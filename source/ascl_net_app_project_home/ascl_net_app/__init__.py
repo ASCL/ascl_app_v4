@@ -5,6 +5,7 @@ from __future__ import print_function
 
 import sys
 import socket
+import os
 
 from flask import Flask, g
 
@@ -68,43 +69,42 @@ def create_app(debug=False): #, conf=dict()):
 		#
 		server_config_file = _app_setup_utils.getConfigFile("default.cfg") # default
 		
-	elif app.config["USING_UWSGI"]:
+	else:
 		#
-		# Must be in production. Look for deployment configuration file.
+		# Must be in production mode (running under Uvicorn).
+		# Load production configuration file.
 		#
-		try:
-			import uwsgi
-			# The uWSGI configuration file defines a key value pair to point
-			# to a particular configuration file in this module under "configuration_files".
-			# The key is 'flask_config_file', and the value is the name of the configuration
-			# file.
-			# NOTE: For Python 3, the value from the uwsgi.opt dict below must be decoded, e.g.
-			# config_file = uwsgi.opt['flask-config-file'].decode("utf-8")
-			#server_config_file = _app_setup_utils.getConfigFile(uwsgi.opt['flask-config-file'])
-		except ImportError:
-			print("Trying to run in production mode, but not running under uWSGI.\n"
-				  "You might try running again with the '--debug' (or '-d') flag.")
-			sys.exit(1)
-	
-		# read configuration file specified in uWSGI parameters
-		# (see folder: "uwsgi_configuration_files")
-		config_filename = None
-		try:
-			config_filename = uwsgi.opt['flask-config-file'].decode("utf-8")
-		except KeyError:
-			print("No Flask configuration file was found (this is ok, it's optional.)")
-		if config_filename:
-			server_config_file = _app_setup_utils.getConfigFile(config_filename)
-
+		# For production-specific configuration, you can:
+		# 1. Set environment variable: export FLASK_CONFIG=production.cfg
+		# 2. Or specify config file when launching Uvicorn (see README.md)
+		#
+		config_from_env = os.environ.get('FLASK_CONFIG')
+		if config_from_env:
+			server_config_file = _app_setup_utils.getConfigFile(config_from_env)
 		else:
-			raise Exception("No configuration file loaded... not sure what mode we are running in here...")
+			# Default to production config if it exists, otherwise use default
+			try:
+				server_config_file = _app_setup_utils.getConfigFile("production.cfg")
+			except:
+				server_config_file = _app_setup_utils.getConfigFile("default.cfg")
 
 	if server_config_file:
 		print(green_text("Loading config file: "), yellow_text(server_config_file))
 		app.config.from_pyfile(server_config_file)
 	else:
-		print(yellow_text("Warning: No server configuration file found."))	
-		
+		print(yellow_text("Warning: No server configuration file found."))
+
+	# Override database credentials from environment variables if set
+	if os.environ.get('ASCLDB_USER'):
+		app.config['DB_USER'] = os.environ.get('ASCLDB_USER')
+		if app.debug:
+			print_info(f"Using database user from environment: {app.config['DB_USER']}")
+
+	if os.environ.get('ASCLDB_PASSWORD'):
+		app.config['DB_PASSWORD'] = os.environ.get('ASCLDB_PASSWORD')
+		if app.debug:
+			print_info("Using database password from environment variable")
+
 	# -----------------------------
 	# Perform app setup below here.
 	# -----------------------------
@@ -125,7 +125,17 @@ def create_app(debug=False): #, conf=dict()):
 
 	if app.config["USING_SQLALCHEMY"]:
 
-		if app.config["USING_POSTGRESQL"]:
+		# Database-specific setup
+		db_type = app.config.get("DB_TYPE", "mysql").lower()
+
+		# For backwards compatibility
+		if app.config.get("USING_POSTGRESQL"):
+			db_type = "postgresql"
+		elif app.config.get("USING_MYSQL"):
+			db_type = "mysql"
+
+		if db_type == "postgresql":
+			# PostgreSQL-specific setup
 			_app_setup_utils.setupJSONandDecimal()
 
 			# This "with" is necessary to prevent exceptions of the form:
@@ -134,6 +144,11 @@ def create_app(debug=False): #, conf=dict()):
 
 			with app.app_context():
 				from .model.databasePostgreSQL import db
+
+		elif db_type == "mysql":
+			# MySQL-specific setup (if needed)
+			# MySQL generally works out of the box with SQLAlchemy
+			pass
 
 		# Establish database connection
 		#

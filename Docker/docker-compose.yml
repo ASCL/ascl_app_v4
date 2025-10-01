@@ -1,0 +1,23 @@
+services:
+  mysql:
+    image: mysql:8.0.42
+    container_name: ascl_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ASCLDB_ROOT_PASSWORD:-ascl_root_password}
+      MYSQL_DATABASE: ascl_db
+      MYSQL_USER: ${ASCLDB_USER:-ascl_user}
+      MYSQL_PASSWORD: ${ASCLDB_PASSWORD:-ascl_password}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./ascl_db_2025.09.30_bkup.sql:/docker-entrypoint-initdb.d/ascl_db_2025.09.30_bkup.sql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:

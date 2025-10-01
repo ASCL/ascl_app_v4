@@ -1,11 +1,10 @@
 #!/usr/bin/python
 
-''' This file handles a database connection. It can simply be deleted if not needed.
-	
-	The example given is for a PostgreSQL database, but can be modified for any other.
-'''
+''' This file handles a database connection.
 
-import psycopg2
+	Supports both MySQL and PostgreSQL databases. The database type is
+	determined by the DB_TYPE configuration parameter.
+'''
 
 from flask import current_app as app, g
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -15,35 +14,60 @@ from ..designpatterns import singleton
 
 @singleton
 class Database(object):
-	
+
 	def __init__(self):
 		self.pool = None
 		self.database_connection_string = None # can be set manually
 		self._Session = None
 		self.db_config = {}
 		self.db = None # set in method "connect" below
-		
+		self.db_type = None
+
 	def connect(self, flask_app):
 		''' Connect to database using connection parameters in flask_app.config. '''
-	
+
 		# create database connection string
 		#
 		if self.database_connection_string is None:
 			# read details from configuration
 			try:
-				# the password is basically hard-coded at the moment - change as needed
-				#with app.app_context():
-			    self.db_config["host"]     = flask_app.config["DB_HOST"]
-			    self.db_config["database"] = flask_app.config["DB_DATABASE"]
-			    self.db_config["user"]     = flask_app.config["DB_USER"]
-			    self.db_config["password"] = '' # set to empty string to force retrieval from ~/.pgpass
-			    self.db_config["port"]     = flask_app.config["DB_PORT"]
-			except KeyError:
-			    current_app.logger.debug("ERROR: an expected key in the server configuration " + \
-									     "file was not found.")
-	
-			self.database_connection_string = 'postgresql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
-		
+				self.db_config["host"]     = flask_app.config["DB_HOST"]
+				self.db_config["database"] = flask_app.config["DB_DATABASE"]
+				self.db_config["user"]     = flask_app.config["DB_USER"]
+				self.db_config["password"] = flask_app.config.get("DB_PASSWORD", '')
+				self.db_config["port"]     = flask_app.config["DB_PORT"]
+
+				# Determine database type
+				self.db_type = flask_app.config.get("DB_TYPE", "mysql").lower()
+
+				# For backwards compatibility, check legacy flags
+				if flask_app.config.get("USING_POSTGRESQL"):
+					self.db_type = "postgresql"
+				elif flask_app.config.get("USING_MYSQL"):
+					self.db_type = "mysql"
+
+			except KeyError as e:
+				flask_app.logger.error(f"ERROR: Missing database configuration key: {e}")
+				raise
+
+			# Build connection string based on database type
+			if self.db_type == "mysql":
+				# MySQL connection string
+				# Format: mysql://user:password@host:port/database
+				# For mysqlclient driver, use 'mysql' prefix
+				# For PyMySQL driver, use 'mysql+pymysql' prefix
+				self.database_connection_string = 'mysql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+
+			elif self.db_type == "postgresql":
+				# PostgreSQL connection string
+				# Format: postgresql://user:password@host:port/database
+				self.database_connection_string = 'postgresql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+
+			else:
+				raise ValueError(f"Unsupported database type: {self.db_type}. Use 'mysql' or 'postgresql'")
+
+			flask_app.logger.info(f"Connecting to {self.db_type.upper()} database at {self.db_config['host']}:{self.db_config['port']}/{self.db_config['database']}")
+
 		# connect to database:
 		self.db = DatabaseConnection(database_connection_string=self.database_connection_string)
 
