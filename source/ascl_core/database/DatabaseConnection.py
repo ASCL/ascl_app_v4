@@ -21,6 +21,11 @@ from sqlalchemy.pool import Pool
 
 logger = logging.getLogger("DatabaseConnection logger")
 
+# Database type constants
+DBTYPE_POSTGRESQL = "postgresql"
+DBTYPE_MYSQL = "mysql"
+DBTYPE_SQLITE = "sqlite"
+
 @listens_for(Pool, 'connect')
 def clearSearchPathCallback(dbapi_con, connection_record):
     '''
@@ -34,40 +39,24 @@ def clearSearchPathCallback(dbapi_con, connection_record):
     as the user, this effectively makes it blank.
 
     This callback function is called for every database connection.
+    It only executes for PostgreSQL databases (detected by trying
+    the SET search_path command, which is PostgreSQL-specific).
 
     For the full details of this issue, see:
     http://groups.google.com/group/sqlalchemy/browse_thread/thread/88b5cc5c12246220
 
-    dbapi_con - type: psycopg2._psycopg.connection
+    dbapi_con - database connection object
     connection_record - type: sqlalchemy.pool._ConnectionRecord
     '''
-    cursor = dbapi_con.cursor()
-    cursor.execute('SET search_path TO theres_no_schema_by_this_name_no_sir')
-    dbapi_con.commit()
-
-# ---------------------------------------------------------------------------------
-# Database adapters
-# =================
-# Set up any adapters here, e.g. custom data type handling.
-# These should be defined in a central location since they are to be defined once.
-#
-from .adapters import numpy_postgresql
-from .adapters import numpy_sqlite
-#from .adapters.pggeometry import PGPoint, PGPolygon
-
-from sqlalchemy.dialects.postgresql import base as pg
-#pg.ischema_names['circle'] = PGASTCircle
-
-# -----------------------------------------
-# This is to hide the warning:
-# /usr/local/anaconda3/lib/python3.4/site-packages/sqlalchemy/dialects/postgresql/base.py:2505: SAWarning: Did not recognize type 'point' of column 'map'
-# This defines the class PGPoint for any column of type 'point'.
-# -----------------------------------------
-from sqlalchemy.dialects.postgresql import base as pg
-pg.ischema_names['point'] = PGPoint
-pg.ischema_names['polygon'] = PGPolygon
-#
-# ---------------------------------------------------------------------------------
+    # Only execute SET search_path for PostgreSQL databases
+    # MySQL and other databases don't support this command
+    try:
+        cursor = dbapi_con.cursor()
+        cursor.execute('SET search_path TO theres_no_schema_by_this_name_no_sir')
+        dbapi_con.commit()
+    except Exception:
+        # Not a PostgreSQL database or command not supported - silently skip
+        pass
 
 @contextmanager
 def session_scope(db):
@@ -143,6 +132,8 @@ class MetadataCache():
 	def cacheIsStale(self):
 		'''
 		Check if the schema has been modified since this cache was made.
+
+		This has only been tested (and currently depends on) PostgreSQL.
 		'''
 		with self.databaseConnection.engine.connect() as connection:
 			results = connection.execute(text("SELECT last_modified FROM metadata.schema_metadata"))
@@ -195,6 +186,56 @@ class DatabaseConnection(object):
 	'''
 	_singletons = dict()
 
+	def determine_database_type(self):
+		'''
+		Determine the database type from the connection string.
+
+		:return: One of the DBTYPE_* constants
+		:raises ValueError: if database type cannot be determined from connection string
+		'''
+		if self.database_connection_string.startswith('postgresql://'):
+			return DBTYPE_POSTGRESQL
+		elif self.database_connection_string.startswith('mysql://'):
+			return DBTYPE_MYSQL
+		elif self.database_connection_string.startswith('sqlite://'):
+			return DBTYPE_SQLITE
+		else:
+			raise ValueError(
+				f"Unable to determine database type from connection string: '{self.database_connection_string}'. "
+				f"Connection string must start with one of: 'postgresql://', 'mysql://', or 'sqlite://'"
+			)
+
+	@staticmethod
+	def load_postgresql_database_adapters():
+		'''
+		Load PostgreSQL-specific database adapters.
+
+		This includes NumPy adapters and custom geometric types (POINT, POLYGON).
+		'''
+		from .adapters import numpy_postgresql
+		from .adapters.pggeometry import PGPoint, PGPolygon
+		from sqlalchemy.dialects.postgresql import base as pg
+
+		# Register PostgreSQL custom types
+		pg.ischema_names['point'] = PGPoint
+		pg.ischema_names['polygon'] = PGPolygon
+
+	@staticmethod
+	def load_mysql_database_adapters():
+		'''
+		Load MySQL-specific database adapters.
+
+		Currently MySQL does not require any custom adapters.
+		'''
+		pass
+
+	@staticmethod
+	def load_sqlite_database_adapters():
+		'''
+		Load SQLite-specific database adapters.
+		'''
+		from .adapters import numpy_sqlite
+
 	def __new__(cls, database_connection_string=None, cache_name=None):
 		"""This overrides the object's usual creation mechanism."""
 
@@ -209,15 +250,38 @@ class DatabaseConnection(object):
 
 			me.database_connection_string = database_connection_string
 
-			# change 'echo' to print each SQL query (for debugging/optimizing/the curious)
-			me.engine = create_engine(me.database_connection_string,
-									  pool_pre_ping=True,
-									  future=True,
-									  echo=False)#, echo_pool="debug") # pool_size=??
+			# Determine database type from connection string.
+			me.database_type = me.determine_database_type()
+
+			# Load database-specific adapters
+			if me.database_type == DBTYPE_POSTGRESQL:
+				cls.load_postgresql_database_adapters()
+			elif me.database_type == DBTYPE_MYSQL:
+				cls.load_mysql_database_adapters()
+			elif me.database_type == DBTYPE_SQLITE:
+				cls.load_sqlite_database_adapters()
+
+			engine_kwargs = {
+				'pool_pre_ping': True,
+				'future': True,
+				'echo': False    # set to True to print each SQL query (for debugging/optimizing/the curious)
+			}
+			# pool_size=?? # number of permanent database connections
+
+			# Database-specific parameters:
+			if me.database_type == DBTYPE_MYSQL:
+				# Force TCP connection for MySQL to avoid Unix socket connection attempts
+				engine_kwargs['connect_args'] = {'host': '127.0.0.1'}
+
+			me.engine = create_engine(me.database_connection_string, **engine_kwargs)
 
 			me.metadata = MetaData()
-			me.mapper_registry = registry()
-			me.Base = me.mapper_registry.generate_base()
+			me.metadata.reflect(bind=me.engine) # optionally can reflect specific tables
+
+			#me.mapper_registry = registry()
+			#me.mapper_registry = registry(metadata=me.metadata)
+
+			#me.Base = me.mapper_registry.generate_base()
 			me.Session = scoped_session(sessionmaker(me.engine))
 
 			if cache_name:

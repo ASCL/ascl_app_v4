@@ -8,19 +8,19 @@ import sqlalchemy
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from ..DatabaseConnection import DatabaseConnection
-from ..pgutils import read_password_from_pgpass
+#from ..pgutils import read_password_from_pgpass
 
 # ---------------------------------------------------------------------
 # Fill in database connection information here.
-# Note!! The password is parsed from the user’s .pgpass file
+# Note!! The password is read from ~/.my.cnf (MySQL) or ~/.pgpass (PostgreSQL)
 # 		 so the source file can be checked into public version control.
 # ---------------------------------------------------------------------
 db_config = {
 	'user'     : 'ascl_db',  	    # specify the database username
-	'password' : None,     			# the database password for that user -> '' is no password, None is not specified
-	'database' : 'ascl_wordpress',	# the name of the database
-	'host'     : '209.209.8.32',	# your hostname, "localhost" if on your own machine
-	'port'     : 5432				# default port is 5432
+	'password' : '',     			# the database password for that user -> '' reads from ~/.my.cnf or ~/.pgpass
+	'database' : 'ascl_db',			# the name of the database
+	'host'     : 'localhost',		# your hostname, "localhost" if on your own machine
+	'port'     : 3307				# ASCL MySQL Docker: 3307, PostgreSQL default: 5432
 }
 # ---------------------------------------------------------------------
 
@@ -49,16 +49,16 @@ if "ASCLDB_PASSWORD" in os.environ:
 # No need to modify anything below this line.
 # =====================================================================
 
-# Get the password (if unspecified above) from the user's .pgpass file.
-# Asterisks in the .pgpass file are supported, but recommend to be more
-# specific, not less.
+# Empty password string will cause MySQL to read from ~/.my.cnf
+# For PostgreSQL, empty password will read from ~/.pgpass
 #
-if db_config["password"] is None:
-	db_config["password"] = read_password_from_pgpass(host=db_config["host"], port=db_config["port"], user=db_config["user"], database=db_config["database"])
+# If password is empty, that's intentional (use credential files)
+#
+# Note: When connecting to MySQL on a non-standard port, we need to ensure
+# TCP/IP connection is used (not Unix socket). The connection string will
+# use TCP when a port is specified.
 
-# If password is still empty by here, that must be what the user intended.
-
-database_connection_string = 'postgresql://{0[user]}:{0[password]}@{0[host]}:{0[port]}/{0[database]}'.format(db_config)
+database_connection_string = 'mysql://{0[user]}:{0[password]}@{0[host]}:{0[port]}/{0[database]}?charset=utf8mb4'.format(db_config)
 
 # This allows the file to be 'import'ed any number of times, but attempts to
 # connect to the database only once.

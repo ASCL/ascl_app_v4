@@ -1,0 +1,23 @@
+# ASCL Core Database Module Requirements
+# Install with: pip install -r requirements.txt
+
+# Core Dependencies
+SQLAlchemy>=2.0.0
+numpy>=1.20.0
+
+# Database Drivers (install the one(s) you need)
+# Uncomment the driver for your database type:
+
+# MySQL
+# mysqlclient>=2.2.0  # Recommended: C-based, fast
+# PyMySQL>=1.1.0      # Alternative: Pure Python
+
+# PostgreSQL
+# psycopg2-binary>=2.9.0  # PostgreSQL adapter
+# psycopg2>=2.9.0         # Alternative: Build from source (requires PostgreSQL dev headers)
+
+# SQLite
+# No additional driver needed - included with Python standard library
+
+# Note: This module can be used independently of the Flask web application.
+# Only install the database driver(s) you actually need.
