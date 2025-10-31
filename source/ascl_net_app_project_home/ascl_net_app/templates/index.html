@@ -1,18 +1,37 @@
-<html>
+{% extends "base.html" %}
 
-<head>
+{% block title %}Welcome to the ASCL{% endblock %}
 
-</head>
+{% block content %}
+<h1>Welcome to the ASCL</h1><p>The Astrophysics Source Code Library (ASCL) is a free online registry and repository for source codes of interest to astronomers and astrophysicists, including solar system astronomers, and lists codes that have been used in research that has appeared in, or been submitted to, peer-reviewed publications. The ASCL is indexed by the <a href="http://ads.harvard.edu/">SAO/NASA Astrophysics Data System</a> (ADS) and Web of Science and <a title="Citing ASCL code entries" href="/wordpress/?page_id=351">is citable</a> by using the unique ascl ID assigned to each code. The ascl ID can be used to link to the code entry by prefacing the number with ascl.net (<em>i.e.</em>, <a href="http://www.ascl.net/1201.001">ascl.net/1201.001</a>).</p>
 
-<body>
+<br />
+<h2>Most Recently Added Codes</h2>
 
-<h4>{{header}}</h4>
-	
-<br>
-<h1>Welcome to the DMFlaskTemplate index page.</h1>
+{% if recent_codes %}
+<div class="codelist">
 
-Additional pages can be added to the "templates" directory, their controller in the "controllers" directory, and registered in the top level "__init__.py" file under the "register_blueprints" function.
-	
-	
-</body>
-</html>
+	{% for code in recent_codes %}
+	<div class="item">
+
+
+		<span class="ascl_id">
+			[ascl:{{ code.ascl_id }}]
+		</span>
+
+		<span class="title">
+			<a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
+		</span>
+
+		{% if code.credit %}
+		<div class="credit">{{ code.credit }}</div>
+		{% endif %}
+
+		<div class="abstract">{{ code.abstract if code.abstract else 'No description available.' }}</div>
+	</div>
+	{% endfor %}
+</div>
+{% else %}
+	<p>No codes available at this time.</p>
+{% endif %}
+{% endblock %}

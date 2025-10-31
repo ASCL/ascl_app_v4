@@ -3,18 +3,27 @@
 import os
 
 import flask
-#from flask import request, render_template, send_from_directory
-from flask import current_app, render_template, send_from_directory
-
-#from . import valueFromRequest
+from flask import current_app, render_template, send_from_directory, g
 
 index_page = flask.Blueprint("index_page", __name__)
 
 @index_page.route("/", methods=['GET'])
 def index():
-	''' Index page. '''
+	''' Index page - shows recently added codes. '''
+	# Use Trillian2Connection which has connection details built-in
+	from ascl_core.database.connections import Trillian2Connection as db
+	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
+
 	templateDict = {}
-	
+
+	# Get database session
+	session = db.Session()
+
+	# Get the 10 most recently added codes
+	recent_codes = session.query(ascldb.ASCLCode).order_by(ascldb.ASCLCode.time_added.desc()).limit(10).all()
+
+	templateDict['recent_codes'] = recent_codes
+
 	return render_template("index.html", **templateDict)
 
 # This will provide the favicon for the whole site. Can be overridden for

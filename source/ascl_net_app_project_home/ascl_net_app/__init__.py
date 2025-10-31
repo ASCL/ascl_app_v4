@@ -21,10 +21,17 @@ def register_blueprints(app=None):
 	controller file you create here.
 	'''
 	from .controllers.index import index_page
-	#from .controllers.controller1 import xxx
+	from .controllers.browse import browse_page
+	from .controllers.search import search_page
+	from .controllers.code_detail import code_detail_page
+	from .controllers.about import about_page
 
 	app.register_blueprint(index_page)
-	#app.register_blueprint(xxx)
+	app.register_blueprint(browse_page)
+	app.register_blueprint(search_page)
+	app.register_blueprint(about_page)
+	# Register code_detail_page LAST - it has a catch-all route
+	app.register_blueprint(code_detail_page)
 
 # ================================================================================
 

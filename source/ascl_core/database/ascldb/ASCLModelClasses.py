@@ -17,9 +17,13 @@ from sqlalchemy.orm import mapper, relationship, exc, column_property, validates
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm import registry
 
-from ..DatabaseConnection import DatabaseConnection, DBTYPE_POSTGRESQL
+from ..DatabaseConnection import DatabaseConnection
+from ..DatabaseConnection import DBTYPE_POSTGRESQL, DBTYPE_MYSQL, DBTYPE_SQLITE
 
 dbc = DatabaseConnection()
+
+class Base(DeclarativeBase):
+	metadata = dbc.metadata
 
 # -----------------------------------------
 # Suppress harmless warnings, e.g.
@@ -45,21 +49,23 @@ metadata_pickle_filename = "ModelClasses_ascl.pickle"
 # # ------------------------------------------
 
 # check first (any) entry defined in this file
-# Note: For PostgreSQL, tables are in schema 'ascldb'
-# For MySQL, tables are directly in the database (no schema prefix needed)
-table_key = 'ascldb.codes' if dbc.database_type == 'postgresql' else 'codes'
+# Note: For PostgreSQL, tables are in schema 'ascldb'.
+# For MySQL, tables are directly in the database (no schema prefix needed).
+table_key = 'ascldb.codes' if dbc.database_type == DBTYPE_POSTGRESQL else 'codes'
+#
+# if table_key in dbc.metadata.tables:
+	# need_to_update_metadata_cache = False
+# else:
+	# # Reflect tables from database
+	# # PostgreSQL: reflect from 'ascldb' schema
+	# # MySQL: reflect from current database (no schema parameter)
+	# if dbc.database_type == DBTYPE_POSTGRESQL:
+	# 	dbc.metadata.reflect(dbc.engine, schema=db_schema)
+	# else:
+	# 	dbc.metadata.reflect(dbc.engine)
+	# need_to_update_metadata_cache = True
 
-if table_key in dbc.metadata.tables:
-	need_to_update_metadata_cache = False
-else:
-	# Reflect tables from database
-	# PostgreSQL: reflect from 'ascldb' schema
-	# MySQL: reflect from current database (no schema parameter)
-	if dbc.database_type == 'postgresql':
-		dbc.metadata.reflect(dbc.engine, schema=db_schema)
-	else:
-		dbc.metadata.reflect(dbc.engine)
-	need_to_update_metadata_cache = True
+need_to_update_metadata = table_key not in Base.metadata
 
 # See DatabaseConnection file for central location to set up any needed adapters.
 
@@ -70,22 +76,7 @@ else:
 # Set schema based on database type
 # PostgreSQL: tables are in 'ascldb' schema
 # MySQL: tables are in current database (no schema)
-db_schema = 'ascldb' if dbc.database_type == 'postgresql' else None
-
-#mapper_registry = dbc.mapper_registry
-
-#Base = dbc.Base
-
-class Base(DeclarativeBase):
-    pass
-
-#if dbc.metadataCache:
-#	cached_metadata = dbc.metadataCache.metadata
-#else:
-#	cached_metadata = None
-#if cached_metadata:
-#	cached_metadata.bind = dbc.engine
-#	Base.metadata = cached_metadata
+db_schema = 'ascldb' if dbc.database_type == DBTYPE_POSTGRESQL else None
 
 # Note on metadata, reflection, and autoload.
 # -------------------------------------------
@@ -94,8 +85,6 @@ class Base(DeclarativeBase):
 # for the information on the table. If found, it returns it. If not,
 # it will autoload from the database and add it to the Base.metadata object.
 #
-
-need_to_update_metadata = False
 
 # @mapper_registry.mapped
 # class ASCLForZenodoMatching2(Base):
@@ -233,7 +222,6 @@ ASCLCode.keywords = relationship(Keyword,
 from sqlalchemy.orm import configure_mappers
 try:
 	configure_mappers()
-#	raise Exception("")
 except RuntimeError as error:
 	print("""
 An error occurred when verifying the relations between the database tables.
@@ -247,6 +235,7 @@ see the error message below for details.
 
 # assert CodesAliases.__table__.c.alias.references(Codes.__table__.c.id)
 
-if dbc.metadataCache is None or need_to_update_metadata:
-	assert len(dbc.metadata.tables) > 0
-	dbc.metadataCache.write(metadata=dbc.metadata)
+# Write metadata cache if caching is enabled and cache doesn't exist
+if dbc.metadataCache is not None and not dbc.metadataCache.cachePath.exists():
+	assert len(Base.metadata.tables) > 0
+	dbc.metadataCache.write(metadata=Base.metadata)

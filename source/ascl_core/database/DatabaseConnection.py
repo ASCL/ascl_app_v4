@@ -110,6 +110,64 @@ class MetadataCache():
 		#return os.path.join(self.cache_directory, self.filename)
 		return pathlib.Path(self.cache_directory) / self.filename
 
+	def _compute_mysql_schema_hash(self):
+		'''
+		Compute MD5 hash of MySQL schema based on table names and UPDATE_TIME values.
+		Returns hash string.
+		'''
+		import hashlib
+
+		with self.databaseConnection.engine.connect() as connection:
+			# Get database name from connection
+			db_name = connection.execute(text("SELECT DATABASE()")).scalar()
+
+			# Get all table update times, sorted for consistent hashing
+			query = text("""
+				SELECT TABLE_NAME, UPDATE_TIME
+				FROM information_schema.TABLES
+				WHERE TABLE_SCHEMA = :db_name
+				ORDER BY TABLE_NAME
+			""")
+			results = connection.execute(query, {"db_name": db_name})
+
+			# Create hash of table names and update times
+			hash_input = ""
+			for row in results:
+				table_name = row[0]
+				update_time = row[1] or "NULL"  # Some tables may have NULL UPDATE_TIME
+				hash_input += f"{table_name}:{update_time}|"
+
+			return hashlib.md5(hash_input.encode()).hexdigest()
+
+	def _compute_postgresql_schema_hash(self):
+		'''
+		Compute MD5 hash of PostgreSQL schema based on table structure.
+		Uses information_schema.columns to detect schema changes (DDL).
+		No manual setup required - alternative to metadata.schema_metadata table.
+		Returns hash string.
+		'''
+		import hashlib
+
+		with self.databaseConnection.engine.connect() as connection:
+			# Get current schema (or use specific schema if needed)
+			schema = connection.execute(text("SELECT current_schema()")).scalar()
+
+			# Hash table names + column definitions
+			query = text("""
+				SELECT table_name, column_name, data_type, is_nullable
+				FROM information_schema.columns
+				WHERE table_schema = :schema
+				ORDER BY table_name, ordinal_position
+			""")
+			results = connection.execute(query, {"schema": schema})
+
+			# Create hash of table structure
+			hash_input = ""
+			for row in results:
+				hash_input += "|".join(str(v) for v in row) + "|"
+
+			return hashlib.md5(hash_input.encode()).hexdigest()
+
 	def read(self):
 		'''
 		Read the cached metadata for this database connection.
@@ -119,7 +177,7 @@ class MetadataCache():
 		if cache_path.exists(): #os.path.exists(cache_path):
 
 			if self.cacheIsStale():
-				self.cachePath.unlink
+				self.cachePath.unlink()
 				self.metadata = None
 			else:
 				try:
@@ -133,33 +191,86 @@ class MetadataCache():
 		'''
 		Check if the schema has been modified since this cache was made.
 
-		This has only been tested (and currently depends on) PostgreSQL.
+		PostgreSQL: Uses metadata.schema_metadata table with trigger
+		MySQL: Uses hash of information_schema.TABLES update times
 		'''
-		with self.databaseConnection.engine.connect() as connection:
-			results = connection.execute(text("SELECT last_modified FROM metadata.schema_metadata"))
-			for row in results:
-				schema_last_modified = row[0] # -> datetime object
-
-		# get last modification time of cache file
 		file_timestamp = datetime.fromtimestamp(self.cachePath.stat().st_mtime)
-		if file_timestamp < schema_last_modified:
-			logger.info("Metadata cache is stale.")
-		else:
-			logger.info("Metadata cache is current.")
-		return file_timestamp < schema_last_modified
+
+		if self.databaseConnection.database_type == DBTYPE_POSTGRESQL:
+			# PostgreSQL: check metadata.schema_metadata table
+			try:
+				with self.databaseConnection.engine.connect() as connection:
+					results = connection.execute(text("SELECT last_modified FROM metadata.schema_metadata"))
+					for row in results:
+						schema_last_modified = row[0]  # datetime object
+
+				if file_timestamp < schema_last_modified:
+					logger.info("Metadata cache is stale.")
+					return True
+				else:
+					logger.info("Metadata cache is current.")
+					return False
+			except Exception as e:
+				# metadata.schema_metadata table doesn't exist
+				logger.warning(f"Could not check PostgreSQL metadata staleness: {e}")
+				return True
+
+		elif self.databaseConnection.database_type == DBTYPE_MYSQL:
+			# MySQL: compute hash of all table UPDATE_TIME values
+			try:
+				current_hash = self._compute_mysql_schema_hash()
+
+				# Store/retrieve hash alongside cache file
+				hash_file = self.cachePath.with_suffix('.hash')
+
+				if hash_file.exists():
+					with open(hash_file, 'r') as f:
+						cached_hash = f.read().strip()
+
+					if current_hash != cached_hash:
+						logger.info("Metadata cache is stale (schema hash changed).")
+						return True
+					else:
+						logger.info("Metadata cache is current.")
+						return False
+				else:
+					# No hash file exists, consider stale
+					logger.info("Metadata cache is stale (no hash file).")
+					return True
+			except Exception as e:
+				logger.warning(f"Could not check MySQL metadata staleness: {e}")
+				return True
+
+		# Unknown database type or SQLite - consider stale to be safe
+		return True
 
 	def write(self, metadata=None):
 		'''
 		Write the SQLAlchemy metadata to a pickle file.
+		For MySQL, also writes a hash file to track schema changes.
 		:param metadata:
 		'''
 		try:
 			cache_dir = os.path.join(os.path.expanduser("~"), ".sqlalchemy_cache")
 			if not os.path.exists(cache_dir):
 				os.makedirs(cache_dir)
+
+			# Write pickle file
 			with open(os.path.join(cache_dir, self.filename), 'wb') as cache_file:
 				pickle.dump(metadata, cache_file)
 			logger.info("Metadata cache written.")
+
+			# For MySQL, write hash file
+			if self.databaseConnection.database_type == DBTYPE_MYSQL:
+				try:
+					current_hash = self._compute_mysql_schema_hash()
+					hash_file = self.cachePath.with_suffix('.hash')
+					with open(hash_file, 'w') as f:
+						f.write(current_hash)
+					logger.info("MySQL schema hash written.")
+				except Exception as e:
+					logger.warning(f"Could not write MySQL schema hash: {e}")
+
 			for t in metadata.tables.keys():
 				logger.debug(f"    - {t}")
 		except:
@@ -275,22 +386,23 @@ class DatabaseConnection(object):
 
 			me.engine = create_engine(me.database_connection_string, **engine_kwargs)
 
-			me.metadata = MetaData()
-			me.metadata.reflect(bind=me.engine) # optionally can reflect specific tables
+			me.metadata = None
 
-			#me.mapper_registry = registry()
-			#me.mapper_registry = registry(metadata=me.metadata)
-
-			#me.Base = me.mapper_registry.generate_base()
-			me.Session = scoped_session(sessionmaker(me.engine))
-
+			# Load pickle'd metadata or create it from the database.
 			if cache_name:
 				me.metadataCache = MetadataCache(dbc=me, filename=cache_name)
 				me.metadataCache.read()
 				if me.metadataCache.metadata is not None:
 					me.metadata = me.metadataCache.metadata
-			else:
-				me.metadataCache = None
+#			else:
+#				me.metadataCache = None
+
+			if me.metadata is None:
+				# create here, reflected from database
+				me.metadata = MetaData()
+				me.metadata.reflect(bind=me.engine) # optionally can reflect specific tables
+
+			me.Session = scoped_session(sessionmaker(me.engine))
 
 			# ------------------------------------------------
 

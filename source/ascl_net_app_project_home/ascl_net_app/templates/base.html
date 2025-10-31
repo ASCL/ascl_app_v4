@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:fb="http://ogp.me/ns/fb#">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<link href='https://fonts.googleapis.com/css?family=Merriweather:400,400italic,700,700italic' rel='stylesheet' type='text/css'>
+	<link href='https://fonts.googleapis.com/css?family=Merriweather+Sans:400,400italic,700,700italic' rel='stylesheet' type='text/css'>
+	<link rel="stylesheet" type="text/css" media="all" href="{{ url_for('static', filename='css/style.css') }}" />
+	<link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}?v=2" />
+	<title>
+		ASCL.net
+		 - {% block title %}Welcome to the ASCL{% endblock %}
+	</title>
+{% block extra_css %}{% endblock %}
+</head>
+<body>
+<div id="ascl_header">
+
+	<h1>ASCL.net</h1>
+
+	<h2>Astrophysics Source Code Library</h2>
+
+	<h3>Making codes discoverable since 1999</h3>
+
+
+<form action="/search" method="get" accept-charset="utf-8" class="search"><input type="text" name="q" value="" maxlength="100" placeholder="Search Site" class="input"  /><input type="submit" name="mysubmit" value="Search" class="button" /></form>
+
+</div>
+<div id="menu">
+	<div class="inner_padding">
+		<a href="/">Home</a>
+		<a href="/about">About</a>
+		<a href="/resources">Resources</a>
+		<a href="/browse">Browse</a>
+		<a href="/submissions">Submissions</a>
+		<a href="/news">News</a>
+		<a href="/dashboard">Dashboard</a>
+	</div>
+</div>
+<div id="ascl_body">
+<div class="inner_padding">{% block content %}{% endblock %}</div>
+</div>
+<div id="footer">
+	<div class="inner_padding">
+		<div id="footer-left">
+			<div id="footer-right">
+				<a href="https://twitter.com/asclnet" class="social_button twitter" title="Follow ASCL on Twitter">T</a>
+				<a href="https://www.facebook.com/ASCLnet" class="social_button facebook" title="Like ASCL on Facebook">F</a>
+			</div>
+			<p>Content is subject to license and copyright by respective content creators and entities.</p>
+			<p>
+				Page rendered by Flask.
+			</p>
+
+		</div>
+
+	</div>
+	</div>
+</div>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

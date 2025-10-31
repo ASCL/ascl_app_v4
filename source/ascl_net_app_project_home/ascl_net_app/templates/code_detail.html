@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}{{ code.title | safe }}{% endblock %}
+
+{% block content %}
+<div class="codelist">
+
+
+	<div class="item">
+
+
+		<span class="ascl_id">
+			[ascl:{{ code.ascl_id }}]
+		</span>
+
+		<span class="title">
+			{{ code.title | safe }}
+		</span>
+
+		{% if code.credit %}
+		<div class="credit">{{ code.credit }}</div>
+		{% endif %}
+
+		{% if code.abstract %}
+		<div class="abstract">{{ code.abstract }}</div>
+		{% endif %}
+
+		{% if code.site_url or code.code_site or code.described_in %}
+		<dl class="sites">
+			{% if code.site_url or code.code_site %}
+			<dt>Code site:</dt>
+			<dd>
+				{% if code.site_url %}<a href="{{ code.site_url }}">{{ code.site_url }}</a>{% endif %}
+				{% if code.code_site %}<a href="{{ code.code_site }}">{{ code.code_site }}</a>{% endif %}
+			</dd>
+			{% endif %}
+
+			{% if code.described_in %}
+			<dt>Described in:</dt>
+			<dd>
+				<a href="{{ code.described_in }}">{{ code.described_in }}</a>
+			</dd>
+			{% endif %}
+			<div class="clear"></div>
+		</dl>
+		{% endif %}
+
+		{% if code.bibcode %}
+		<dl class="sites bibcode">
+			<dt>Bibcode:</dt>
+			<dd><a href="https://ui.adsabs.harvard.edu/abs/{{ code.bibcode }}/abstract">{{ code.bibcode }}</a></dd>
+			<div class="clear"></div>
+		</dl>
+		{% endif %}
+
+
+		<div class="explain"><a href="/explain">Explain these fields?</a></div>
+
+		<div class="clear"></div>
+
+
+		<br>
+
+		<div class="clear"></div>
+		<div class="views">Views: {{ code.views if code.views else '0' }}</div>
+
+		<br>
+		<div class="shield">
+			<img src="https://img.shields.io/badge/ascl-{{ code.ascl_id }}-blue.svg?colorB=262255" alt="ascl:{{ code.ascl_id }}" />
+			<script> 						var css = ".getShield { display: inline; } textarea { box-sizing: border-box; } .shieldText { width: 580px } .shieldCode { display: none; position: relative; } .ungetShield { height: 20px; width: 20px; position: absolute; top: -20px; left: 560px; background-color: #999; text-align: center; } .x { position: absolute; left: 0; right: 0; top: 2; bottom: 0; margin: auto; text-align: center; }";
+				var htmlDiv = document.createElement('div');
+				htmlDiv.innerHTML = '<p>&nbsp;</p><style>' + css + '</style>'; // IE bug workaround
+				document.getElementsByTagName('head')[0].appendChild(htmlDiv.childNodes[1]);
+			</script>
+			<br>
+			<a class="getShield" id="getShield{{ code.ascl_id }}">Add this shield to your page</a>
+			<script>
+				var shieldButton = document.getElementById("getShield{{ code.ascl_id }}");
+				shieldButton.addEventListener("click", function () {
+					var css = ".shieldCode { display: block; } .getShield { display: none; }";
+					var htmlDiv = document.createElement('div');
+					htmlDiv.innerHTML = '<p>&nbsp;</p><style>' + css + '</style>';
+					document.getElementsByTagName('head')[0].appendChild(htmlDiv.childNodes[1]);
+				});
+			</script>
+			<div class="shieldCode">
+				<textarea rows="5" class="shieldText">&lt;a href=&quot;https://ascl.net/{{ code.ascl_id }}&quot;&gt;&lt;img src=&quot;https://img.shields.io/badge/ascl-{{ code.ascl_id }}-blue.svg?colorB=262255&quot; alt=&quot;ascl:{{ code.ascl_id }}&quot; /&gt;&lt;/a&gt;</textarea>
+				<div class="shieldCopy">Copy the above HTML to add this shield to your code&#39;s website.</div>
+				<button class="ungetShield" id="ungetShield{{ code.ascl_id }}"><span class="x">X</span></button>
+				<script>
+					var unshieldButton = document.getElementById("ungetShield{{ code.ascl_id }}");
+					unshieldButton.addEventListener("click", function () {
+						var css = ".shieldCode { display: none; } .getShield { display: inline; }";
+						var htmlDiv = document.createElement('div');
+						htmlDiv.innerHTML = '<p>&nbsp;</p><style>' + css + '</style>';
+						document.getElementsByTagName('head')[0].appendChild(htmlDiv.childNodes[1]);
+					});
+				</script>
+			</div>
+		</div>
+
+	</div>
+</div>
+{% endblock %}

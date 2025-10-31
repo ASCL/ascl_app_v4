@@ -53,12 +53,8 @@ if "ASCLDB_PASSWORD" in os.environ:
 # For PostgreSQL, empty password will read from ~/.pgpass
 #
 # If password is empty, that's intentional (use credential files)
-#
-# Note: When connecting to MySQL on a non-standard port, we need to ensure
-# TCP/IP connection is used (not Unix socket). The connection string will
-# use TCP when a port is specified.
 
-database_connection_string = 'mysql://{0[user]}:{0[password]}@{0[host]}:{0[port]}/{0[database]}?charset=utf8mb4'.format(db_config)
+database_connection_string = 'mysql://{0[user]}:{0[password]}@{0[host]}:{0[port]}/{0[database]}'.format(db_config)
 
 # This allows the file to be 'import'ed any number of times, but attempts to
 # connect to the database only once.

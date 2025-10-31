@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Search - ASCL.net{% endblock %}
+
+{% block content %}
+<h2>Search ASCL.net</h2>
+
+<div class="search-form">
+    <form method="GET" action="/search">
+        <input type="text"
+               name="q"
+               placeholder="Search by name, description, or author..."
+               value="{{ query }}"
+               autofocus>
+        <button type="submit">Search</button>
+    </form>
+</div>
+
+{% if query %}
+    <div class="search-results-count">
+        Found {{ result_count }} result{% if result_count != 1 %}s{% endif %} for "{{ query }}"
+    </div>
+
+    {% if results %}
+        <div class="code-listings">
+            {% for code in results %}
+            <div class="code-entry">
+                <div class="code-id">[ascl:{{ code.ascl_id }}]</div>
+                <h3><a href="/{{ code.ascl_id }}">{{ code.title }}</a></h3>
+                {% if code.credit %}
+                <div class="authors">{{ code.credit }}</div>
+                {% endif %}
+                <div class="description">
+                    {{ code.abstract | truncate(300) if code.abstract else 'No description available.' }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="padding: 2rem; text-align: center; color: #7f8c8d;">
+            No codes found matching your search. Try different keywords or <a href="/browse">browse all codes</a>.
+        </p>
+    {% endif %}
+{% else %}
+    <div style="padding: 2rem; text-align: center; color: #7f8c8d;">
+        <p>Enter a search term to find astrophysics source codes.</p>
+        <p style="margin-top: 1rem;">You can search by:</p>
+        <ul style="list-style: none; margin-top: 0.5rem;">
+            <li>Code name</li>
+            <li>Description or abstract</li>
+            <li>Author name</li>
+        </ul>
+    </div>
+{% endif %}
+
+{% endblock %}

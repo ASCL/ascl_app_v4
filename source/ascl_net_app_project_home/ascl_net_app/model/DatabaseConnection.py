@@ -14,23 +14,31 @@ def clearSearchPathCallback(dbapi_con, connection_record):
     When creating relationships across schemas, SQLAlchemy
     has problems when you explicitly declare the schema in
     ModelClasses and it is found in search_path.
-    
+
     The solution is to set the search_path to "$user" for
     the life of any connection to the database. Since there
     is no schema with the same name as the user, (or shouldn't
     be here!), this effectively makes it blank.
-    
+
     This callback function is called for every database connection.
-    
+    It only executes for PostgreSQL databases (detected by trying
+    the SET search_path command, which is PostgreSQL-specific).
+
     For the full details of this issue, see:
     http://groups.google.com/group/sqlalchemy/browse_thread/thread/88b5cc5c12246220
-    
-    dbapi_con - type: psycopg2._psycopg.connection
+
+    dbapi_con - database connection object
     connection_record - type: sqlalchemy.pool._ConnectionRecord
     '''
-    cursor = dbapi_con.cursor()
-    cursor.execute('SET search_path TO "$user",functions')
-    dbapi_con.commit()
+    # Only execute SET search_path for PostgreSQL databases
+    # MySQL and other databases don't support this command
+    try:
+        cursor = dbapi_con.cursor()
+        cursor.execute('SET search_path TO theres_no_schema_by_this_name_no_sir')
+        dbapi_con.commit()
+    except Exception:
+        # Not a PostgreSQL database or command not supported - silently skip
+        pass
 
 listen(Pool, 'connect', clearSearchPathCallback)
 
@@ -68,12 +76,14 @@ class DatabaseConnection(object):
 			me.database_connection_string = database_connection_string
 			
 			# change 'echo' to print each SQL query (for debugging/optimizing/the curious)
-			me.engine = create_engine(me.database_connection_string, echo=False)	
+			me.engine = create_engine(me.database_connection_string, echo=False)
 
 			me.metadata = MetaData()
-			me.metadata.bind = me.engine
-			me.Base = declarative_base(bind=me.engine)
-			me.Session = scoped_session(sessionmaker(bind=me.engine, autocommit=True))
+			# SQLAlchemy 2.0: metadata.bind is deprecated - use engine directly
+			# me.metadata.bind = me.engine
+			me.Base = declarative_base(metadata=me.metadata)
+			# SQLAlchemy 2.0: autocommit is deprecated, removed bind parameter
+			me.Session = scoped_session(sessionmaker(me.engine))
 			# ------------------------------------------------
 		
 		return cls._singletons[cls]
