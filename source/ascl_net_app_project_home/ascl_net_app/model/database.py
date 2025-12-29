@@ -6,11 +6,14 @@
 	determined by the DB_TYPE configuration parameter.
 '''
 
+import logging
 from flask import current_app as app, g
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from .DatabaseConnection import DatabaseConnection
 from ..designpatterns import singleton
+
+logger = logging.getLogger(__name__)
 
 @singleton
 class Database(object):
@@ -47,6 +50,7 @@ class Database(object):
 					self.db_type = "mysql"
 
 			except KeyError as e:
+				logger.error(f"Missing database configuration key: {e}")
 				flask_app.logger.error(f"ERROR: Missing database configuration key: {e}")
 				raise
 
@@ -57,19 +61,25 @@ class Database(object):
 				# For mysqlclient driver, use 'mysql' prefix
 				# For PyMySQL driver, use 'mysql+pymysql' prefix
 				self.database_connection_string = 'mysql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+				logger.info(f"Built MySQL connection string for {self.db_config['database']}")
+				logger.debug(f"Connection params: user={self.db_config['user']}, host={self.db_config['host']}, port={self.db_config['port']}, database={self.db_config['database']}, password={'***' if self.db_config['password'] else 'EMPTY (will use ~/.my.cnf)'}")
 
 			elif self.db_type == "postgresql":
 				# PostgreSQL connection string
 				# Format: postgresql://user:password@host:port/database
 				self.database_connection_string = 'postgresql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+				logger.info(f"Built PostgreSQL connection string for {self.db_config['database']}")
 
 			else:
 				raise ValueError(f"Unsupported database type: {self.db_type}. Use 'mysql' or 'postgresql'")
 
+			logger.info(f"Connecting to {self.db_type.upper()} database at {self.db_config['host']}:{self.db_config['port']}/{self.db_config['database']}")
 			flask_app.logger.info(f"Connecting to {self.db_type.upper()} database at {self.db_config['host']}:{self.db_config['port']}/{self.db_config['database']}")
 
 		# connect to database:
+		logger.debug("Creating DatabaseConnection instance")
 		self.db = DatabaseConnection(database_connection_string=self.database_connection_string)
+		logger.info("Database connection established successfully")
 
 	def pool(self, release):
 		# NOTE: NOT IMPLEMENTED YET

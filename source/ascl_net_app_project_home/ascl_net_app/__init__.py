@@ -25,11 +25,17 @@ def register_blueprints(app=None):
 	from .controllers.search import search_page
 	from .controllers.code_detail import code_detail_page
 	from .controllers.about import about_page
+	from .controllers.news import news_page
+	from .controllers.admin import admin_page
+	from .controllers.dashboard import dashboard_page
 
 	app.register_blueprint(index_page)
 	app.register_blueprint(browse_page)
 	app.register_blueprint(search_page)
 	app.register_blueprint(about_page)
+	app.register_blueprint(news_page)
+	app.register_blueprint(admin_page)
+	app.register_blueprint(dashboard_page)
 	# Register code_detail_page LAST - it has a catch-all route
 	app.register_blueprint(code_detail_page)
 
@@ -39,7 +45,7 @@ def register_blueprints(app=None):
 app = None
 
 def create_app(debug=False): #, conf=dict()):
-	
+
 	global app
 	app = Flask(__name__) # creates the app instance using the name of the module
 	app.debug = debug
@@ -53,29 +59,33 @@ def create_app(debug=False): #, conf=dict()):
 	# Configuration files are located in the "configuration_files" directory.
 	# -----------------------------------------------------------------------
 	server_config_file = None
-	
+
 	# Always load the default configuration - values that need to be overridden
 	# should be contained in other configuration files (see logic below).
 	default_config_file = _app_setup_utils.getConfigFile("default.cfg") # returns the file path
 	app.config.from_pyfile(default_config_file) # reads values into app.config dictionary
 
+	# Determine which config file to load based on mode
+	# When running with run_ascl_net_app.py --debug, we're in debug mode
+	# When running with uvicorn, we're in production mode
 	if app.debug:
 		#
-		# Look for configuration file by host name (for example, can modify to taste).
+		# DEBUG MODE: Use default.cfg (already loaded above)
+		# Optionally override with hostname-specific config
 		#
-		hostname = socket.gethostname()		
+		hostname = socket.gethostname()
 		if "your_host" in hostname:
 			server_config_file = _app_setup_utils.getConfigFile("your_host.cfg")
 		else:
-			server_config_file = _app_setup_utils.getConfigFile("default.cfg") # default
-		
+			# Already loaded default.cfg above, don't reload it
+			server_config_file = None
+
 	elif app.testing:
 		#
-		# Get config file when testing. Can add extra logic here to test multiple configurations,
-		# e.g. a testing configuration file.
+		# TESTING MODE: Use default.cfg (already loaded above)
 		#
-		server_config_file = _app_setup_utils.getConfigFile("default.cfg") # default
-		
+		server_config_file = None
+
 	else:
 		#
 		# Must be in production mode (running under Uvicorn).
@@ -98,7 +108,8 @@ def create_app(debug=False): #, conf=dict()):
 	if server_config_file:
 		print(green_text("Loading config file: "), yellow_text(server_config_file))
 		app.config.from_pyfile(server_config_file)
-	else:
+	elif not (app.debug or app.testing):
+		# Only warn in production mode if no config file found
 		print(yellow_text("Warning: No server configuration file found."))
 
 	# Override database credentials from environment variables if set
@@ -115,13 +126,17 @@ def create_app(debug=False): #, conf=dict()):
 	# -----------------------------
 	# Perform app setup below here.
 	# -----------------------------
-	
+
 	if app.debug:
 		#print("{0}App '{1}' created.{2}".format('\033[92m', __name__, '\033[0m'))
 		print_info("Application '{0}' created.".format(__name__))
 	else:
 		if app.config["USING_SENTRY"]:
 			_app_setup_utils.setupSentry(app, dsn=sentryDSN)
+
+	# Set up logging for the application and ascl_core module
+	from .utilities.logging_config import setup_logging
+	setup_logging(app)
 
 	# Change the implementation of "decimal" to a C-based version (much! faster)
 	try:
@@ -132,46 +147,30 @@ def create_app(debug=False): #, conf=dict()):
 
 	if app.config["USING_SQLALCHEMY"]:
 
-		# Database-specific setup
-		db_type = app.config.get("DB_TYPE", "mysql").lower()
+		# Database connection handled by ascl_core.database.connections.Trillian2DBConnection
+		# Controllers import: from ascl_core.database.connections import Trillian2DBConnection as db
 
-		# For backwards compatibility
+		app.logger.info("Database connection: ascl_core.database.connections.Trillian2DBConnection (dm-dbcore)")
+
+		# PostgreSQL-specific setup
+		db_type = app.config.get("DB_TYPE", "mysql").lower()
 		if app.config.get("USING_POSTGRESQL"):
 			db_type = "postgresql"
 		elif app.config.get("USING_MYSQL"):
 			db_type = "mysql"
 
 		if db_type == "postgresql":
-			# PostgreSQL-specific setup
 			_app_setup_utils.setupJSONandDecimal()
-
-			# This "with" is necessary to prevent exceptions of the form:
-			#    RuntimeError: working outside of application context
-			#    (i.e. the app object doesn't exist yet - being created here) (?)
-
-			with app.app_context():
-				from .model.databasePostgreSQL import db
-
-		elif db_type == "mysql":
-			# MySQL-specific setup (if needed)
-			# MySQL generally works out of the box with SQLAlchemy
-			pass
-
-		# Establish database connection
-		#
-		from .model.database import Database
-		database = Database()
-		database.connect(flask_app=app)
 
 		@app.teardown_appcontext
 		def shutdown_session(exception=None):
-			'''
-			Enable Flask to automatically remove database schema at the end of the request.
-			Also removes the session at app shutdown.
+			"""
+			Remove database sessions at the end of each request or when the app shuts down.
+			Trillian2DBConnection uses a scoped_session which needs cleanup per request.
 			Ref: http://flask.pocoo.org/docs/patterns/sqlalchemy/
-			'''
-			if hasattr(g, 'my_session'): # defined in model.database.py
-				g.my_session.remove()
+			"""
+			from ascl_core.database.connections import Trillian2DBConnection as db
+			db.Session.remove()
 
 	# Register all paths (URLs) available.
 	register_blueprints(app=app)
@@ -180,7 +179,5 @@ def create_app(debug=False): #, conf=dict()):
 	app.register_blueprint(jinja_filters.blueprint)
 
 	return app
-	
 
-	
-	
+

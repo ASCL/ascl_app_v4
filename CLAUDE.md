@@ -104,36 +104,52 @@ The main web application that will serve the ASCL.net website.
 
 **Configuration** (`ascl_net_app/configuration_files/default.cfg`):
 ```ini
-# Currently DISABLED - needs to be enabled for database functionality
-USING_SQLALCHEMY = False
-USING_POSTGRESQL = False
+# Database configuration - ENABLED (as of 2025-12-28)
+USING_SQLALCHEMY = True
+DB_TYPE = 'mysql'  # or 'postgresql' for future migration
 
-# Database connection parameters (currently commented out)
-#DB_DATABASE = ''
-#DB_HOST = ''
-#DB_USER = ''
-#DB_PASSWORD = ''  # Can be empty to use ~/.pgpass
-#DB_PORT = ''
+# Database connection parameters
+DB_DATABASE = 'ascl_db'
+DB_HOST = 'localhost'
+DB_USER = 'ascl_db'
+DB_PASSWORD = ''  # Leave empty to use ~/.my.cnf (MySQL) or ~/.pgpass (PostgreSQL)
+DB_PORT = '3307'  # ASCL Docker MySQL: 3307, PostgreSQL default: 5432
 
 # Production features
 USING_SENTRY = False
-USING_UWSGI = True
+USING_UVICORN = True  # Modern ASGI server
 ```
 
-**⚠️ Important**: SQLAlchemy and PostgreSQL are currently **disabled** in the default config. They need to be enabled and database credentials configured.
+**✅ Status**: Database functionality is **enabled** and fully operational with MySQL 8.0.42.
 
 #### Application Components
 
 **Controllers** (`ascl_net_app/controllers/`)
-- `index.py` - Main index page controller
+- `index.py` - Main index page
   - Routes: `/`, `/favicon.ico`, `/robots.txt`
-- Blueprint pattern for URL routing
-- Template: `templates/index.html`
+- `about.py` - About page
+  - Route: `/about`
+- `browse.py` - Browse codes by keyword
+  - Route: `/browse`
+- `search.py` - Search functionality
+  - Route: `/search`
+- `code_detail.py` - Individual code detail pages
+  - Route: `/code/<ascl_id>`
+- `news.py` - News listing and detail pages
+  - Routes: `/news`, `/news/<post_id>`
+- `dashboard.py` - **NEW (2025-12-28)** Public statistics dashboard
+  - Route: `/dashboard`
+  - Features: Comprehensive statistics, charts, top codes/keywords
+- `admin.py` - Admin interface with authentication
+  - Routes: `/admin`, `/admin/login`, `/admin/logout`, `/admin/unpublished`, `/admin/archived`
+  - Features: Secure bcrypt authentication, session management, login attempt tracking
 
 **Templates** (`ascl_net_app/templates/`)
-- `index.html` - Main page
-- `header.html` - Common header
-- `footer.html` - Common footer
+- Public pages: `index.html`, `about.html`, `browse.html`, `search.html`, `code_detail.html`
+- News: `news_list.html`, `news_detail.html`
+- Dashboard: `dashboard.html` - **NEW (2025-12-28)** Statistics dashboard
+- Admin: `admin/home.html`, `admin/codes_list.html`
+- Common: `base.html`, `header.html`, `footer.html`
 
 **Models** (`ascl_net_app/model/`)
 - `database.py` - Flask-specific database integration
@@ -306,43 +322,71 @@ The `ascldb` schema contains the core ASCL data:
 - **Configuration Management**: Multi-environment config system
 - **Reusability**: `ascl_core` module can be imported by other tools
 
-### Current Limitations
-1. ⚠️ Database functionality is **disabled by default** in configuration
-2. Database connection has not been tested yet
-3. MySQL → PostgreSQL migration not completed
-4. Limited controllers/routes implemented (only index page)
-5. Templates are minimal (header, footer, index only)
+### Current Status (Updated 2025-12-28)
+
+**✅ Completed**:
+1. Database functionality enabled and operational (MySQL 8.0.42)
+2. Core pages implemented: index, about, browse, search, code detail, news
+3. Admin authentication with secure bcrypt password hashing
+4. Public statistics dashboard with comprehensive metrics
+5. Templates styled and functional across all pages
+6. Admin interface for managing unpublished/archived codes
+
+**⚠️ Remaining Limitations**:
+1. MySQL → PostgreSQL migration not completed (MySQL support fully functional)
+2. Admin code editing/insertion not yet implemented
+3. REST API not yet implemented
+4. CSRF protection not yet added to admin forms
+5. Role-based permissions not yet implemented
+
+---
+
+## Security Features (Added 2025-12-28)
+
+### Password Hashing Upgrade
+The application now uses **bcrypt** for secure password hashing, replacing the deprecated SHA-1 algorithm:
+
+- **Algorithm**: Bcrypt with work factor 12 (adaptive hashing)
+- **Migration**: Automatic upgrade on login (no user password reset required)
+- **Backward Compatibility**: Dual-hash system supports both SHA-1 (legacy) and bcrypt
+- **Database**: Password field expanded from 40 to 60 characters
+- **Documentation**: See `PASSWORD_HASHING_UPGRADE.md` for full details
+- **Testing**: Comprehensive test suite in `test_password_hashing.py`
+
+**Security Impact**:
+- **Before**: SHA-1 vulnerable to brute-force (~8 billion hashes/sec on modern GPUs)
+- **After**: Bcrypt resistant to brute-force (~3 hashes/sec with work factor 12)
 
 ---
 
 ## Next Steps / TODO
 
-### Immediate Tasks
-1. **Database Migration**:
-   - Convert MySQL dump to PostgreSQL format
-   - Restore database and verify schema
-   - Test database connection from Flask app
+### High Priority
+1. **Admin Interface Enhancements**:
+   - Add code editing functionality (`/admin/update_code/<id>`)
+   - Add code insertion functionality (`/admin/insert_code`)
+   - Add pagination to unpublished/archived code lists
+   - Implement bulk actions (publish, archive, delete multiple codes)
 
-2. **Configuration**:
-   - Enable SQLAlchemy/PostgreSQL in default.cfg
-   - Set up database credentials
-   - Create metadata.schema_metadata table and triggers
+2. **Security Improvements**:
+   - Add CSRF protection to admin forms
+   - Implement role-based access control (admin, curator, user)
+   - Add secure session configuration
+   - Implement rate limiting for login attempts
 
-3. **Application Development**:
-   - Implement main pages (browse codes, search, detail pages)
-   - Create controllers for CRUD operations
-   - Design templates with proper styling
-   - Implement search functionality
-   - Add user authentication (if needed)
+3. **Database Migration**:
+   - Complete MySQL → PostgreSQL migration (optional, MySQL fully supported)
+   - Create migration scripts for schema changes
+   - Test PostgreSQL compatibility
 
 ### Future Enhancements
-- REST API for programmatic access
-- Admin interface for content management
-- Integration with ADS API
-- Zenodo synchronization
-- Citation export formats (BibTeX, RIS, etc.)
-- Advanced search and filtering
-- Statistics and analytics
+- **REST API**: Programmatic access to ASCL data
+- **ADS Integration**: Automatic citation data synchronization
+- **Zenodo Integration**: Software preservation and DOI minting
+- **Citation Export**: BibTeX, RIS, EndNote formats
+- **Advanced Search**: Faceted search with filters
+- **Link Checking**: Automated validation of external URLs
+- **Activity Log**: Track changes to code entries
 
 ---
 
@@ -371,11 +415,31 @@ The `ascldb` schema contains the core ASCL data:
 
 **Controllers**:
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/index.py` - Index page
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/about.py` - About page
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/browse.py` - Browse codes
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/search.py` - Search functionality
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/code_detail.py` - Code detail pages
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/news.py` - News pages
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/dashboard.py` - **NEW** Statistics dashboard
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/admin.py` - Admin interface
 
 **Templates**:
-- `source/ascl_net_app_project_home/ascl_net_app/templates/index.html`
-- `source/ascl_net_app_project_home/ascl_net_app/templates/header.html`
-- `source/ascl_net_app_project_home/ascl_net_app/templates/footer.html`
+- `source/ascl_net_app_project_home/ascl_net_app/templates/base.html` - Base template
+- `source/ascl_net_app_project_home/ascl_net_app/templates/index.html` - Home page
+- `source/ascl_net_app_project_home/ascl_net_app/templates/about.html` - About page
+- `source/ascl_net_app_project_home/ascl_net_app/templates/browse.html` - Browse page
+- `source/ascl_net_app_project_home/ascl_net_app/templates/search.html` - Search results
+- `source/ascl_net_app_project_home/ascl_net_app/templates/code_detail.html` - Code detail
+- `source/ascl_net_app_project_home/ascl_net_app/templates/news_list.html` - News listing
+- `source/ascl_net_app_project_home/ascl_net_app/templates/news_detail.html` - News detail
+- `source/ascl_net_app_project_home/ascl_net_app/templates/dashboard.html` - **NEW** Statistics dashboard
+- `source/ascl_net_app_project_home/ascl_net_app/templates/admin/home.html` - Admin home
+- `source/ascl_net_app_project_home/ascl_net_app/templates/admin/codes_list.html` - Admin code lists
+
+**Security & Migrations**:
+- `source/ascl_net_app_project_home/migrations/001_upgrade_password_hashing.sql` - **NEW** Password field migration
+- `source/ascl_net_app_project_home/test_password_hashing.py` - **NEW** Password hashing test suite
+- `source/ascl_net_app_project_home/PASSWORD_HASHING_UPGRADE.md` - **NEW** Security documentation
 
 ---
 
@@ -445,4 +509,15 @@ The `ascldb` schema contains the core ASCL data:
 
 ---
 
-*Last Updated: 2025-10-01*
+*Last Updated: 2025-12-28*
+
+## Changelog
+
+### 2025-12-28
+- ✅ Implemented public statistics dashboard at `/dashboard`
+- ✅ Upgraded password hashing from SHA-1 to bcrypt
+- ✅ Added dual-hash authentication system with automatic migration
+- ✅ Database functionality fully operational with MySQL 8.0.42
+- ✅ All core pages implemented and styled
+- ✅ Admin interface with secure authentication
+- 📝 Updated documentation (CLAUDE.md, TODO_MASTER.md, PASSWORD_HASHING_UPGRADE.md)

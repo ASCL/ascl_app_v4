@@ -11,6 +11,20 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import os
+import sys
+from pathlib import Path
+
+# Load environment variables from .env file for local development
+# Production uses asgi.py which doesn't load .env - environment variables
+# are set in systemd service file or deployment configuration
+from dotenv import load_dotenv
+env_file = Path(__file__).parent / '.env'
+if env_file.exists():
+    load_dotenv(env_file)
+    # Mark that we loaded from .env file (for logging purposes)
+    os.environ['_DOTENV_LOADED_FROM'] = str(env_file)
+    print(f"✓ [DEV] Loaded environment variables from {env_file}")
 
 from flask import Flask
 
@@ -64,11 +78,11 @@ if __name__ == "__main__":
 	if args.rules:
 		for rule in app.url_map.iter_rules():
 			print("Rule: {0} calls {1} ({2})".format(rule, rule.endpoint, ",".join(rule.methods)))
-	
+
 	# TODO: Switch over to new "flask run" method.
-	
+
 	if args.debug:
-		# If running on a remote host via a tunnel, not that
+		# If running on a remote host via a tunnel, note that
 		# Safari blocks some high ports (e.g.port 6000)
 		# Ref: http://support.apple.com/kb/TS4639
 		#
@@ -78,7 +92,7 @@ if __name__ == "__main__":
 		#
 		app.run(debug=args.debug, port=args.port, host=args.host)
 	else:
-		app.run()
+		app.run(debug=args.debug, port=args.port, host=args.host)
 
 # PLACE NO CODE BELOW THIS LINE - it won't get called. "app.run" is the main event loop.
 

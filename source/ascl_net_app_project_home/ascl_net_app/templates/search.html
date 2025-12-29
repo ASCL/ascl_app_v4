@@ -19,26 +19,60 @@
 {% if query %}
     <div class="search-results-count">
         Found {{ result_count }} result{% if result_count != 1 %}s{% endif %} for "{{ query }}"
+        {% if search_method == 'typesense' %}
+        <span style="color: #27ae60; font-size: 0.9em;">({{ search_time_ms }}ms via Typesense)</span>
+        {% elif search_method == 'mysql' %}
+        <span style="color: #e67e22; font-size: 0.9em;">(MySQL fallback)</span>
+        {% endif %}
     </div>
 
     {% if results %}
-        <div class="code-listings">
+        <div class="codelist">
             {% for code in results %}
-            <div class="code-entry">
-                <div class="code-id">[ascl:{{ code.ascl_id }}]</div>
-                <h3><a href="/{{ code.ascl_id }}">{{ code.title }}</a></h3>
+            <div class="item">
+                <span class="ascl_id">
+                    {% if code.ascl_id == "0000.000" %}
+                        [submitted]
+                    {% else %}
+                        [ascl:{{ code.ascl_id }}]
+                    {% endif %}
+                </span>
+
+                <span class="title">
+                    {% if code.ascl_id == "0000.000" %}
+                        <a href="/code/v/{{ code.pk }}">{{ code.title | safe }}</a>
+                    {% else %}
+                        <a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
+                    {% endif %}
+                </span>
+
                 {% if code.credit %}
-                <div class="authors">{{ code.credit }}</div>
+                <div class="credit">{{ code.credit | link_author_credit }}</div>
                 {% endif %}
-                <div class="description">
-                    {{ code.abstract | truncate(300) if code.abstract else 'No description available.' }}
+
+                <div class="abstract">
+                    {% if search_method == 'typesense' and typesense_hits %}
+                        {# Show highlighted snippet if available #}
+                        {% set hit = typesense_hits[loop.index0] %}
+                        {% if hit.highlights %}
+                            {% for highlight in hit.highlights %}
+                                {% if highlight.field == 'abstract' %}
+                                    {{ highlight.snippet | safe }}...
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            {{ code.abstract[:300] if code.abstract else 'No description available.' }}
+                        {% endif %}
+                    {% else %}
+                        {{ code.abstract[:300] if code.abstract else 'No description available.' }}
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
         </div>
     {% else %}
         <p style="padding: 2rem; text-align: center; color: #7f8c8d;">
-            No codes found matching your search. Try different keywords or <a href="/browse">browse all codes</a>.
+            No codes found matching your search. Try different keywords or <a href="/code/all">browse all codes</a>.
         </p>
     {% endif %}
 {% else %}

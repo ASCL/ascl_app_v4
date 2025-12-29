@@ -9,6 +9,7 @@ Group=www-data
 WorkingDirectory=/var/www/ascl_net_app
 Environment="PATH=/var/www/ascl_net_app/venv/bin"
 Environment="FLASK_CONFIG=production.cfg"
+Environment="ASCLDB_MYCNF_SECTION=client_ascl"
 
 # Run Uvicorn with multiple workers
 ExecStart=/var/www/ascl_net_app/venv/bin/uvicorn \

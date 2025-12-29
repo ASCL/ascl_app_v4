@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Admin{% endblock %}
+
+{% block content %}
+<h2>Admin</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+	{% if messages %}
+		<ul class="flash-messages">
+		{% for category, message in messages %}
+			<li class="{{ category }}">{{ message|safe }}</li>
+		{% endfor %}
+		</ul>
+	{% endif %}
+{% endwith %}
+
+<div class="admin-summary">
+	<p><strong>Published views:</strong> {{ published_views }}</p>
+	<p><strong>Unpublished views:</strong> {{ unpublished_views }}</p>
+</div>
+
+{% if current_user %}
+	<p>Signed in as <strong>{{ current_user.username }}</strong>. <a href="{{ url_for('admin_page.admin_logout') }}">Logout</a></p>
+	<ul>
+		<li><a href="{{ url_for('admin_page.unpublished_codes') }}">Unpublished codes</a></li>
+		<li><a href="{{ url_for('admin_page.archived_codes') }}">Archived codes</a></li>
+	</ul>
+{% else %}
+	<h3>Login</h3>
+	<form action="{{ url_for('admin_page.admin_login') }}" method="post" class="admin-login-form">
+		<div>
+			<label for="username">Username</label>
+			<input type="text" name="username" id="username" required />
+		</div>
+		<div>
+			<label for="password">Password</label>
+			<input type="password" name="password" id="password" required />
+		</div>
+		<div>
+			<button type="submit">Login</button>
+		</div>
+	</form>
+{% endif %}
+{% endblock %}

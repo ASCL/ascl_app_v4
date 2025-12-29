@@ -12,6 +12,33 @@ The Astrophysics Source Code Library (ASCL) is a registry of source codes used i
 - **MySQL 8.0** - Current database (PostgreSQL supported for future migration)
 - **Uvicorn** - High-performance ASGI server
 - **Nginx** - Reverse proxy and static file server
+- **bcrypt** - Secure password hashing
+
+## Features
+
+### Core Functionality
+- ✅ **Browse & Search**: Full-text search with Typesense integration
+- ✅ **Code Detail Pages**: Comprehensive information for each software entry
+- ✅ **News System**: Latest updates and announcements
+- ✅ **Statistics Dashboard**: Public metrics and visualizations at `/dashboard`
+  - Total codes, citations, views, keywords
+  - Codes added by year with bar charts
+  - Most viewed and most cited codes
+  - Recently added codes
+  - Top keywords
+  - Metadata completeness tracking
+
+### Admin Interface
+- ✅ **Secure Authentication**: bcrypt password hashing with automatic SHA-1 migration
+- ✅ **Session Management**: Login/logout with attempt tracking (lockout after 10 failures)
+- ✅ **Code Management**: View unpublished and archived codes
+- ⏳ **Future**: Code editing, insertion, bulk operations
+
+### Security
+- ✅ **Password Hashing**: Industry-standard bcrypt (work factor 12)
+- ✅ **Automatic Migration**: Legacy SHA-1 passwords upgraded on login
+- ✅ **Login Protection**: Rate limiting with lockout mechanism
+- ⏳ **Future**: CSRF protection, role-based access control
 
 ## Project Structure
 
@@ -51,9 +78,10 @@ alt_ascl/
 ### Prerequisites
 
 - Python 3.8 or higher
-- PostgreSQL 12 or higher
+- MySQL 8.0 or higher (or PostgreSQL 12+ for future migration)
 - pip and virtualenv
 - (Production) Nginx web server
+- (Optional) Docker for MySQL containerized setup
 
 ### Development Setup
 
@@ -525,12 +553,20 @@ See `CLAUDE.md` for detailed database schema documentation.
 
 **Note**: This is currently a private rebuild project. Contribution guidelines will be added when ready for public contributions.
 
-## Resources
+## Documentation
 
-- **Detailed Documentation**: See `CLAUDE.md` for comprehensive technical details
+### Project Documentation
+- **`CLAUDE.md`** - Comprehensive technical documentation and architecture details
+- **`TODO_MASTER.md`** - Complete task list and migration progress tracking
+- **`PASSWORD_HASHING_UPGRADE.md`** - Security upgrade documentation (SHA-1 → bcrypt)
+- **`DEPLOYMENT.md`** - Production deployment guide (systemd, Docker, Nginx)
+- **`LOGGING.md`** - Logging configuration and troubleshooting
+
+### External Resources
 - **Flask Documentation**: https://flask.palletsprojects.com/
 - **Uvicorn Documentation**: https://www.uvicorn.org/
 - **SQLAlchemy Documentation**: https://docs.sqlalchemy.org/
+- **bcrypt Documentation**: https://github.com/pyca/bcrypt/
 
 ## License
 
@@ -543,4 +579,20 @@ See `CLAUDE.md` for detailed database schema documentation.
 
 ---
 
-*Last Updated: 2025-10-01*
+*Last Updated: 2025-12-28*
+
+## Recent Changes
+
+### 2025-12-28
+- ✅ Implemented public statistics dashboard at `/dashboard`
+- ✅ Upgraded admin authentication from SHA-1 to bcrypt password hashing
+- ✅ Added automatic password migration (no user password reset required)
+- ✅ Database fully operational with MySQL 8.0.42
+- ✅ All core pages implemented (index, about, browse, search, code detail, news)
+- ✅ Admin interface for managing unpublished/archived codes
+- 📝 Comprehensive documentation updates
+
+### 2025-10-01
+- Initial project structure setup
+- Database schema migration planning
+- Flask application framework implementation

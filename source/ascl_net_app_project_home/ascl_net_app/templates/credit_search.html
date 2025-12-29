@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Credit Search for '{{ search_term }}'{% endblock %}
+
+{% block content %}
+<h1>Searching for codes credited to '{{ search_term }}'</h1>
+
+<p><strong style="color: red;"><span style="font-size: 19px;">&#10149;</span> Tip!</strong> Refine or expand your search. Authors are sometimes listed as 'Smith, J. K.' instead of 'Smith, John' so it is useful to search for last names only. Note this is currently a simple phrase search.</p>
+
+<form action="/code/cs_submit" method="post">
+	<input type="text" name="search" value="{{ search_term }}" />
+	<input type="submit" value="Search" />
+</form>
+
+<p>Found <strong>{{ result_count }}</strong> code(s){% if result_count == 100 %} (limited to 100 results){% endif %}</p>
+
+<div class="codelist">
+	{% if codes %}
+		{% for code in codes %}
+		<div class="item">
+
+			<span class="ascl_id">
+				{% if code.ascl_id == "0000.000" %}
+					[submitted]
+				{% else %}
+					[ascl:{{ code.ascl_id }}]
+				{% endif %}
+			</span>
+
+			<span class="title">
+				{% if code.ascl_id == "0000.000" %}
+					<a href="/code/v/{{ code.pk }}">{{ code.title | safe }}</a>
+				{% else %}
+					<a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
+				{% endif %}
+			</span>
+
+			{% if code.credit %}
+			<div class="credit">{{ code.credit | link_author_credit }}</div>
+			{% endif %}
+
+			<div class="abstract">
+				{{ code.abstract if code.abstract else 'No description available.' }}
+			</div>
+		</div>
+		{% endfor %}
+	{% else %}
+		<p>No codes found for author '{{ search_term }}'.</p>
+	{% endif %}
+</div>
+{% endblock %}

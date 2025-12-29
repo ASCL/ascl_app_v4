@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}ASCL Statistics Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+	<h1>ASCL Statistics Dashboard</h1>
+
+	<!-- Overall Statistics -->
+	<section class="dashboard-section">
+		<h2>Overall Statistics</h2>
+		<div class="stats-grid">
+			<div class="stat-card">
+				<div class="stat-value">{{ stats.total_codes|number_format }}</div>
+				<div class="stat-label">Total Codes</div>
+				<div class="stat-detail">{{ stats.published_codes|number_format }} published, {{ stats.unpublished_codes|number_format }} unpublished</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{{ stats.total_views|number_format }}</div>
+				<div class="stat-label">Total Views</div>
+				<div class="stat-detail">All-time page views</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{{ stats.total_citations|number_format }}</div>
+				<div class="stat-label">Total Citations</div>
+				<div class="stat-detail">Bibliographic entries</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{{ stats.codes_this_year|number_format }}</div>
+				<div class="stat-label">Codes Added This Year</div>
+				<div class="stat-detail">Published this year</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{{ stats.total_keywords|number_format }}</div>
+				<div class="stat-label">Keywords</div>
+				<div class="stat-detail">Classification tags</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{{ stats.total_links|number_format }}</div>
+				<div class="stat-label">External Links</div>
+				<div class="stat-detail">Repositories, documentation, etc.</div>
+			</div>
+		</div>
+	</section>
+
+	<!-- Codes by Year -->
+	<section class="dashboard-section">
+		<h2>Codes Added by Year</h2>
+		<div class="chart-container">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Year</th>
+						<th>Codes Added</th>
+						<th>Visualization</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in stats.codes_by_year %}
+					<tr>
+						<td>{{ item.year }}</td>
+						<td>{{ item.count }}</td>
+						<td>
+							<div class="bar-chart">
+								<div class="bar" style="width: {{ (item.count / stats.codes_by_year|map(attribute='count')|max * 100)|round }}%"></div>
+							</div>
+						</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<!-- Most Viewed Codes -->
+	<section class="dashboard-section">
+		<h2>Most Viewed Codes</h2>
+		<div class="code-list">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Rank</th>
+						<th>ASCL ID</th>
+						<th>Title</th>
+						<th>Views</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for code in stats.most_viewed %}
+					<tr>
+						<td>{{ loop.index }}</td>
+						<td><a href="/code/{{ code.ascl_id }}">{{ code.ascl_id }}</a></td>
+						<td><a href="/code/{{ code.ascl_id }}">{{ code.title }}</a></td>
+						<td>{{ code.views|number_format }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<!-- Most Cited Codes -->
+	<section class="dashboard-section">
+		<h2>Most Cited Codes</h2>
+		<div class="code-list">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Rank</th>
+						<th>ASCL ID</th>
+						<th>Title</th>
+						<th>Citations</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in stats.most_cited %}
+					<tr>
+						<td>{{ loop.index }}</td>
+						<td><a href="/code/{{ item.code.ascl_id }}">{{ item.code.ascl_id }}</a></td>
+						<td><a href="/code/{{ item.code.ascl_id }}">{{ item.code.title }}</a></td>
+						<td>{{ item.citation_count }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<!-- Recently Added Codes -->
+	<section class="dashboard-section">
+		<h2>Recently Added Codes</h2>
+		<div class="code-list">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>ASCL ID</th>
+						<th>Title</th>
+						<th>Added</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for code in stats.recently_added %}
+					<tr>
+						<td><a href="/code/{{ code.ascl_id }}">{{ code.ascl_id }}</a></td>
+						<td><a href="/code/{{ code.ascl_id }}">{{ code.title }}</a></td>
+						<td>{{ code.time_added.strftime('%Y-%m-%d') }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<!-- Top Keywords -->
+	<section class="dashboard-section">
+		<h2>Top Keywords</h2>
+		<div class="keyword-cloud">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Keyword</th>
+						<th>Codes</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in stats.top_keywords %}
+					<tr>
+						<td>{{ item.keyword.keyword }}</td>
+						<td>{{ item.code_count }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<!-- Metadata Completeness -->
+	<section class="dashboard-section">
+		<h2>Metadata Completeness</h2>
+		<div class="stats-grid">
+			<div class="stat-card">
+				<div class="stat-value">{{ stats.missing_metadata.doi|number_format }}</div>
+				<div class="stat-label">Codes Missing DOI</div>
+				<div class="stat-detail">{{ ((stats.missing_metadata.doi / stats.published_codes * 100)|round(1)) }}% of published codes</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{{ stats.missing_metadata.bibcode|number_format }}</div>
+				<div class="stat-label">Codes Missing Bibcode</div>
+				<div class="stat-detail">{{ ((stats.missing_metadata.bibcode / stats.published_codes * 100)|round(1)) }}% of published codes</div>
+			</div>
+		</div>
+	</section>
+</div>
+
+<style>
+.dashboard-container {
+	padding: 20px;
+	max-width: 1200px;
+	margin: 0 auto;
+}
+
+.dashboard-section {
+	margin-bottom: 40px;
+	background: #f8f9fa;
+	padding: 20px;
+	border-radius: 8px;
+}
+
+.dashboard-section h2 {
+	margin-top: 0;
+	margin-bottom: 20px;
+	color: #333;
+	border-bottom: 2px solid #007bff;
+	padding-bottom: 10px;
+}
+
+.stats-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 20px;
+}
+
+.stat-card {
+	background: white;
+	padding: 20px;
+	border-radius: 8px;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	text-align: center;
+}
+
+.stat-value {
+	font-size: 2.5em;
+	font-weight: bold;
+	color: #007bff;
+	margin-bottom: 5px;
+}
+
+.stat-label {
+	font-size: 1.1em;
+	font-weight: 600;
+	color: #555;
+	margin-bottom: 5px;
+}
+
+.stat-detail {
+	font-size: 0.9em;
+	color: #777;
+}
+
+.data-table {
+	width: 100%;
+	background: white;
+	border-collapse: collapse;
+	border-radius: 8px;
+	overflow: hidden;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.data-table thead {
+	background: #007bff;
+	color: white;
+}
+
+.data-table th,
+.data-table td {
+	padding: 12px;
+	text-align: left;
+	border-bottom: 1px solid #ddd;
+}
+
+.data-table tbody tr:hover {
+	background: #f5f5f5;
+}
+
+.data-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.bar-chart {
+	background: #e9ecef;
+	height: 25px;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.bar {
+	background: linear-gradient(90deg, #007bff, #0056b3);
+	height: 100%;
+	min-width: 2px;
+	transition: width 0.3s ease;
+}
+
+.code-list {
+	overflow-x: auto;
+}
+</style>
+{% endblock %}

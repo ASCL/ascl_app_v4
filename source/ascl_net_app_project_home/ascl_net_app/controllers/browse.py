@@ -27,9 +27,9 @@ def browse():
 	# Apply sorting
 	if sort_by == 'date':
 		if sort_order == 'desc':
-			query = query.order_by(ascldb.ASCLCode.ascl_id.desc())
+			query = query.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
 		else:
-			query = query.order_by(ascldb.ASCLCode.ascl_id.asc())
+			query = query.order_by(ascldb.ASCLCode.time_added.asc(), ascldb.ASCLCode.pk.asc())
 	else:  # sort by title
 		if sort_order == 'desc':
 			query = query.order_by(ascldb.ASCLCode.title.desc())

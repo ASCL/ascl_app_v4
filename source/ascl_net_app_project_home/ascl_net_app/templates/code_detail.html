@@ -3,6 +3,7 @@
 {% block title %}{{ code.title | safe }}{% endblock %}
 
 {% block content %}
+<h1>ASCL Code Record</h1>
 <div class="codelist">
 
 
@@ -18,27 +19,44 @@
 		</span>
 
 		{% if code.credit %}
-		<div class="credit">{{ code.credit }}</div>
+		<div class="credit">{{ code.credit | link_author_credit }}</div>
 		{% endif %}
 
 		{% if code.abstract %}
-		<div class="abstract">{{ code.abstract }}</div>
+		<div class="abstract">{{ code.abstract | link_ascl_ids }}</div>
 		{% endif %}
 
-		{% if code.site_url or code.code_site or code.described_in %}
+		{% if site_links or code.site_url or code.code_site or described_in_links or used_in_links %}
 		<dl class="sites">
-			{% if code.site_url or code.code_site %}
+			{% if site_links or code.site_url or code.code_site %}
 			<dt>Code site:</dt>
 			<dd>
-				{% if code.site_url %}<a href="{{ code.site_url }}">{{ code.site_url }}</a>{% endif %}
-				{% if code.code_site %}<a href="{{ code.code_site }}">{{ code.code_site }}</a>{% endif %}
+				{% if site_links %}
+					{% for link in site_links %}
+						<a href="{{ link }}">{{ link }}</a>{% if not loop.last %}<br>{% endif %}
+					{% endfor %}
+				{% else %}
+					{% if code.site_url %}<a href="{{ code.site_url }}">{{ code.site_url }}</a>{% endif %}
+					{% if code.code_site %}<a href="{{ code.code_site }}">{{ code.code_site }}</a>{% endif %}
+				{% endif %}
 			</dd>
 			{% endif %}
 
-			{% if code.described_in %}
+			{% if used_in_links %}
+			<dt>Used in:</dt>
+			<dd>
+				{% for link in used_in_links %}
+					<a href="{{ link }}">{{ link }}</a>{% if not loop.last %}<br>{% endif %}
+				{% endfor %}
+			</dd>
+			{% endif %}
+
+			{% if described_in_links %}
 			<dt>Described in:</dt>
 			<dd>
-				<a href="{{ code.described_in }}">{{ code.described_in }}</a>
+				{% for link in described_in_links %}
+					<a href="{{ link }}">{{ link }}</a>{% if not loop.last %}<br>{% endif %}
+				{% endfor %}
 			</dd>
 			{% endif %}
 			<div class="clear"></div>
@@ -62,7 +80,7 @@
 		<br>
 
 		<div class="clear"></div>
-		<div class="views">Views: {{ code.views if code.views else '0' }}</div>
+		<div class="views">Views: {{ view_count if view_count is not none else '0' }}</div>
 
 		<br>
 		<div class="shield">

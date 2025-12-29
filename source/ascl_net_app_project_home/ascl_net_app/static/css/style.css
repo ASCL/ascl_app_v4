@@ -150,7 +150,7 @@ a.social_button:hover { color: #fff; }
 .google:hover { background: #ac1b08; }
 
 
-.codelist { color: #6058c4; }
+.codelist { color: #333; }
 .random a { background: #EEE; border: 1px solid #AAA; color: #000; border-radius: 3px; padding: 5px 10px; text-decoration: none; display: block; float: left; }
 .random a:hover { background: #E5E5E5; border-color: #BBB; }
 

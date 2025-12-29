@@ -8,28 +8,41 @@
 <br />
 <h2>Most Recently Added Codes</h2>
 
-{% if recent_codes %}
+{% if records_by_date %}
 <div class="codelist">
 
-	{% for code in recent_codes %}
-	<div class="item">
+	{% for date_str, codes in records_by_date.items() %}
+		{# Display date header (format: YYYY Mon DD) #}
+		<h3>{{ date_str | format_date_header }}</h3>
 
+		{% for code in codes %}
+		<div class="item">
 
-		<span class="ascl_id">
-			[ascl:{{ code.ascl_id }}]
-		</span>
+			<span class="ascl_id">
+				{% if code.ascl_id == "0000.000" %}
+					[submitted]
+				{% else %}
+					[ascl:{{ code.ascl_id }}]
+				{% endif %}
+			</span>
 
-		<span class="title">
-			<a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
-		</span>
+			<span class="title">
+				{% if code.ascl_id == "0000.000" %}
+					<a href="/code/v/{{ code.pk }}">{{ code.title | safe }}</a>
+				{% else %}
+					<a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
+				{% endif %}
+			</span>
 
-		{% if code.credit %}
-		<div class="credit">{{ code.credit }}</div>
-		{% endif %}
+			{% if code.credit %}
+			<div class="credit">{{ code.credit | link_author_credit }}</div>
+			{% endif %}
 
-		<div class="abstract">{{ code.abstract if code.abstract else 'No description available.' }}</div>
-	</div>
+			<div class="abstract">{{ code.abstract if code.abstract else 'No description available.' }}</div>
+		</div>
+		{% endfor %}
 	{% endfor %}
+
 </div>
 {% else %}
 	<p>No codes available at this time.</p>

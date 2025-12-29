@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.title }}{% endblock %}
+
+{% block content %}
+<div class="codelist">
+	<div class="item">
+		<h2>{{ post.title }}</h2>
+		<div class="news-date">{{ post.date.strftime("%Y-%m-%d") if post.date else "" }}</div>
+		<div class="news-content">
+			{{ post.content|safe }}
+		</div>
+		<p><a href="/news">Back to news</a></p>
+	</div>
+</div>
+{% endblock %}

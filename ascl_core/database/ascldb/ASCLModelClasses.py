@@ -17,8 +17,8 @@ from sqlalchemy.orm import mapper, relationship, exc, column_property, validates
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm import registry
 
-from ..DatabaseConnection import DatabaseConnection
-from ..DatabaseConnection import DBTYPE_POSTGRESQL, DBTYPE_MYSQL, DBTYPE_SQLITE
+from dm_dbcore import DatabaseConnection
+from dm_dbcore import DBTYPE_POSTGRESQL, DBTYPE_MYSQL, DBTYPE_SQLITE
 
 dbc = DatabaseConnection()
 
@@ -86,44 +86,19 @@ db_schema = 'ascldb' if dbc.database_type == DBTYPE_POSTGRESQL else None
 # it will autoload from the database and add it to the Base.metadata object.
 #
 
-# @mapper_registry.mapped
-# class ASCLForZenodoMatching2(Base):
-	# __table__ = Table('ascl_for_zenodo_matching2', dbc.metadata,
-	# 				  schema=db_schema, autoload_with=dbc.engine)
-#
-# @mapper_registry.mapped
-# class ASCLForZenodoMatchingTwo(Base):
-	# __table__ = Table('ascl_for_zenodo_matching_two', dbc.metadata,
-	# 				  schema=db_schema, autoload_with=dbc.engine)
-#
-# @mapper_registry.mapped
-# class ASCLForZenodoMatching(Base):
-	# __table__ = Table('ascl_for_zenodo_matching', dbc.metadata,
-	# 				  schema=db_schema, autoload_with=dbc.engine)
-
 #@mapper_registry.mapped
 class Change(Base):
 	__table__ = Table('change', Base.metadata,
 				      schema=db_schema, autoload_with=dbc.engine)
 
 #@mapper_registry.mapped
-class LinkNew(Base):
-	__table__ = Table('links_new', dbc.metadata,
-					  schema=db_schema, autoload_with=dbc.engine)
-
-#@mapper_registry.mapped
 class Link(Base):
-	__table__ = Table('links', dbc.metadata,
+	__table__ = Table('link', dbc.metadata,
 					  schema=db_schema, autoload_with=dbc.engine)
 
 #@mapper_registry.mapped
 class ADSEntryNew(Base):
 	__table__ = Table('ads_entries_new', dbc.metadata,
-					  schema=db_schema, autoload_with=dbc.engine)
-
-#@mapper_registry.mapped
-class ADSEntry(Base):
-	__table__ = Table('ads_entries', dbc.metadata,
 					  schema=db_schema, autoload_with=dbc.engine)
 
 #@mapper_registry.mapped
@@ -139,21 +114,11 @@ class ASCLCodeAlias(Base):
 #@mapper_registry.mapped
 class ASCLCodeToKeyword(Base):
 	__table__ = Table('code_keywords', dbc.metadata,
-					  PrimaryKeyConstraint("code_id", "keyword_id", name="pk_code_keywords"),
-
-					  # Column("code_id", Integer, primary_key=True),
-					  # Column("keyword_id", Integer, primary_key=True),
-					  extend_existing=True,
 					  schema=db_schema, autoload_with=dbc.engine)
 
 #@mapper_registry.mapped
 class Keyword(Base):
 	__table__ = Table('keywords', dbc.metadata,
-					  schema=db_schema, autoload_with=dbc.engine)
-
-#@mapper_registry.mapped
-class CitationNew(Base):
-	__table__ = Table('citations_new', dbc.metadata,
 					  schema=db_schema, autoload_with=dbc.engine)
 
 #@mapper_registry.mapped
@@ -177,18 +142,8 @@ class Temp(Base):
 					  schema=db_schema, autoload_with=dbc.engine)
 
 #@mapper_registry.mapped
-class ClassicCitation(Base):
-	__table__ = Table('classic_citations', dbc.metadata,
-					  schema=db_schema, autoload_with=dbc.engine)
-
-#@mapper_registry.mapped
 class CISession(Base):
 	__table__ = Table('ci_sessions', dbc.metadata,
-					  schema=db_schema, autoload_with=dbc.engine)
-
-#@mapper_registry.mapped
-class ASCLCodeBackup2(Base):
-	__table__ = Table('codes_backup2', dbc.metadata,
 					  schema=db_schema, autoload_with=dbc.engine)
 
 # =========================
@@ -198,21 +153,106 @@ class ASCLCodeBackup2(Base):
 #       "#@mapper_registry.mapped" decorator; instead go
 #       back to subclassing from "Base".
 
-# Example relationships (uncomment and adjust as needed):
-#ASCLCode.codeAliases = relationship(ASCLCodeAlias, backref="code")
-ASCLCode.keywords = relationship(Keyword,
-								 secondary=ASCLCodeToKeyword.__table__,
-								 #foreign_keys=[ASCLCodeToKeyword.code_id, ASCLCodeToKeyword.keyword_id],
-								 primaryjoin=ASCLCodeToKeyword.code_id==ASCLCode.ascl_id,
-								 secondaryjoin=ASCLCodeToKeyword.keyword_id==Keyword.id,
-								 backref="asclCode")
-#
-# FitsFile.directoryPaths = relationship(DirectoryPath,
-									   # secondary=FitsFileToDirectoryPath.__table__,
-									   # #foreign_keys=[FitsFileToDirectoryPath.fits_file_pk, FitsFileToDirectoryPath.directory_path_pk],
-									   # primaryjoin=FitsFileToDirectoryPath.fits_file_pk==FitsFile.pk,
-									   # secondaryjoin=FitsFileToDirectoryPath.directory_path_pk==DirectoryPath.pk,
-									   # backref="fitsFile")
+# ---------------------------------------------------------
+# 1. ASCLCode.aliases → ASCLCodeAlias (One-to-Many)
+# ---------------------------------------------------------
+# FK: code_aliases.code_id → codes.pk
+# One code has many aliases
+# Note: Using string-based primaryjoin because FK may not be reflected from MySQL
+ASCLCode.aliases = relationship(
+	"ASCLCodeAlias",
+	primaryjoin="ASCLCode.pk == foreign(ASCLCodeAlias.code_id)",
+	backref="code",
+	cascade="save-update, merge",
+	lazy="selectin"
+)
+
+# ---------------------------------------------------------
+# 2. ASCLCode.keywords ↔ Keyword (Many-to-Many)
+# ---------------------------------------------------------
+# Via code_keywords junction table
+# FKs: code_keywords.code_id → codes.pk, code_keywords.keyword_id → keywords.id
+ASCLCode.keywords = relationship(
+	"Keyword",
+	secondary="code_keywords",
+	primaryjoin="ASCLCode.pk == code_keywords.c.code_id",
+	secondaryjoin="Keyword.id == code_keywords.c.keyword_id",
+	backref="ascl_codes",
+	lazy="selectin"
+)
+
+# ---------------------------------------------------------
+# 3. ASCLCode.ads_entries → ADSEntryNew (One-to-Many)
+# ---------------------------------------------------------
+# FK: ads_entries_new.code_pk → codes.pk
+# One code has many ADS entries
+# NOTE: Using lambda to delay evaluation until tables are loaded
+ASCLCode.ads_entries = relationship(
+	"ADSEntryNew",
+	primaryjoin=lambda: ASCLCode.__table__.c[list(ASCLCode.__table__.primary_key.columns.keys())[0]] == ADSEntryNew.__table__.c.code_pk,
+	foreign_keys=lambda: [ADSEntryNew.__table__.c.code_pk],
+	backref="ascl_code",
+	cascade="save-update, merge",
+	lazy="selectin"
+)
+
+# ---------------------------------------------------------
+# 4. ASCLCode.links → Link (One-to-Many)
+# ---------------------------------------------------------
+# FK: link.code_pk → codes.pk
+# One code has many links
+ASCLCode.links = relationship(
+	"Link",
+	primaryjoin=lambda: ASCLCode.__table__.c[list(ASCLCode.__table__.primary_key.columns.keys())[0]] == Link.__table__.c.code_pk,
+	foreign_keys=lambda: [Link.__table__.c.code_pk],
+	backref="ascl_code",
+	cascade="save-update, merge",
+	lazy="selectin"
+)
+
+# ---------------------------------------------------------
+# 5. ASCLCode.citefile_metadata → CitefileMetadata (One-to-One or One-to-Many)
+# ---------------------------------------------------------
+# FK: citefile_metadata.code_pk → codes.pk
+# One code has one (or possibly many) citefile metadata record(s)
+ASCLCode.citefile_metadata = relationship(
+	"CitefileMetadata",
+	primaryjoin=lambda: ASCLCode.__table__.c[list(ASCLCode.__table__.primary_key.columns.keys())[0]] == CitefileMetadata.__table__.c.code_pk,
+	foreign_keys=lambda: [CitefileMetadata.__table__.c.code_pk],
+	backref="ascl_code",
+	cascade="save-update, merge",
+	lazy="selectin",
+	uselist=True  # Set to False if truly one-to-one
+)
+
+# ---------------------------------------------------------
+# 6. ASCLCode.changes → Change (One-to-Many)
+# ---------------------------------------------------------
+# FK: change.code_pk → codes.pk
+# One code has many change records
+ASCLCode.changes = relationship(
+	"Change",
+	primaryjoin=lambda: ASCLCode.__table__.c[list(ASCLCode.__table__.primary_key.columns.keys())[0]] == Change.__table__.c.code_pk,
+	foreign_keys=lambda: [Change.__table__.c.code_pk],
+	backref="ascl_code",
+	cascade="save-update, merge",
+	lazy="selectin"
+)
+
+# ---------------------------------------------------------
+# 7. ASCLCode.citations → Citation (One-to-Many)
+# ---------------------------------------------------------
+# FK: citations.code_pk → codes.pk
+# NOTE: entry_asclid column was removed in Step 16 of DB_UPGRADE_PLAYBOOK
+# All joins now use code_pk (integer FK) instead of ascl_id (varchar)
+ASCLCode.citations = relationship(
+	"Citation",
+	primaryjoin=lambda: ASCLCode.__table__.c[list(ASCLCode.__table__.primary_key.columns.keys())[0]] == Citation.__table__.c.code_pk,
+	foreign_keys=lambda: [Citation.__table__.c.code_pk],
+	backref="ascl_code",
+	cascade="save-update, merge",
+	lazy="selectin"
+)
 
 
 # ---------------------------------------------------------
@@ -236,6 +276,7 @@ see the error message below for details.
 # assert CodesAliases.__table__.c.alias.references(Codes.__table__.c.id)
 
 # Write metadata cache if caching is enabled and cache doesn't exist
-if dbc.metadataCache is not None and not dbc.metadataCache.cachePath.exists():
-	assert len(Base.metadata.tables) > 0
-	dbc.metadataCache.write(metadata=Base.metadata)
+# NOTE: Metadata caching disabled during active development
+# if dbc.metadataCache is not None and not dbc.metadataCache.cachePath.exists():
+# 	assert len(Base.metadata.tables) > 0
+# 	dbc.metadataCache.write(metadata=Base.metadata)

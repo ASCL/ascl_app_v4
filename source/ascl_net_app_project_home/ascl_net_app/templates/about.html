@@ -1,56 +1,32 @@
 {% extends "base.html" %}
 
-{% block title %}About - ASCL.net{% endblock %}
+{% block title %}{{ page_title or "About - ASCL.net" }}{% endblock %}
 
 {% block content %}
-<h2>About ASCL.net</h2>
+<div class="codelist">
+	<div class="item">
+		<h1>{{ page_title or "About ASCL.net" }}</h1>
 
-<div class="about-content" style="line-height: 1.8;">
-    <h3>What is ASCL?</h3>
-    <p>
-        The Astrophysics Source Code Library (ASCL) is a free online registry for source code of interest to astronomers and astrophysicists.
-        It lists codes that have been used in research that has appeared in, or been submitted to, peer-reviewed publications.
-    </p>
+		{% if subpages and subpages|length > 1 %}
+			<div id="subpages">
+				{% for page in subpages %}
+					{% if page.ID == current_page %}
+						<strong>{{ page.post_title }}</strong>
+					{% else %}
+						<a href="/getwp/{{ page.ID }}">{{ page.post_title }}</a>
+					{% endif %}
+					{% if not loop.last %}&nbsp;&bull;&nbsp;{% endif %}
+				{% endfor %}
+			</div>
+		{% endif %}
 
-    <h3>Citing Codes</h3>
-    <p>
-        Each code entry in the ASCL is assigned a unique identifier in the form <code>ascl:YYMM.NNN</code>, where:
-    </p>
-    <ul>
-        <li><strong>YY</strong> = Year (two digits)</li>
-        <li><strong>MM</strong> = Month (two digits)</li>
-        <li><strong>NNN</strong> = Sequential number for that month</li>
-    </ul>
-    <p>
-        This identifier makes codes citable and discoverable, just like research papers.
-    </p>
+		<div class="wp-content">
+			{{ content|safe }}
+		</div>
 
-    <h3>Indexing</h3>
-    <p>
-        ASCL entries are indexed by the SAO/NASA Astrophysics Data System (ADS), making them discoverable alongside
-        traditional research literature. This integration helps researchers find and cite the software they use.
-    </p>
-
-    <h3>Mission</h3>
-    <p>
-        The ASCL's mission is to:
-    </p>
-    <ul>
-        <li>Improve the transparency and reproducibility of astrophysics research</li>
-        <li>Provide proper credit to software authors</li>
-        <li>Enable discovery of research software</li>
-        <li>Promote best practices in scientific software development</li>
-    </ul>
-
-    <h3>Submitting Codes</h3>
-    <p>
-        If you have developed astrophysics source code that has been used in published research,
-        we encourage you to submit it to the ASCL. Visit the submission page for more information.
-    </p>
-
-    <h3>Contact</h3>
-    <p>
-        For questions or more information about ASCL.net, please visit our website or follow us on social media.
-    </p>
+		{% if back %}
+			<p><a href="/{{ back }}">Back</a></p>
+		{% endif %}
+	</div>
 </div>
 {% endblock %}

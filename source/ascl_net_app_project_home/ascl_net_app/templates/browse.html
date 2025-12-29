@@ -90,7 +90,7 @@
 			</span>
 
 			{% if code.credit %}
-			<div class="credit">{{ code.credit }}</div>
+			<div class="credit">{{ code.credit | link_author_credit }}</div>
 			{% endif %}
 
 			{% if view_mode == 'abstract' %}

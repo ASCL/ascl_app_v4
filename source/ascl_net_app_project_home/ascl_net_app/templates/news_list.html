@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}ASCL News{% endblock %}
+
+{% block content %}
+<div class="codelist">
+	<h2>ASCL News</h2>
+	{% if posts %}
+		<ul class="news-list">
+			{% for post in posts %}
+				<li class="news-item">
+					<div class="news-title">
+						<a href="/news/{{ post.slug }}">{{ post.title }}</a>
+					</div>
+					<div class="news-date">{{ post.date.strftime("%Y-%m-%d") if post.date else "" }}</div>
+					<div class="news-excerpt">{{ post.excerpt }}</div>
+				</li>
+			{% endfor %}
+		</ul>
+		{% if total_pages > 1 %}
+			<div class="pagination">
+				{% if page > 1 %}
+					<a href="/news?page={{ page - 1 }}">Previous</a>
+				{% endif %}
+				<span>Page {{ page }} of {{ total_pages }}</span>
+				{% if page < total_pages %}
+					<a href="/news?page={{ page + 1 }}">Next</a>
+				{% endif %}
+			</div>
+		{% endif %}
+	{% else %}
+		<p>No news posts found.</p>
+	{% endif %}
+</div>
+{% endblock %}

@@ -2,13 +2,15 @@
 # -*- coding: UTF-8 -*-
 
 import os
+import logging
 from socket import gethostname
 
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-from ..DatabaseConnection import DatabaseConnection
-#from ..pgutils import read_password_from_pgpass
+from dm_dbcore import DatabaseConnection
+
+logger = logging.getLogger("DatabaseConnection logger")
 
 # ---------------------------------------------------------------------
 # Fill in database connection information here.
@@ -18,7 +20,7 @@ from ..DatabaseConnection import DatabaseConnection
 db_config = {
 	'user'     : 'ascl_db',  	    # specify the database username
 	'password' : '',     			# the database password for that user -> '' reads from ~/.my.cnf or ~/.pgpass
-	'database' : 'ascl_db',			# the name of the database
+	'database' : 'ascl_db_v4',		# the name of the database (v4 = upgraded schema with InnoDB+FKs)
 	'host'     : 'localhost',		# your hostname, "localhost" if on your own machine
 	'port'     : 3307				# ASCL MySQL Docker: 3307, PostgreSQL default: 5432
 }
@@ -56,12 +58,20 @@ if "ASCLDB_PASSWORD" in os.environ:
 
 database_connection_string = 'mysql://{0[user]}:{0[password]}@{0[host]}:{0[port]}/{0[database]}'.format(db_config)
 
+logger.info(f"Trillian2DBConnection: Configured to connect to {db_config['host']}:{db_config['port']}/{db_config['database']}")
+logger.debug(f"Trillian2DBConnection: Connection string: mysql://{db_config['user']}:***@{db_config['host']}:{db_config['port']}/{db_config['database']}")
+
 # This allows the file to be 'import'ed any number of times, but attempts to
 # connect to the database only once.
 try:
+	logger.debug("Trillian2DBConnection: Attempting to get existing DatabaseConnection singleton")
 	db = DatabaseConnection() # fails if connection not yet made.
+	logger.info("Trillian2DBConnection: Using existing DatabaseConnection singleton")
 except:
-	db = DatabaseConnection(database_connection_string=database_connection_string, cache_name="ascldb_metadata_cache.pickle")
+	logger.info("Trillian2DBConnection: Creating new DatabaseConnection singleton")
+	# NOTE: Metadata caching disabled during active development
+	db = DatabaseConnection(database_connection_string=database_connection_string, cache_name=None)
+	logger.info("Trillian2DBConnection: DatabaseConnection created successfully")
 
 engine = db.engine
 metadata = db.metadata
