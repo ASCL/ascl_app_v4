@@ -9,6 +9,7 @@ Flask>=3.0.0
 
 # ASGI Server
 uvicorn[standard]>=0.27.0  # Includes uvloop and httptools for better performance
+asgiref>=3.7.0  # WSGI-to-ASGI adapter for running Flask with Uvicorn
 
 # Database adapters - install the one(s) you need
 # MySQL (currently used)
