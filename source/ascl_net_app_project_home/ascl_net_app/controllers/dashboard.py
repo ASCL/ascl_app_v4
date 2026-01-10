@@ -62,26 +62,53 @@ def dashboard_home():
 		.scalar() or 0
 	)
 
-	# === Codes Added by Year ===
-	codes_by_year = (
-		db_session.query(
-			extract("year", ascldb.ASCLCode.time_added).label("year"),
-			func.count(ascldb.ASCLCode.pk).label("count"),
-		)
-		.filter(ascldb.ASCLCode.published == 1)
-		.group_by("year")
-		.order_by("year")
-		.all()
-	)
+	# === Codes Added by Year (from ascl_id, last 10 years) ===
+	# Matches production PHP: concat(century, substring(ascl_id, 1, 2))
+	# ASCL ID format: YYMM.NNN (e.g., 2312.001 = December 2023)
+	from sqlalchemy import text
+
+	current_year = datetime.now().year
+	cutoff_year = current_year - 10
+
+	# Use raw SQL to match PHP exactly (avoids SQLAlchemy column reference issues)
+	sql = text("""
+		SELECT CONCAT(century, SUBSTRING(ascl_id, 1, 2)) AS year,
+		       COUNT(pk) AS count
+		FROM codes
+		WHERE CONCAT(century, SUBSTRING(ascl_id, 1, 2)) > :cutoff_year
+		  AND ascl_id != '0000.000'
+		GROUP BY year
+		ORDER BY year ASC
+	""")
+
+	result = db_session.execute(sql, {"cutoff_year": str(cutoff_year)})
 	stats["codes_by_year"] = [
 		{"year": int(row.year), "count": row.count}
-		for row in codes_by_year if row.year
+		for row in result
+	]
+
+	# === Citations by Year (from 2012 onwards) ===
+	# Matches production PHP dashboard
+	sql_citations = text("""
+		SELECT year, COUNT(*) AS count
+		FROM citations
+		WHERE type = 'ascl_entry'
+		  AND year >= 2012
+		GROUP BY year
+		ORDER BY year ASC
+	""")
+
+	result_citations = db_session.execute(sql_citations)
+	stats["citations_by_year"] = [
+		{"year": int(row.year), "count": row.count}
+		for row in result_citations
 	]
 
 	# === Most Viewed Codes ===
 	most_viewed = (
 		db_session.query(ascldb.ASCLCode)
 		.filter(ascldb.ASCLCode.published == 1)
+		.filter(ascldb.ASCLCode.ascl_id != '0000.000')
 		.order_by(desc(ascldb.ASCLCode.views))
 		.limit(10)
 		.all()
@@ -96,6 +123,7 @@ def dashboard_home():
 		)
 		.join(ascldb.Citation, ascldb.ASCLCode.pk == ascldb.Citation.code_pk, isouter=True)
 		.filter(ascldb.ASCLCode.published == 1)
+		.filter(ascldb.ASCLCode.ascl_id != '0000.000')
 		.group_by(ascldb.ASCLCode.pk)
 		.order_by(desc("citation_count"))
 		.limit(10)
@@ -110,6 +138,7 @@ def dashboard_home():
 	recently_added = (
 		db_session.query(ascldb.ASCLCode)
 		.filter(ascldb.ASCLCode.published == 1)
+		.filter(ascldb.ASCLCode.ascl_id != '0000.000')
 		.order_by(desc(ascldb.ASCLCode.time_added))
 		.limit(10)
 		.all()

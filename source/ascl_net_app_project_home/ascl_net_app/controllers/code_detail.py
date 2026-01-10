@@ -7,6 +7,118 @@ from sqlalchemy import text
 
 code_detail_page = flask.Blueprint("code_detail_page", __name__)
 
+@code_detail_page.route("/alt/<path:ascl_id>", methods=['GET'])
+def code_detail_alt(ascl_id):
+	"""Modern alternate version of code detail page."""
+	import re
+	if not re.match(r'^\d{4}\.\d{3}$', ascl_id):
+		from flask import abort
+		abort(404)
+
+	from ascl_core.database.connections import Trillian2Connection as db
+	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
+
+	# Get database session
+	session = db.Session()
+
+	code = session.query(ascldb.ASCLCode).filter_by(ascl_id=ascl_id).first()
+
+	if not code:
+		abort(404)
+
+	def _parse_php_serialized_list(value):
+		"""Return a list of strings from a PHP-serialized array or simple string."""
+		if not value:
+			return []
+		if isinstance(value, bytes):
+			value = value.decode(errors="ignore")
+
+		# Common case: PHP-serialized array of strings such as a:2:{i:0;s:53:"http://...";i:1;s:...;}
+		if isinstance(value, str) and value.strip().startswith("a:"):
+			matches = re.findall(r'"([^"]+)"', value)
+			if matches:
+				return matches
+
+		# Fallback: split on whitespace/commas/semicolons to catch simple multi-value strings
+		if isinstance(value, str):
+			parts = re.split(r"[\s,;]+", value.strip())
+			return [p for p in parts if p]
+
+		return []
+
+	# Increment view count
+	view_count = code.views or 0
+	try:
+		with db.engine.begin() as conn:
+			conn.execute(text("UPDATE codes SET views = views + 1 WHERE pk = :pk"), {"pk": code.pk})
+		view_count = view_count + 1
+	except Exception:
+		view_count = code.views or 0
+
+	# Get related links from link table
+	link_query = text("""
+		SELECT l.url, lt.short_name
+		FROM link l
+		LEFT JOIN link_type lt ON l.link_type_pk = lt.pk
+		WHERE l.code_pk = :code_pk
+		ORDER BY lt.pk, l.id
+	""")
+
+	link_results = session.execute(link_query, {"code_pk": code.pk}).fetchall()
+
+	# Group links by type
+	site_links = []
+	described_in_links = []
+	used_in_links = []
+	ref_links = []
+
+	for link in link_results:
+		url = link.url
+		link_type = link.short_name
+
+		if link_type == 'code-site':
+			site_links.append(url)
+		elif link_type == 'described-in':
+			described_in_links.append(url)
+		elif link_type == 'used-in':
+			used_in_links.append(url)
+		elif link_type == 'reference':
+			ref_links.append(url)
+		elif link_type is None or link_type == '':
+			site_links.append(url)
+
+	# Fallback to PHP-serialized columns if no links found
+	if not link_results:
+		site_links = _parse_php_serialized_list(getattr(code, "site_list", None))
+		described_in_links = _parse_php_serialized_list(getattr(code, "described_in", None))
+		used_in_links = _parse_php_serialized_list(getattr(code, "used_in", None))
+
+	# Get keywords for this code
+	from sqlalchemy import desc
+	keywords_query = text("""
+		SELECT k.keyword
+		FROM keywords k
+		JOIN code_keywords ck ON k.id = ck.keyword_id
+		WHERE ck.code_id = :code_pk
+		ORDER BY k.keyword ASC
+	""")
+
+	keyword_results = session.execute(keywords_query, {"code_pk": code.pk}).fetchall()
+	keywords = [row.keyword for row in keyword_results]
+
+	templateDict = {
+		'code': code,
+		'site_links': site_links,
+		'described_in_links': described_in_links,
+		'used_in_links': used_in_links,
+		'ref_links': ref_links,
+		'view_count': view_count,
+		'keywords': keywords,
+	}
+
+	return render_template("code_detail_alt.html", **templateDict)
+
+
 @code_detail_page.route("/<path:ascl_id>", methods=['GET'])
 def code_detail(ascl_id):
 	# Only handle ASCL ID format (YYMM.NNN)
@@ -57,17 +169,54 @@ def code_detail(ascl_id):
 	except Exception:
 		view_count = code.views or 0
 
-	# Get related data (keywords, links, etc.)
-	# keywords = code.keywords if hasattr(code, 'keywords') else []
-	site_links = _parse_php_serialized_list(getattr(code, "site_list", None))
-	described_in_links = _parse_php_serialized_list(getattr(code, "described_in", None))
-	used_in_links = _parse_php_serialized_list(getattr(code, "used_in", None))
+	# Get related links from link table (migrated from PHP-serialized columns)
+	# Query links joined with link_type to categorize them
+	link_query = text("""
+		SELECT l.url, lt.short_name
+		FROM link l
+		LEFT JOIN link_type lt ON l.link_type_pk = lt.pk
+		WHERE l.code_pk = :code_pk
+		ORDER BY lt.pk, l.id
+	""")
+
+	link_results = session.execute(link_query, {"code_pk": code.pk}).fetchall()
+
+	# Group links by type
+	site_links = []
+	described_in_links = []
+	used_in_links = []
+	ref_links = []
+
+	for link in link_results:
+		url = link.url
+		link_type = link.short_name
+
+		if link_type == 'code-site':
+			site_links.append(url)
+		elif link_type == 'described-in':
+			described_in_links.append(url)
+		elif link_type == 'used-in':
+			used_in_links.append(url)
+		elif link_type == 'reference':
+			ref_links.append(url)
+		elif link_type is None or link_type == '':
+			# NULL or empty link_type - default to treating as code site link
+			# This handles legacy links that existed before link_type was added
+			site_links.append(url)
+
+	# Fallback to PHP-serialized columns if no links found in link table
+	# (in case migration hasn't been run or for codes without links in link table)
+	if not link_results:
+		site_links = _parse_php_serialized_list(getattr(code, "site_list", None))
+		described_in_links = _parse_php_serialized_list(getattr(code, "described_in", None))
+		used_in_links = _parse_php_serialized_list(getattr(code, "used_in", None))
 
 	templateDict = {
 		'code': code,
 		'site_links': site_links,
 		'described_in_links': described_in_links,
 		'used_in_links': used_in_links,
+		'ref_links': ref_links,
 		'view_count': view_count,
 	}
 

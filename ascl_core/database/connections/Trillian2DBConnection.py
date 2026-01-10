@@ -4,6 +4,8 @@
 import os
 import logging
 from socket import gethostname
+from urllib.parse import quote_plus
+from configparser import ConfigParser
 
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -14,16 +16,41 @@ logger = logging.getLogger("DatabaseConnection logger")
 
 # ---------------------------------------------------------------------
 # Fill in database connection information here.
-# Note!! The password is read from ~/.my.cnf (MySQL) or ~/.pgpass (PostgreSQL)
-# 		 so the source file can be checked into public version control.
+# The password is read from ~/.my.cnf (MySQL) or ~/.pgpass (PostgreSQL)
+# so the source file can be checked into public version control.
 # ---------------------------------------------------------------------
+
+def read_mysql_config(group='client_ascl'):
+	"""Read MySQL credentials from ~/.my.cnf and return a config dict."""
+	config_path = os.path.expanduser('~/.my.cnf')
+
+	config = ConfigParser()
+	config.read(config_path)
+
+	if group not in config:
+		logger.warning(f"MySQL config section [{group}] not found in {config_path}")
+		return {}
+
+	return dict(config[group])
+
+# Read credentials from ~/.my.cnf [client_ascl] section
+mysql_config = read_mysql_config('client_ascl')
+
 db_config = {
-	'user'     : 'ascl_db',  	    # specify the database username
-	'password' : '',     			# the database password for that user -> '' reads from ~/.my.cnf or ~/.pgpass
-	'database' : 'ascl_db_v4',		# the name of the database (v4 = upgraded schema with InnoDB+FKs)
-	'host'     : 'localhost',		# your hostname, "localhost" if on your own machine
-	'port'     : 3307				# ASCL MySQL Docker: 3307, PostgreSQL default: 5432
+	'user'     : mysql_config.get('user', 'ascl_db'),
+	'password' : mysql_config.get('password', ''),  # Will be URL-encoded below
+	'database' : 'ascl_db_v4',  # the name of the database (v4 = upgraded schema with InnoDB+FKs)
+	'host'     : mysql_config.get('host', 'localhost'),
+	'port'     : int(mysql_config.get('port', 3307))
 }
+
+# URL-encode the password to handle special characters
+if db_config['password']:
+	db_config['password_encoded'] = quote_plus(db_config['password'])
+else:
+	db_config['password_encoded'] = ''
+
+logger.info(f"Read MySQL credentials from ~/.my.cnf [client_ascl]")
 # ---------------------------------------------------------------------
 
 # The default connection is via "localhost". If the local host name is not "...",
@@ -51,12 +78,9 @@ if "ASCLDB_PASSWORD" in os.environ:
 # No need to modify anything below this line.
 # =====================================================================
 
-# Empty password string will cause MySQL to read from ~/.my.cnf
-# For PostgreSQL, empty password will read from ~/.pgpass
-#
-# If password is empty, that's intentional (use credential files)
-
-database_connection_string = 'mysql://{0[user]}:{0[password]}@{0[host]}:{0[port]}/{0[database]}'.format(db_config)
+# Build connection string with URL-encoded password
+# This handles special characters in passwords (like {, }, =, ~, etc.)
+database_connection_string = 'mysql://{0[user]}:{0[password_encoded]}@{0[host]}:{0[port]}/{0[database]}'.format(db_config)
 
 logger.info(f"Trillian2DBConnection: Configured to connect to {db_config['host']}:{db_config['port']}/{db_config['database']}")
 logger.debug(f"Trillian2DBConnection: Connection string: mysql://{db_config['user']}:***@{db_config['host']}:{db_config['port']}/{db_config['database']}")

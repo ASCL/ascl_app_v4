@@ -413,6 +413,9 @@
   - [ ] Handle code not found (404)
   - [ ] Load related data (keywords, citations, links)
 
+- [ ] **CODE-001a**: Fix spacing on code detail page
+  - [ ] Review and fix layout/spacing issues on code detail template
+
 - [ ] **CODE-002**: Code detail template
   - [ ] Display all code metadata
   - [ ] Display aliases
@@ -629,6 +632,18 @@
   - Use Elasticsearch for search queries only
 
 **Recommended**: Start with **Option A** (MySQL FULLTEXT), migrate to **Option B** or **C** if needed later.
+
+**Option D: Typesense** (Modern, lightweight alternative to Elasticsearch)
+- Pros: Easy setup, fast, typo-tolerant, good relevance ranking, lower resource usage than Elasticsearch
+- Cons: Newer project, smaller community, sync complexity
+- Status: 🟡 **TESTING REQUIRED**
+- [ ] **SEARCH-002a**: Test Typesense search engine
+  - [ ] Set up Typesense instance (Docker or native)
+  - [ ] Create schema for ASCL codes
+  - [ ] Index codes collection
+  - [ ] Test search queries (title, abstract, credit, keywords)
+  - [ ] Evaluate relevance and performance
+  - [ ] Compare with MySQL FULLTEXT results
 
 - [ ] **SEARCH-003**: Search template (search.html)
   - [x] Basic search form exists
@@ -1654,22 +1669,121 @@
     - [x] Creates new rows in `link` table with appropriate `link_type_pk`
     - [x] Supports --dry-run and --limit flags for testing
   - [x] Update ASCLModelClasses.py: Rename `LinkNew` class to `Link`
-  - [ ] Run migration script on development database:
-    - [ ] Test with `--dry-run --limit 10` first
-    - [ ] Review output and verify correctness
-    - [ ] Run full migration: `python3 agents/migrate_php_links_to_table.py`
-    - [ ] Verify link count and data integrity
-  - [ ] Update Flask application to use `link` table instead of parsing PHP fields
+  - [x] Run migration script on development database: ✅ **COMPLETED 2026-01-01**
+    - [x] Test with `--dry-run --limit 10` first
+    - [x] Review output and verify correctness
+    - [x] Run full migration: `python3 agents/migrate_php_links_to_table.py`
+    - [x] Verify link count and data integrity
+    - **Results**: 4,481 codes processed, 2,838 new links created, 0 errors
+    - **Final counts**: 894 Code Site, 3,648 Described In, 2,296 Used In, 448 Reference links
+  - [x] Update Flask application to use `link` table instead of parsing PHP fields: ✅ **COMPLETED 2026-01-01**
+    - [x] Updated `code_detail.py` controller to query `link` table instead of deserializing PHP fields
+    - [x] Implemented SQL query joining `link` and `link_type` tables to categorize links
+    - [x] Added NULL link_type handling (defaults to code site links for legacy data)
+    - [x] Kept PHP deserialization fallback for backward compatibility
+    - [x] Verified correct display of Code Site, Described In, Used In, and Reference links
+    - [x] Tested with multiple codes (0003.001, 0008.002) - all links displaying correctly
+    - **Note**: Only `code_detail.py` uses these fields in the Flask app
   - [ ] Add database cleanup step to drop PHP-serialized columns (after verification):
+    - [ ] Verify ALL Flask app pages work correctly with link table
+    - [ ] Verify no other tools/scripts depend on PHP columns
+    - [ ] Create backup before dropping columns
     - [ ] `ALTER TABLE codes DROP COLUMN site_list;`
     - [ ] `ALTER TABLE codes DROP COLUMN ref_list;`
     - [ ] `ALTER TABLE codes DROP COLUMN described_in;`
     - [ ] `ALTER TABLE codes DROP COLUMN used_in;`
+    - **Warning**: This is a destructive operation - only do after thorough verification
+
+### AI-Powered Code Analysis
+
+- [ ] **AI-001**: Create low-level software parser with AI-generated abstracts and function search
+  - [ ] Research and select code parsing libraries:
+    - [ ] Python: `ast`, `tree-sitter`, or language-specific parsers
+    - [ ] Multi-language support (Python, C/C++, Fortran, IDL, Julia, R)
+  - [ ] Design code fetching system:
+    - [ ] Clone/download repositories from site URLs
+    - [ ] Handle various hosting platforms (GitHub, GitLab, Bitbucket, etc.)
+    - [ ] Cache downloaded code for analysis
+  - [ ] Implement code parsing and extraction:
+    - [ ] Extract function/method signatures and docstrings
+    - [ ] Identify main entry points and APIs
+    - [ ] Parse README files and documentation
+    - [ ] Detect dependencies and requirements
+  - [ ] AI abstract generation:
+    - [ ] Select AI model/API (Claude, GPT, local LLM)
+    - [ ] Design prompts for abstract generation from code
+    - [ ] Generate summaries of code functionality
+    - [ ] Compare AI-generated vs human-written abstracts
+    - [ ] Curator review workflow for AI abstracts
+  - [ ] Enhanced search capabilities:
+    - [ ] Index extracted functions and their descriptions
+    - [ ] Enable search by functionality ("find codes that do X")
+    - [ ] Enable search by function names and signatures
+    - [ ] Semantic search using embeddings
+  - [ ] Database schema for parsed data:
+    - [ ] `code_functions` table (code_pk, function_name, signature, description, file_path)
+    - [ ] `code_analysis` table (code_pk, ai_abstract, parsed_date, model_used)
+  - [ ] Periodic re-analysis for updated repositories
+  - [ ] Privacy/licensing considerations for code analysis
+
+### Keyword System Enhancement
+
+- [ ] **KEYWORDS-001**: Develop high-quality keyword system using the UAT (Unified Astronomy Thesaurus)
+  - [ ] Research UAT structure and hierarchy (https://astrothesaurus.org/)
+  - [ ] Audit current ASCL keyword list against UAT terms
+  - [ ] Create mapping of existing keywords to UAT concepts
+  - [ ] Design database schema changes for UAT integration:
+    - [ ] Add UAT URI/identifier field to keywords table
+    - [ ] Support hierarchical relationships (broader/narrower terms)
+    - [ ] Support related terms and synonyms
+  - [ ] Develop migration script to update existing keywords
+  - [ ] Update keyword browse interface to support hierarchy
+  - [ ] Add keyword suggestions based on UAT relationships
+  - [ ] Consider integration with ADS keyword system
+  - [ ] Document keyword assignment guidelines for curators
 
 - [ ] **MISC-005**: Internationalization (i18n)
   - [ ] If desired: Set up Flask-Babel
   - [ ] Mark strings for translation
   - [ ] Provide translations (languages TBD)
+
+- [x] **MISC-006**: Link checking system: ✅ **COMPLETED 2026-01-01**
+  - [x] Created `agents/check_links.py` script for checking link validity
+  - [x] Script features:
+    - [x] Multi-threaded link checking (configurable, default 5 threads, max 20)
+    - [x] Updates `link` table fields: `is_working`, `last_working`, `message`
+    - [x] Configurable timeout (default 10s) and delay between requests (default 0.5s)
+    - [x] Filtering options: by code ID, by link type, limit, recheck working links
+    - [x] Handles HTTP status codes, SSL errors, connection errors, timeouts
+    - [x] Comprehensive error logging with descriptive messages
+    - [x] Progress reporting and summary statistics
+  - [x] Tested successfully on sample links (working and broken)
+  - [ ] Schedule regular link checking (cron job or similar)
+  - [ ] Create dashboard view for link health statistics
+  - [ ] Add email notifications for broken links
+  - **Usage examples**:
+    ```bash
+    # Check all unchecked/broken links (default behavior)
+    python3 agents/check_links.py --limit 100 --threads 10
+
+    # Check links for specific code
+    python3 agents/check_links.py --code 0003.001
+
+    # Check only code site links
+    python3 agents/check_links.py --type code-site --limit 50
+
+    # Recheck all links including working ones
+    python3 agents/check_links.py --recheck-working --threads 20 --delay 0.3
+    ```
+  - **Database fields**:
+    - `is_working` (tinyint): 1 = working, 0 = broken
+    - `last_working` (datetime): Timestamp when link was last verified as working
+    - `message` (varchar): HTTP status or error message
+  - **Current status** (as of 2026-01-01):
+    - Total links: 14,042
+    - Links checked: 6,331 (45%)
+    - Working: 6,220 (44%)
+    - Broken/unchecked: 7,822 (56%)
 
 ---
 
@@ -1717,6 +1831,10 @@ When ready to switch from v3 to v4:
   - **Note**: Points to `ascl_db_v4` database (changed from `ascl_db` on 2025-12-01)
   - **Metadata Caching**: Disabled during active development (`cache_name=None`)
 - **Credentials**: Read from `~/.my.cnf` (MySQL) with `[client_ascl]` section
+  - **⚠️ IMPORTANT**: MySQL passwords with special characters (`{`, `}`, `=`, `~`, `!`, `@`, `#`, etc.) **MUST** be URL-encoded in SQLAlchemy connection strings
+  - **Solution** (2026-01-01): `Trillian2DBConnection.py` now reads password from `~/.my.cnf` and URL-encodes it using `urllib.parse.quote_plus()`
+  - **Why needed**: Unlike PostgreSQL's `.pgpass` which works transparently with `psycopg2`, MySQL's `MySQLdb` driver requires explicit password encoding
+  - **Example**: Password `Pass{word}123!` becomes `Pass%7Bword%7D123%21` in connection string
 - **Development Approach**: Make changes freely on dev database, no production downtime concerns
 - **Production Config**: Will need separate `ProductionDBConnection.py` for production deployment
 - **v3→v4 DB refresh steps**:
