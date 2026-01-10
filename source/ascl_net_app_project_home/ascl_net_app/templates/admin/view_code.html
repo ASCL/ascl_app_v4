@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}View Code: {{ code.title }}{% endblock %}
+
+{% block content %}
+<h2>{{ code.title }}</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+	{% if messages %}
+		<ul class="flash-messages">
+		{% for category, message in messages %}
+			<li class="{{ category }}">{{ message|safe }}</li>
+		{% endfor %}
+		</ul>
+	{% endif %}
+{% endwith %}
+
+{% if current_user %}
+	<p>Signed in as <strong>{{ current_user.username }}</strong>. <a href="{{ url_for('admin_page.admin_logout') }}">Logout</a></p>
+{% endif %}
+
+<div class="admin-actions">
+	<a href="{{ url_for('admin_page.update_code', pk=code.pk) }}" class="button primary">Edit</a>
+	<a href="{{ url_for('admin_page.archive_code', pk=code.pk) }}" class="button">{% if code.archived == 1 %}Unarchive{% else %}Archive{% endif %}</a>
+	<a href="{{ url_for('admin_page.delete_code', pk=code.pk) }}" class="button danger">Delete</a>
+	{% if code.ascl_id and code.ascl_id != '0000.000' %}
+	<a href="/{{ code.ascl_id }}" class="button" target="_blank">View Public Page</a>
+	{% else %}
+	<a href="/code/v/{{ code.pk }}" class="button" target="_blank">View Public Page</a>
+	{% endif %}
+</div>
+
+<div class="code-details">
+	<table class="details-table">
+		<tr>
+			<th>PK</th>
+			<td>{{ code.pk }}</td>
+		</tr>
+		<tr>
+			<th>ASCL ID</th>
+			<td>{{ code.ascl_id or 'Not assigned' }}</td>
+		</tr>
+		<tr>
+			<th>Title</th>
+			<td>{{ code.title }}</td>
+		</tr>
+		<tr>
+			<th>Credit</th>
+			<td>{{ code.credit }}</td>
+		</tr>
+		<tr>
+			<th>Abstract</th>
+			<td>{{ code.abstract or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Site URLs</th>
+			<td>{{ code.site_list or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Reference URLs</th>
+			<td>{{ code.ref_list or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Described In</th>
+			<td>{{ code.described_in or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Used In</th>
+			<td>{{ code.used_in or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Citation Method</th>
+			<td>{{ code.citation_method or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>See Also</th>
+			<td>{{ code.see_also or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Aliases</th>
+			<td>{{ aliases_str or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Keywords</th>
+			<td>{{ keywords_str or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Email</th>
+			<td>{{ code.email or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>DOI</th>
+			<td>{{ code.doi or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Bibcode</th>
+			<td>{{ code.bibcode or 'None' }}</td>
+		</tr>
+		<tr>
+			<th>Notes</th>
+			<td>{{ code.notes or 'None' }}</td>
+		</tr>
+		<tr class="{% if code.published == 1 %}status-published{% else %}status-unpublished{% endif %}">
+			<th>Published</th>
+			<td>{% if code.published == 1 %}Yes{% else %}No{% endif %}</td>
+		</tr>
+		<tr class="{% if code.archived == 1 %}status-archived{% endif %}">
+			<th>Archived</th>
+			<td>{% if code.archived == 1 %}Yes{% else %}No{% endif %}</td>
+		</tr>
+		<tr>
+			<th>Views</th>
+			<td>{{ code.views or 0 }}</td>
+		</tr>
+		<tr>
+			<th>Time Added</th>
+			<td>{{ code.time_added }}</td>
+		</tr>
+		<tr>
+			<th>Time Updated</th>
+			<td>{{ code.time_updated }}</td>
+		</tr>
+		<tr>
+			<th>Added By</th>
+			<td>{{ code.added_by or 'Unknown' }}</td>
+		</tr>
+	</table>
+</div>
+
+<div class="admin-actions bottom">
+	<a href="{{ url_for('admin_page.unpublished_codes') }}" class="button">Back to Unpublished</a>
+	<a href="{{ url_for('admin_page.archived_codes') }}" class="button">Back to Archived</a>
+	<a href="{{ url_for('admin_page.admin_home') }}" class="button">Admin Home</a>
+</div>
+
+<style>
+.admin-actions {
+	margin: 1rem 0;
+}
+.admin-actions.bottom {
+	margin-top: 2rem;
+	padding-top: 1rem;
+	border-top: 1px solid #ddd;
+}
+.button {
+	display: inline-block;
+	padding: 0.5rem 1rem;
+	margin-right: 0.5rem;
+	text-decoration: none;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	background: #f5f5f5;
+	color: #333;
+}
+.button.primary {
+	background: #2c3e50;
+	color: white;
+	border-color: #2c3e50;
+}
+.button.danger {
+	background: #c0392b;
+	color: white;
+	border-color: #c0392b;
+}
+.button:hover {
+	opacity: 0.9;
+}
+.code-details {
+	margin: 1.5rem 0;
+}
+.details-table {
+	width: 100%;
+	max-width: 900px;
+	border-collapse: collapse;
+}
+.details-table th,
+.details-table td {
+	padding: 0.75rem;
+	text-align: left;
+	border-bottom: 1px solid #ddd;
+	vertical-align: top;
+}
+.details-table th {
+	width: 150px;
+	background: #f5f5f5;
+	font-weight: bold;
+}
+.details-table td {
+	word-break: break-word;
+}
+.status-published td {
+	color: #27ae60;
+	font-weight: bold;
+}
+.status-unpublished td {
+	color: #e67e22;
+	font-weight: bold;
+}
+.status-archived td {
+	color: #c0392b;
+	font-weight: bold;
+}
+</style>
+{% endblock %}

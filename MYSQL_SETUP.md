@@ -179,7 +179,7 @@ The backup contains WordPress tables with prefix (typically `wp_`). The ASCL dat
 
 If the backup uses a different schema structure, you may need to adjust the SQLAlchemy models in:
 ```
-source/ascl_core/database/ascldb/ASCLModelClasses.py
+ascl_core/database/ascldb/ASCLModelClasses.py
 ```
 
 ## MySQL-Specific Configuration
@@ -326,7 +326,7 @@ sudo systemctl restart mysql
 
 The connection pool is configured in:
 ```
-source/ascl_core/database/DatabaseConnection.py
+ascl_core/database/DatabaseConnection.py
 ```
 
 Adjust pool size based on Uvicorn workers:

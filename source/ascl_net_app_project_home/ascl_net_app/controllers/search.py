@@ -8,17 +8,18 @@ import logging
 search_page = flask.Blueprint("search_page", __name__)
 logger = logging.getLogger(__name__)
 
-def search_mysql(query_string, published_only=True, limit=100):
+def search_mysql(query_string, published_only=True, page=1, per_page=20):
 	"""
-	Fallback MySQL LIKE search.
+	Fallback MySQL LIKE search with pagination.
 
 	Args:
 		query_string: Search query
 		published_only: Only return published codes
-		limit: Maximum results to return
+		page: Page number (1-indexed)
+		per_page: Results per page
 
 	Returns:
-		list: List of ASCLCode objects
+		tuple: (results list, total_count)
 	"""
 	from ascl_core.database.connections import Trillian2DBConnection as db
 	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
@@ -27,7 +28,7 @@ def search_mysql(query_string, published_only=True, limit=100):
 	# Search in title, abstract, and credit (authors)
 	search_pattern = f"%{query_string}%"
 
-	query = session.query(ASCLCode).filter(
+	base_query = session.query(ASCLCode).filter(
 		or_(
 			ASCLCode.title.like(search_pattern),
 			ASCLCode.abstract.like(search_pattern),
@@ -36,11 +37,19 @@ def search_mysql(query_string, published_only=True, limit=100):
 	)
 
 	if published_only:
-		query = query.filter(ASCLCode.published == 1)
+		base_query = base_query.filter(ASCLCode.published == 1)
 
-	results = query.order_by(ASCLCode.time_added.desc(), ASCLCode.pk.desc()).limit(limit).all()
+	# Get total count
+	total_count = base_query.count()
 
-	return results
+	# Apply pagination
+	offset = (page - 1) * per_page
+	results = base_query.order_by(
+		ASCLCode.time_added.desc(),
+		ASCLCode.pk.desc()
+	).offset(offset).limit(per_page).all()
+
+	return results, total_count
 
 @search_page.route("/search", methods=['GET'])
 def search():
@@ -119,9 +128,21 @@ def search():
 		templateDict['search_method'] = 'mysql'
 		templateDict['typesense_available'] = typesense.is_healthy()
 
-		results = search_mysql(query_string, published_only=True, limit=100)
+		results, total_count = search_mysql(
+			query_string,
+			published_only=True,
+			page=page,
+			per_page=per_page
+		)
 		templateDict['results'] = results
-		templateDict['result_count'] = len(results)
+		templateDict['result_count'] = total_count
+
+	# Calculate pagination info
+	import math
+	total_pages = math.ceil(templateDict['result_count'] / per_page) if per_page > 0 else 1
+	templateDict['total_pages'] = total_pages
+	templateDict['start_result'] = ((page - 1) * per_page) + 1 if templateDict['result_count'] > 0 else 0
+	templateDict['end_result'] = min(page * per_page, templateDict['result_count'])
 
 	return render_template("search.html", **templateDict)
 

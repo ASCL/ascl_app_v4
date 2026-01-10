@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Code: {{ code.title }}{% endblock %}
+
+{% block content %}
+<h2>Confirm Delete</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+	{% if messages %}
+		<ul class="flash-messages">
+		{% for category, message in messages %}
+			<li class="{{ category }}">{{ message|safe }}</li>
+		{% endfor %}
+		</ul>
+	{% endif %}
+{% endwith %}
+
+{% if current_user %}
+	<p>Signed in as <strong>{{ current_user.username }}</strong>. <a href="{{ url_for('admin_page.admin_logout') }}">Logout</a></p>
+{% endif %}
+
+<div class="delete-warning">
+	<p><strong>Warning:</strong> You are about to permanently delete the following code:</p>
+
+	<div class="code-summary">
+		<p><strong>PK:</strong> {{ code.pk }}</p>
+		<p><strong>ASCL ID:</strong> {{ code.ascl_id or 'Not assigned' }}</p>
+		<p><strong>Title:</strong> {{ code.title }}</p>
+		<p><strong>Credit:</strong> {{ code.credit }}</p>
+	</div>
+
+	<p class="danger-text">This action cannot be undone. All associated aliases and keyword associations will also be deleted.</p>
+
+	<form method="POST" class="delete-form">
+		<button type="submit" class="button danger">Yes, Delete This Code</button>
+		<a href="{{ url_for('admin_page.view_code', pk=code.pk) }}" class="button">Cancel</a>
+	</form>
+</div>
+
+<style>
+.delete-warning {
+	max-width: 600px;
+	padding: 1.5rem;
+	background: #fdf2f2;
+	border: 1px solid #c0392b;
+	border-radius: 4px;
+}
+.code-summary {
+	background: white;
+	padding: 1rem;
+	margin: 1rem 0;
+	border-radius: 4px;
+}
+.code-summary p {
+	margin: 0.25rem 0;
+}
+.danger-text {
+	color: #c0392b;
+	font-weight: bold;
+}
+.delete-form {
+	margin-top: 1.5rem;
+}
+.button {
+	display: inline-block;
+	padding: 0.5rem 1rem;
+	margin-right: 0.5rem;
+	text-decoration: none;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	background: #f5f5f5;
+	color: #333;
+	cursor: pointer;
+}
+.button.danger {
+	background: #c0392b;
+	color: white;
+	border-color: #c0392b;
+}
+.button:hover {
+	opacity: 0.9;
+}
+</style>
+{% endblock %}

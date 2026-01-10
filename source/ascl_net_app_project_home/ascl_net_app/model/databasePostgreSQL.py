@@ -7,7 +7,7 @@
 
 from flask import current_app as app
 
-from .DatabaseConnection import DatabaseConnection
+from ascl_core.database.DatabaseConnection import DatabaseConnection
 
 try:
 	db_info

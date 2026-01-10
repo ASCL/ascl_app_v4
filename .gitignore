@@ -1,3 +1,6 @@
+# Custom
+.nova
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -64,6 +67,11 @@ db.sqlite3-journal
 # Flask stuff:
 instance/
 .webassets-cache
+
+# Personal Flask configuration files (hostname-based, optional to gitignore)
+# Only ignore if they contain environment-specific settings you don't want to share
+# Passwords should NEVER be in these files - use ~/.my.cnf, ~/.pgpass, or ENV vars instead
+source/ascl_net_app_project_home/ascl_net_app/configuration_files/local*.cfg
 
 # Scrapy stuff:
 .scrapy

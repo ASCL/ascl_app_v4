@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}{% if mode == 'insert' %}Add New Code{% else %}Edit Code{% endif %}{% endblock %}
+
+{% block content %}
+<h2>{% if mode == 'insert' %}Add New Code{% else %}Edit Code: {{ code.title }}{% endif %}</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+	{% if messages %}
+		<ul class="flash-messages">
+		{% for category, message in messages %}
+			<li class="{{ category }}">{{ message|safe }}</li>
+		{% endfor %}
+		</ul>
+	{% endif %}
+{% endwith %}
+
+{% if current_user %}
+	<p>Signed in as <strong>{{ current_user.username }}</strong>. <a href="{{ url_for('admin_page.admin_logout') }}">Logout</a></p>
+{% endif %}
+
+<form method="POST" class="admin-form">
+	<div class="form-row">
+		<label for="ascl_id">ASCL ID</label>
+		<input type="text" name="ascl_id" id="ascl_id" value="{{ code.ascl_id or '0000.000' }}" maxlength="8" size="10" required>
+		{% if mode == 'insert' and next_ascl_id %}
+		<button type="button" onclick="document.getElementById('ascl_id').value='{{ next_ascl_id }}'" class="button small">Use {{ next_ascl_id }}</button>
+		{% endif %}
+		<span class="help-text">Format: YYMM.NNN (e.g., 2401.001) or 0000.000 for unpublished</span>
+	</div>
+
+	<div class="form-row">
+		<label for="title">Title <span class="required">*</span></label>
+		<input type="text" name="title" id="title" value="{{ code.title or '' }}" maxlength="255" size="80" required>
+	</div>
+
+	<div class="form-row">
+		<label for="credit">Credit (Authors) <span class="required">*</span></label>
+		<textarea name="credit" id="credit" cols="100" rows="2" required>{{ code.credit or '' }}</textarea>
+		<span class="help-text">Author names, comma-separated</span>
+	</div>
+
+	<div class="form-row">
+		<label for="abstract">Abstract</label>
+		<textarea name="abstract" id="abstract" cols="100" rows="10">{{ code.abstract or '' }}</textarea>
+	</div>
+
+	<div class="form-row">
+		<label for="site_list">Site URLs</label>
+		<textarea name="site_list" id="site_list" cols="100" rows="3">{{ site_list_str or '' }}</textarea>
+		<span class="help-text">One URL per line</span>
+	</div>
+
+	<div class="form-row">
+		<label for="ref_list">Reference URLs</label>
+		<textarea name="ref_list" id="ref_list" cols="100" rows="3">{{ ref_list_str or '' }}</textarea>
+		<span class="help-text">One URL per line</span>
+	</div>
+
+	<div class="form-row">
+		<label for="described_in">Described In (Bibcodes)</label>
+		<textarea name="described_in" id="described_in" cols="100" rows="2">{{ described_in_str or '' }}</textarea>
+		<span class="help-text">ADS bibcodes, one per line</span>
+	</div>
+
+	<div class="form-row">
+		<label for="used_in">Used In (Bibcodes)</label>
+		<textarea name="used_in" id="used_in" cols="100" rows="2">{{ used_in_str or '' }}</textarea>
+		<span class="help-text">ADS bibcodes, one per line</span>
+	</div>
+
+	<div class="form-row">
+		<label for="citation_method">Preferred Citation Method</label>
+		<input type="text" name="citation_method" id="citation_method" value="{{ code.citation_method or '' }}" maxlength="255" size="80">
+	</div>
+
+	<div class="form-row">
+		<label for="see_also">See Also</label>
+		<input type="text" name="see_also" id="see_also" value="{{ code.see_also or '' }}" maxlength="255" size="80">
+		<span class="help-text">Related ASCL IDs or code names</span>
+	</div>
+
+	<div class="form-row">
+		<label for="aliases">Aliases</label>
+		<input type="text" name="aliases" id="aliases" value="{{ aliases_str or '' }}" maxlength="255" size="80">
+		<span class="help-text">Space-separated short names</span>
+	</div>
+
+	<div class="form-row">
+		<label for="keywords">Keywords</label>
+		<input type="text" name="keywords" id="keywords" value="{{ keywords_str or '' }}" maxlength="255" size="80">
+		<span class="help-text">Space-separated; use quotes for multi-word keywords (e.g., "N-body" cosmology)</span>
+	</div>
+
+	<div class="form-row">
+		<label for="email">Contact Email</label>
+		<input type="email" name="email" id="email" value="{{ code.email or '' }}" maxlength="254" size="50">
+	</div>
+
+	<div class="form-row">
+		<label for="doi">DOI</label>
+		<input type="text" name="doi" id="doi" value="{{ code.doi or '' }}" maxlength="255" size="50">
+		<span class="help-text">e.g., 10.5281/zenodo.12345</span>
+	</div>
+
+	<div class="form-row">
+		<label for="notes">Notes (Internal)</label>
+		<textarea name="notes" id="notes" cols="100" rows="3">{{ code.notes or '' }}</textarea>
+		<span class="help-text">Internal notes, not displayed publicly</span>
+	</div>
+
+	<div class="form-row checkbox-row">
+		<label for="published">
+			<input type="checkbox" name="published" id="published" value="1" {% if code.published == 1 %}checked{% endif %}>
+			Published
+		</label>
+	</div>
+
+	{% if mode == 'update' %}
+	<div class="form-row info-row">
+		<p><strong>PK:</strong> {{ code.pk }}</p>
+		<p><strong>Time Added:</strong> {{ code.time_added }}</p>
+		<p><strong>Time Updated:</strong> {{ code.time_updated }}</p>
+		<p><strong>Views:</strong> {{ code.views }}</p>
+		<p><strong>Bibcode:</strong> {{ code.bibcode or 'Not set' }}</p>
+	</div>
+	{% endif %}
+
+	<div class="form-actions">
+		<button type="submit" class="button primary">{% if mode == 'insert' %}Add Code{% else %}Update Code{% endif %}</button>
+		<a href="{{ url_for('admin_page.admin_home') }}" class="button">Cancel</a>
+		{% if mode == 'update' %}
+		<a href="{{ url_for('admin_page.view_code', pk=code.pk) }}" class="button">View</a>
+		{% endif %}
+	</div>
+</form>
+
+<style>
+.admin-form {
+	max-width: 900px;
+}
+.admin-form .form-row {
+	margin-bottom: 1rem;
+}
+.admin-form label {
+	display: block;
+	font-weight: bold;
+	margin-bottom: 0.25rem;
+}
+.admin-form input[type="text"],
+.admin-form input[type="email"],
+.admin-form textarea {
+	width: 100%;
+	max-width: 700px;
+	padding: 0.5rem;
+	font-family: inherit;
+	font-size: 1rem;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+}
+.admin-form textarea {
+	resize: vertical;
+}
+.admin-form .help-text {
+	display: block;
+	font-size: 0.85rem;
+	color: #666;
+	margin-top: 0.25rem;
+}
+.admin-form .required {
+	color: #c00;
+}
+.admin-form .checkbox-row label {
+	display: inline;
+	font-weight: normal;
+}
+.admin-form .info-row {
+	background: #f5f5f5;
+	padding: 1rem;
+	border-radius: 4px;
+}
+.admin-form .info-row p {
+	margin: 0.25rem 0;
+}
+.admin-form .form-actions {
+	margin-top: 1.5rem;
+	padding-top: 1rem;
+	border-top: 1px solid #ddd;
+}
+.admin-form .button {
+	display: inline-block;
+	padding: 0.5rem 1rem;
+	margin-right: 0.5rem;
+	text-decoration: none;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	background: #f5f5f5;
+	color: #333;
+	cursor: pointer;
+}
+.admin-form .button.primary {
+	background: #2c3e50;
+	color: white;
+	border-color: #2c3e50;
+}
+.admin-form .button:hover {
+	opacity: 0.9;
+}
+.admin-form .button.small {
+	padding: 0.25rem 0.5rem;
+	font-size: 0.85rem;
+	vertical-align: middle;
+}
+</style>
+{% endblock %}

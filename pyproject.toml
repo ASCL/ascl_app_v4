@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ascl_core"
+version = "0.1.0"
+description = "Shared database, adapters, and other utilities for ASCL applications."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{ name = "ASCL Team" }]
+dependencies = [
+    "SQLAlchemy>=2.0.0",
+    "numpy>=1.20.0",
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+mysql = ["mysqlclient>=2.2.0"]
+postgresql = ["psycopg2-binary>=2.9.0"]
+dev = ["pytest>=7.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/ascl/alt_ascl"
+Issues = "https://github.com/ascl/alt_ascl/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ascl_core*"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"ascl_core.database.ascldb" = ["table_names.txt"]

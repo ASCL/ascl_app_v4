@@ -19,12 +19,63 @@
 {% if query %}
     <div class="search-results-count">
         Found {{ result_count }} result{% if result_count != 1 %}s{% endif %} for "{{ query }}"
+        {% if result_count > 0 %}
+        (showing {{ start_result }}-{{ end_result }})
+        {% endif %}
         {% if search_method == 'typesense' %}
         <span style="color: #27ae60; font-size: 0.9em;">({{ search_time_ms }}ms via Typesense)</span>
         {% elif search_method == 'mysql' %}
         <span style="color: #e67e22; font-size: 0.9em;">(MySQL fallback)</span>
         {% endif %}
     </div>
+
+    {% if total_pages > 1 %}
+    <div class="ascl_pagination_wrap">
+        <div class="ascl_pagination">
+            {% if page > 1 %}
+            <a href="?q={{ query }}&page={{ page - 1 }}&per_page={{ per_page }}">Previous</a>
+            {% else %}
+            <span class="disabled">Previous</span>
+            {% endif %}
+
+            {% set max_display = 10 %}
+            {% if total_pages <= max_display %}
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p == page %}
+                    <strong>{{ p }}</strong>
+                    {% else %}
+                    <a href="?q={{ query }}&page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                {# Show first, current area, and last pages #}
+                {% if page > 3 %}
+                <a href="?q={{ query }}&page=1&per_page={{ per_page }}">1</a>
+                {% if page > 4 %}<span>...</span>{% endif %}
+                {% endif %}
+
+                {% for p in range([1, page - 2]|max, [total_pages + 1, page + 3]|min) %}
+                    {% if p == page %}
+                    <strong>{{ p }}</strong>
+                    {% else %}
+                    <a href="?q={{ query }}&page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page < total_pages - 2 %}
+                {% if page < total_pages - 3 %}<span>...</span>{% endif %}
+                <a href="?q={{ query }}&page={{ total_pages }}&per_page={{ per_page }}">{{ total_pages }}</a>
+                {% endif %}
+            {% endif %}
+
+            {% if page < total_pages %}
+            <a href="?q={{ query }}&page={{ page + 1 }}&per_page={{ per_page }}">Next</a>
+            {% else %}
+            <span class="disabled">Next</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     {% if results %}
         <div class="codelist">
