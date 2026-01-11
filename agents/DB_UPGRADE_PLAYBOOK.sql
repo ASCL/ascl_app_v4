@@ -928,6 +928,16 @@ DROP INDEX idx_ascl_for_zenodo_matching_ascl_id,
 DROP COLUMN ascl_id;
 
 -- ============================================================================
+-- Step 17: Expand password column for bcrypt hashes
+-- ============================================================================
+-- The v3 application used SHA-1 (40 characters). Flask v4 uses bcrypt (60 characters).
+-- This expands the column to support bcrypt while allowing existing SHA-1 hashes
+-- to continue working until they are migrated on next login.
+-- ============================================================================
+
+ALTER TABLE users MODIFY COLUMN password VARCHAR(60) NOT NULL;
+
+-- ============================================================================
 -- UPGRADE COMPLETE
 -- ============================================================================
 -- Database: ascl_db_v4

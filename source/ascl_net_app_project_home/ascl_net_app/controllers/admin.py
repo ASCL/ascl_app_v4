@@ -728,3 +728,104 @@ def _update_keywords(db_session, ascldb, code_pk, keywords_text):
 		assoc.code_id = code_pk
 		assoc.keyword_id = kw_id
 		db_session.add(assoc)
+
+
+# ==========================================
+# Utility / Raw Data Routes
+# ==========================================
+
+@admin_page.route("/utility/ascl", methods=["GET"])
+@_login_required
+def utility_ascl():
+	"""Full ASCL table with all details."""
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	# Get optional filters
+	subtype = request.args.get("filter", "")
+
+	query = (
+		db_session.query(ascldb.ASCLCode)
+		.filter(ascldb.ASCLCode.ascl_id != "0000.000")
+	)
+
+	if subtype == "published":
+		query = query.filter(ascldb.ASCLCode.published == 1)
+	elif subtype == "unpublished":
+		query = query.filter(ascldb.ASCLCode.published == 0)
+
+	codes = query.order_by(ascldb.ASCLCode.title).all()
+
+	return render_template(
+		"admin/utility_ascl.html",
+		codes=codes,
+		current_user=_current_user(db_session),
+		filter=subtype,
+	)
+
+
+@admin_page.route("/utility/ascl2", methods=["GET"])
+@_login_required
+def utility_ascl2():
+	"""Simple ASCL table with just ID and title."""
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	subtype = request.args.get("filter", "")
+
+	query = (
+		db_session.query(ascldb.ASCLCode)
+		.filter(ascldb.ASCLCode.ascl_id != "0000.000")
+	)
+
+	if subtype == "published":
+		query = query.filter(ascldb.ASCLCode.published == 1)
+	elif subtype == "unpublished":
+		query = query.filter(ascldb.ASCLCode.published == 0)
+
+	codes = query.order_by(ascldb.ASCLCode.century, ascldb.ASCLCode.ascl_id).all()
+
+	return render_template(
+		"admin/utility_ascl2.html",
+		codes=codes,
+		current_user=_current_user(db_session),
+		filter=subtype,
+	)
+
+
+@admin_page.route("/utility/links", methods=["GET"])
+@_login_required
+def utility_links():
+	"""All links as plain text."""
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	# Query from link table
+	links = db_session.query(ascldb.Link.url).all()
+
+	# Build plain text output
+	output = "\n".join([link.url for link in links if link.url])
+
+	from flask import Response
+	return Response(output, mimetype="text/plain; charset=utf-8")
+
+
+@admin_page.route("/utility/site_links", methods=["GET"])
+@_login_required
+def utility_site_links():
+	"""Site links only as plain text."""
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	# Query from link table where link_type is 'Code Site' (pk=1)
+	links = (
+		db_session.query(ascldb.Link.url)
+		.filter(ascldb.Link.link_type_pk == 1)
+		.all()
+	)
+
+	# Build plain text output
+	output = "\n".join([link.url for link in links if link.url])
+
+	from flask import Response
+	return Response(output, mimetype="text/plain; charset=utf-8")

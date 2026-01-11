@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Full ASCL Table{% endblock %}
+
+{% block content %}
+<h2>Full ASCL Table</h2>
+
+<p>
+	Filter:
+	<a href="{{ url_for('admin_page.utility_ascl') }}">All</a> |
+	<a href="{{ url_for('admin_page.utility_ascl', filter='published') }}">Published</a> |
+	<a href="{{ url_for('admin_page.utility_ascl', filter='unpublished') }}">Unpublished</a>
+</p>
+
+<p>Total: {{ codes|length }} codes</p>
+
+<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; font-size: 0.9em;">
+	<thead>
+		<tr style="background: #eee;">
+			<th>ASCL ID</th>
+			<th>Title</th>
+			<th>Abstract</th>
+			<th>Credit</th>
+			<th>Sites</th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for code in codes %}
+		<tr>
+			<td style="white-space: nowrap;"><a href="/{{ code.ascl_id }}">ascl:{{ code.ascl_id }}</a></td>
+			<td>{{ code.title }}</td>
+			<td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis;">{{ code.abstract[:300] }}{% if code.abstract and code.abstract|length > 300 %}...{% endif %}</td>
+			<td>{{ code.credit }}</td>
+			<td>
+				{% for link in code.links %}
+					<a href="{{ link.url }}">{{ link.url }}</a><br />
+				{% endfor %}
+			</td>
+		</tr>
+		{% endfor %}
+	</tbody>
+</table>
+
+<p><a href="{{ url_for('admin_page.admin_home') }}">&larr; Back to Admin</a></p>
+{% endblock %}

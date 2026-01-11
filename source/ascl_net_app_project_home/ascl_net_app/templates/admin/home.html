@@ -36,6 +36,14 @@
 			<li><a href="/dashboard">Public Dashboard</a></li>
 			<li><a href="/code/all">Browse All Codes</a></li>
 		</ul>
+
+		<h3>Raw Data</h3>
+		<ul>
+			<li><a href="{{ url_for('admin_page.utility_ascl') }}">Full ASCL Table</a></li>
+			<li><a href="{{ url_for('admin_page.utility_ascl2') }}">Simple ASCL Table</a></li>
+			<li><a href="{{ url_for('admin_page.utility_links') }}">All Links List (plain text)</a></li>
+			<li><a href="{{ url_for('admin_page.utility_site_links') }}">Site Links List (plain text)</a></li>
+		</ul>
 	</div>
 
 	<style>
