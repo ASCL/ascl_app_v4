@@ -28,6 +28,7 @@ def register_blueprints(app=None):
 	from .controllers.news import news_page
 	from .controllers.admin import admin_page
 	from .controllers.dashboard import dashboard_page
+	from .controllers.submit_code import submit_code_page
 
 	app.register_blueprint(index_page)
 	app.register_blueprint(browse_page)
@@ -36,6 +37,7 @@ def register_blueprints(app=None):
 	app.register_blueprint(news_page)
 	app.register_blueprint(admin_page)
 	app.register_blueprint(dashboard_page)
+	app.register_blueprint(submit_code_page)
 	# Register code_detail_page LAST - it has a catch-all route
 	app.register_blueprint(code_detail_page)
 

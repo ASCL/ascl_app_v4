@@ -1,0 +1,38 @@
+[Unit]
+Description=ASCL.net Web Application (Uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/ascl_net_app
+Environment="PATH=/var/www/ascl_net_app/.venv/bin"
+Environment="FLASK_CONFIG=production.cfg"
+Environment="ASCLDB_MYCNF_SECTION=client_ascl"
+Environment="HOME=/var/www"
+Environment="UV_CACHE_DIR=/var/cache/uv"
+
+# Run Uvicorn with multiple workers
+ExecStart=/var/www/ascl_net_app/.venv/bin/uvicorn \
+    --host 127.0.0.1 \
+    --port 5050 \
+    --workers 4 \
+    --log-level info \
+    --access-log \
+    asgi:application
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=append:/var/log/ascl_v4_uvicorn.log
+StandardError=append:/var/log/ascl_v4_uvicorn.log
+
+[Install]
+WantedBy=multi-user.target

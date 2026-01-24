@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} - ASCL.net{% endblock %}
+
+{% block content %}
+<div class="codelist">
+	<div class="item">
+		<h1>{{ page_title }}</h1>
+
+		{% if err %}
+		<div class="err" style="background-color: #ffcccc; border: 1px solid #cc0000; padding: 10px; margin-bottom: 15px;">
+			{{ err|safe }}
+		</div>
+		{% endif %}
+
+		{% if msg %}
+		<div class="msg" style="background-color: #ccffcc; border: 1px solid #00cc00; padding: 10px; margin-bottom: 15px;">
+			{{ msg|safe }}
+		</div>
+		{% endif %}
+
+		{% if not hide_form %}
+		<p>The ASCL gladly accepts submitted codes meeting our criteria. Your code will show up immediately for public viewing but will be subject to moderation. Code entries are examined by an editor for completion and suitability and may be edited; entries meeting our criteria will be assigned an ASCL ID and indexed by ADS.</p>
+
+		<div class="forms">
+			<form action="/code/submit" method="post" accept-charset="utf-8">
+
+				<p>
+					<label for="title"><strong>Title</strong></label><br>
+					<input type="text" name="title" id="title" value="{{ form_data.title or '' }}" size="60" maxlength="255" required>
+					<br><small>Plain text.</small>
+				</p>
+
+				<p>
+					<label for="credit"><strong>Credit (Authors)</strong></label><br>
+					<textarea name="credit" id="credit" rows="3" cols="60" required>{{ form_data.credit or '' }}</textarea>
+					<br><small>Names should follow the format Surname, Firstname I. Separate additional names with semicolons. Plain text.</small>
+				</p>
+
+				<p>
+					<label for="abstract"><strong>Abstract</strong></label><br>
+					<textarea name="abstract" id="abstract" rows="6" cols="60" required>{{ form_data.abstract or '' }}</textarea>
+					<br><small>Plain text.</small>
+				</p>
+
+				<p>
+					<label for="site_list"><strong>Code Site URL(s)</strong></label><br>
+					<textarea name="site_list" id="site_list" rows="3" cols="60" required>{{ form_data.site_list or '' }}</textarea>
+					<br><small>One link per line. This should be the URL to a site from where your code can be downloaded or copied.</small>
+				</p>
+
+				<p>
+					<label for="ref_list"><strong>Reference Paper URL(s)</strong></label><br>
+					<textarea name="ref_list" id="ref_list" rows="3" cols="60">{{ form_data.ref_list or '' }}</textarea>
+					<br><small>(Not required if paper has been submitted but not yet published.) One link per line. Papers that reference your code.</small>
+				</p>
+
+				<p>
+					<label for="citation_method"><strong>Preferred Citation Method</strong></label><br>
+					<input type="text" name="citation_method" id="citation_method" value="{{ form_data.citation_method or '' }}" size="60" maxlength="255">
+					<br><small>(Not required) Bibcode for ASCL or paper entry; if using another method, please describe it in the notes field. Plain text.</small>
+				</p>
+
+				{% if mode == 'insert' %}
+				<p>
+					<label for="name"><strong>Your Name</strong></label><br>
+					<input type="text" name="name" id="name" value="{{ form_data.name or '' }}" size="60" maxlength="255" required>
+					<br><small>This will be hidden from public view. It is required so an editor can contact you upon assignment of the ASCL ID.</small>
+				</p>
+				{% endif %}
+
+				<p>
+					<label for="email"><strong>Email Address</strong></label><br>
+					<input type="email" name="email" id="email" value="{{ form_data.email or '' }}" size="60" maxlength="255" required>
+					<br><small>This will be hidden from public view. It is required so an editor can contact you upon assignment of the ASCL ID.</small>
+				</p>
+
+				<p>
+					<label for="notes"><strong>Notes for Editors</strong></label><br>
+					<textarea name="notes" id="notes" rows="4" cols="60">{{ form_data.notes or '' }}</textarea>
+					<br><small style="display: block; max-width: 1000px;">Any further information you would like to provide the editors. This will also not be displayed publicly. Note that some HTML is allowed in titles and abstracts, for instance a super or subscript in the title or some formatting within the abstract such as an anchor. Please mention that here without using HTML, eg "the 2 in emc2 should be a superscript". Alternatively, correspondence with the editor may be required for more complex requests.</small>
+				</p>
+
+				{% if mode == 'insert' %}
+				<p>
+					<img src="/static/images/challenge.jpg" alt="Bot challenge image">
+				</p>
+
+				<p>
+					<label for="challenge"><strong>Bot Challenge</strong></label><br>
+					<input type="text" name="challenge" id="challenge" value="" size="30" maxlength="50" required>
+					<br><small>Bot challenge: Type what the galaxies say.</small>
+				</p>
+				{% endif %}
+
+				<p>
+					<input type="submit" value="Submit Code" class="button">
+				</p>
+
+			</form>
+		</div>
+		{% endif %}
+	</div>
+</div>
+{% endblock %}

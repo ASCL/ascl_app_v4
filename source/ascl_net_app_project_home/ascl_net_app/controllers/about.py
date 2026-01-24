@@ -95,7 +95,9 @@ def about():
 
 @about_page.route("/submissions", methods=['GET'])
 def submissions():
-	return _render_wp_page(_SUBMISSIONS_PAGE_ID)
+	"""Redirect to the code submission form."""
+	from flask import redirect
+	return redirect('/code/submit')
 
 
 @about_page.route("/resources", methods=['GET'])

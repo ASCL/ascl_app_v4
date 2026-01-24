@@ -1,3 +1,22 @@
+## Deployment Notes
+
+The `alt_ascl/deployment/` directory contains all files needed to deploy the Flask application to production:
+- `ascl_net_app.service` - systemd service unit (install to /etc/systemd/system/)
+- `nginx_ascl_production.conf` - Nginx site config (install to /etc/nginx/sites-available/)
+- `redeploy.sh` - Script to sync updates from dev repo (run directly from repo)
+- `my.cnf.template` - MySQL credentials template (install to /var/www/.my.cnf)
+- `DEPLOYMENT.md` - Full deployment instructions for humans and AI agents
+
+Production paths:
+- App: /var/www/ascl_net_app
+- Dependencies: /var/www/dm-dbcore, /var/www/ascl_core
+- Logs: /var/log/ascl_v4_uvicorn.log
+- Server: Uvicorn on port 5050, proxied by Nginx for ascl.bistromath.net
+
+To redeploy after changes: `sudo /home/demitri/repositories/ASCL/alt_ascl/deployment/redeploy.sh`
+
+---
+
 M1 [~/Documents/Repositories/GitHub/alt_ascl] % codex
 
 ╭─────────────────────────────────────────────────────╮

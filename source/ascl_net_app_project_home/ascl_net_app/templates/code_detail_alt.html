@@ -151,7 +151,7 @@
 			<!-- Citation Card -->
 			{% if code.bibcode %}
 			<div class="sidebar-card">
-				<h3 class="sidebar-card-title">Citation</h3>
+				<h3 class="sidebar-card-title">Preferred Citation</h3>
 				<a href="https://ui.adsabs.harvard.edu/abs/{{ code.bibcode }}/abstract"
 				   class="bibcode-link" target="_blank" rel="noopener">
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -165,19 +165,6 @@
 				</a>
 			</div>
 			{% endif %}
-
-			<!-- Stats Card -->
-			<div class="sidebar-card">
-				<h3 class="sidebar-card-title">Statistics</h3>
-				<div class="stat-item">
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-						<path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/>
-						<path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/>
-					</svg>
-					<span class="stat-label">Views:</span>
-					<span class="stat-value">{{ view_count if view_count is not none else '0' }}</span>
-				</div>
-			</div>
 
 			<!-- Badge Card -->
 			<div class="sidebar-card badge-card">
@@ -218,7 +205,7 @@
 
 /* Hero Section */
 .hero-section {
-	background: linear-gradient(135deg, #352bb3 0%, #262255 100%);
+	background: #262255;
 	color: white;
 	padding: 40px;
 	border-radius: 12px;
@@ -227,16 +214,13 @@
 }
 
 .ascl-badge {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	background: rgba(255, 255, 255, 0.2);
-	padding: 6px 12px;
-	border-radius: 20px;
-	font-size: 0.9em;
-	font-weight: 600;
-	margin-bottom: 16px;
-	backdrop-filter: blur(10px);
+	display: block;
+	font-size: 2.5em;
+	font-weight: 300;
+	font-family: monospace;
+	color: rgba(255, 255, 255, 0.4);
+	margin-bottom: 12px;
+	letter-spacing: 0.02em;
 }
 
 .code-title {

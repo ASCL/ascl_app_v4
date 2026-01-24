@@ -1,0 +1,10 @@
+# MySQL credentials for ASCL production deployment
+# Copy this file to /var/www/.my.cnf and fill in the password
+# Then set permissions: chown www-data:www-data /var/www/.my.cnf && chmod 600 /var/www/.my.cnf
+
+[client_ascl]
+host = 127.0.0.1
+port = 3307
+user = ascl_db
+password = <YOUR_PASSWORD_HERE>
+database = ascl_db_v4

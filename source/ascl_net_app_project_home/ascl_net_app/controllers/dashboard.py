@@ -62,30 +62,28 @@ def dashboard_home():
 		.scalar() or 0
 	)
 
-	# === Codes Added by Year (from ascl_id, last 10 years) ===
+	# === Codes Added by Year (from ascl_id, most recent 5 years with data) ===
 	# Matches production PHP: concat(century, substring(ascl_id, 1, 2))
 	# ASCL ID format: YYMM.NNN (e.g., 2312.001 = December 2023)
 	from sqlalchemy import text
 
-	current_year = datetime.now().year
-	cutoff_year = current_year - 10
-
-	# Use raw SQL to match PHP exactly (avoids SQLAlchemy column reference issues)
+	# Get all years with data, then take the most recent 5
 	sql = text("""
 		SELECT CONCAT(century, SUBSTRING(ascl_id, 1, 2)) AS year,
 		       COUNT(pk) AS count
 		FROM codes
-		WHERE CONCAT(century, SUBSTRING(ascl_id, 1, 2)) > :cutoff_year
-		  AND ascl_id != '0000.000'
+		WHERE ascl_id != '0000.000'
 		GROUP BY year
-		ORDER BY year ASC
+		ORDER BY year DESC
+		LIMIT 5
 	""")
 
-	result = db_session.execute(sql, {"cutoff_year": str(cutoff_year)})
-	stats["codes_by_year"] = [
+	result = db_session.execute(sql)
+	# Reverse to show in ascending order (oldest to newest)
+	stats["codes_by_year"] = sorted([
 		{"year": int(row.year), "count": row.count}
 		for row in result
-	]
+	], key=lambda x: x["year"])
 
 	# === Citations by Year (from 2012 onwards) ===
 	# Matches production PHP dashboard
