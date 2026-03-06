@@ -1,0 +1,375 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block admin_content %}
+<h2>{{ page_title }}</h2>
+
+{% if codes %}
+
+<div class="view-toggle">
+	<button class="toggle-btn active" id="btn-table-view" onclick="switchView('table')">Table</button>
+	<button class="toggle-btn" id="btn-card-view" onclick="switchView('card')">Detail</button>
+</div>
+
+<p class="result-count">
+	{% if total_count %}
+		{{ total_count }} code{% if total_count != 1 %}s{% endif %} total{% if total_pages > 1 %}, showing {{ (page - 1) * per_page + 1 }}&ndash;{{ [page * per_page, total_count]|min }}{% endif %}
+	{% else %}
+		{{ codes|length }} code{% if codes|length != 1 %}s{% endif %} found
+	{% endif %}
+	<span id="filter-count"></span>
+</p>
+
+{% if total_pages and total_pages > 1 %}
+<div class="admin-pagination">
+	{% if page > 1 %}
+	<a href="?page={{ page - 1 }}&per_page={{ per_page }}" class="btn btn-small">Previous</a>
+	{% else %}
+	<span class="btn btn-small disabled">Previous</span>
+	{% endif %}
+
+	{% for p in range(1, total_pages + 1) %}
+		{% if p == page %}
+		<strong class="current-page">{{ p }}</strong>
+		{% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+		<a href="?page={{ p }}&per_page={{ per_page }}" class="btn btn-small">{{ p }}</a>
+		{% elif p == 4 and page > 5 %}
+		<span class="ellipsis">...</span>
+		{% elif p == total_pages - 2 and page < total_pages - 4 %}
+		<span class="ellipsis">...</span>
+		{% endif %}
+	{% endfor %}
+
+	{% if page < total_pages %}
+	<a href="?page={{ page + 1 }}&per_page={{ per_page }}" class="btn btn-small">Next</a>
+	{% else %}
+	<span class="btn btn-small disabled">Next</span>
+	{% endif %}
+
+	<span class="per-page-selector">
+		Per page:
+		{% for pp in [25, 50, 100] %}
+			{% if pp == per_page %}
+			<strong>{{ pp }}</strong>
+			{% else %}
+			<a href="?page=1&per_page={{ pp }}">{{ pp }}</a>
+			{% endif %}
+		{% endfor %}
+		{% if per_page == 0 %}
+		<strong>All</strong>
+		{% else %}
+		<a href="?page=1&per_page=0">All</a>
+		{% endif %}
+	</span>
+</div>
+{% endif %}
+
+<!-- ========== TABLE VIEW ========== -->
+<div id="table-view">
+	<div class="filter-section">
+		<input type="text" id="table-filter" placeholder="Filter by ASCL ID or title..." autocomplete="off">
+		<span id="table-filter-count" class="filter-count-label"></span>
+	</div>
+
+	<table class="admin-table">
+		<thead>
+			<tr>
+				<th style="white-space:nowrap">ASCL ID</th>
+				<th>Title</th>
+				<th style="white-space:nowrap">Added</th>
+				<th>Actions</th>
+			</tr>
+		</thead>
+		<tbody>
+		{% for code in codes %}
+			<tr>
+				<td>{{ code.ascl_id if code.ascl_id and code.ascl_id != '0000.000' else code.pk }}</td>
+				<td>{{ code.title }}</td>
+				<td style="white-space:nowrap">{{ code.time_added.strftime('%Y-%m-%d') if code.time_added else 'N/A' }}</td>
+				<td class="actions">
+					<a href="{{ url_for('admin_page.view_code', pk=code.pk) }}" class="btn btn-small">View</a>
+					<a href="{{ url_for('admin_page.update_code', pk=code.pk) }}" class="btn btn-small btn-primary">Edit</a>
+					<a href="{{ url_for('admin_page.archive_code', pk=code.pk) }}" class="btn btn-small">Archive</a>
+				</td>
+			</tr>
+		{% endfor %}
+		</tbody>
+	</table>
+</div>
+
+<!-- ========== CARD VIEW ========== -->
+<div id="card-view" style="display:none;">
+	<div class="filter-section">
+		<input type="text" id="card-filter" placeholder="Filter by title..." autocomplete="off">
+		<span id="card-filter-count" class="filter-count-label"></span>
+	</div>
+
+	<div class="codelist">
+	{% for code in codes %}
+		<div class="item" data-title="{{ code.title|lower }}">
+			<span class="ascl_id">
+				{% if code.ascl_id and code.ascl_id != '0000.000' %}
+					[ascl:{{ code.ascl_id }}]
+				{% else %}
+					[submitted]
+				{% endif %}
+			</span>
+			<span class="title">
+				<a href="{{ url_for('admin_page.view_code', pk=code.pk) }}">{{ code.title }}</a>
+			</span>
+			<span class="update">
+				<a href="{{ url_for('admin_page.update_code', pk=code.pk) }}">Edit</a>
+				<a href="{{ url_for('admin_page.archive_code', pk=code.pk) }}">Archive</a>
+			</span>
+			{% if codes_credit.get(code.pk) %}
+			<div class="credit">{{ codes_credit[code.pk] }}</div>
+			{% endif %}
+			{% if code.abstract %}
+			<div class="abstract">{{ code.abstract }}</div>
+			{% endif %}
+		</div>
+	{% endfor %}
+	</div>
+</div>
+
+{% else %}
+	<p>No codes found.</p>
+{% endif %}
+
+<style>
+.view-toggle {
+	display: inline-flex;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	overflow: hidden;
+	margin-bottom: 0.75rem;
+}
+.toggle-btn {
+	padding: 0.35rem 1rem;
+	border: none;
+	background: #f5f5f5;
+	color: #333;
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+.toggle-btn + .toggle-btn {
+	border-left: 1px solid #ccc;
+}
+.toggle-btn.active {
+	background: #2c3e50;
+	color: white;
+}
+.toggle-btn:hover:not(.active) {
+	background: #e8e8e8;
+}
+
+.result-count {
+	color: #666;
+	margin-bottom: 1rem;
+}
+.filter-section {
+	margin-bottom: 0.5rem;
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+.filter-section input[type="text"] {
+	padding: 0.5rem 0.75rem;
+	font-size: 0.9rem;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	width: 300px;
+	max-width: 100%;
+}
+.filter-section input[type="text"]:focus {
+	outline: none;
+	border-color: #2c3e50;
+	box-shadow: 0 0 0 2px rgba(44, 62, 80, 0.1);
+}
+.filter-count-label {
+	color: #888;
+	font-size: 0.85rem;
+}
+
+/* Table view */
+.admin-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9rem;
+}
+.admin-table th,
+.admin-table td {
+	padding: 0.5rem 0.75rem;
+	text-align: left;
+	border-bottom: 1px solid #ddd;
+}
+.admin-table th {
+	background: #f5f5f5;
+	font-weight: bold;
+}
+.admin-table tr:hover {
+	background: #fafafa;
+}
+.admin-table tr.filter-hidden {
+	display: none;
+}
+.actions {
+	white-space: nowrap;
+}
+.btn {
+	display: inline-block;
+	padding: 0.25rem 0.5rem;
+	margin-right: 0.25rem;
+	text-decoration: none;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+	background: #f5f5f5;
+	color: #333;
+	font-size: 0.8rem;
+}
+.btn-primary {
+	background: #2c3e50;
+	color: white;
+	border-color: #2c3e50;
+}
+.btn:hover {
+	opacity: 0.9;
+}
+.btn.disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Pagination */
+.admin-pagination {
+	margin: 1rem 0;
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	flex-wrap: wrap;
+}
+.admin-pagination .current-page {
+	padding: 0.25rem 0.5rem;
+	background: #2c3e50;
+	color: white;
+	border-radius: 3px;
+}
+.admin-pagination .ellipsis {
+	padding: 0 0.25rem;
+	color: #666;
+}
+.admin-pagination .per-page-selector {
+	margin-left: 1rem;
+	padding-left: 1rem;
+	border-left: 1px solid #ddd;
+	color: #666;
+	font-size: 0.85rem;
+}
+.admin-pagination .per-page-selector a {
+	margin: 0 0.25rem;
+}
+
+/* Codelist (detail view) */
+.codelist { color: #333; }
+.codelist .item { margin: 20px 0; clear: both; }
+.codelist .item.filter-hidden { display: none; }
+.codelist .ascl_id, .codelist .ascl_id a {
+	color: #777; text-decoration: none;
+	font-family: monospace; font-weight: bold; font-size: 18px;
+}
+.codelist .title { font-family: 'Merriweather', serif; font-size: 18px; }
+.codelist .title a { text-decoration: none; color: #2c3e50; }
+.codelist .title a:hover { text-decoration: underline; }
+.codelist .update a {
+	font-size: 11px; text-decoration: none; color: #2980b9; margin-left: 0.5rem;
+}
+.codelist .update a:hover { text-decoration: underline; }
+.codelist .credit { margin-left: 20px; margin-top: 3px; color: #777; max-width: 1000px; }
+.codelist .abstract { margin-left: 20px; margin-top: 3px; color: #333; max-width: 1000px; line-height: 1.5; }
+</style>
+
+<script>
+function switchView(view) {
+	var tableView = document.getElementById('table-view');
+	var cardView = document.getElementById('card-view');
+	var btnTable = document.getElementById('btn-table-view');
+	var btnCard = document.getElementById('btn-card-view');
+
+	if (view === 'table') {
+		tableView.style.display = '';
+		cardView.style.display = 'none';
+		btnTable.classList.add('active');
+		btnCard.classList.remove('active');
+	} else {
+		tableView.style.display = 'none';
+		cardView.style.display = '';
+		btnTable.classList.remove('active');
+		btnCard.classList.add('active');
+	}
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+	// Table view filter
+	var tableFilter = document.getElementById('table-filter');
+	var tableFilterCount = document.getElementById('table-filter-count');
+	var tbody = document.querySelector('.admin-table tbody');
+	var rows = tbody ? tbody.querySelectorAll('tr') : [];
+	var totalRows = rows.length;
+
+	function updateTableFilter() {
+		var term = tableFilter.value.toLowerCase().trim();
+		var visible = 0;
+		rows.forEach(function(row) {
+			var id = row.cells[0] ? row.cells[0].textContent.trim().toLowerCase() : '';
+			var title = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
+			var match = term === '' || id.includes(term) || title.includes(term);
+			if (match) {
+				row.classList.remove('filter-hidden');
+				visible++;
+			} else {
+				row.classList.add('filter-hidden');
+			}
+		});
+		tableFilterCount.textContent = term ? visible + ' of ' + totalRows + ' shown' : '';
+	}
+
+	if (tableFilter) {
+		tableFilter.addEventListener('input', updateTableFilter);
+		tableFilter.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape') { tableFilter.value = ''; updateTableFilter(); tableFilter.blur(); }
+		});
+	}
+
+	// Card view filter
+	var cardFilter = document.getElementById('card-filter');
+	var cardFilterCount = document.getElementById('card-filter-count');
+	var cards = document.querySelectorAll('.codelist .item');
+	var totalCards = cards.length;
+
+	function updateCardFilter() {
+		var term = cardFilter.value.toLowerCase().trim();
+		var visible = 0;
+		cards.forEach(function(card) {
+			var title = card.getAttribute('data-title') || '';
+			var match = term === '' || title.includes(term);
+			if (match) {
+				card.classList.remove('filter-hidden');
+				visible++;
+			} else {
+				card.classList.add('filter-hidden');
+			}
+		});
+		cardFilterCount.textContent = term ? visible + ' of ' + totalCards + ' shown' : '';
+	}
+
+	if (cardFilter) {
+		cardFilter.addEventListener('input', updateCardFilter);
+		cardFilter.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape') { cardFilter.value = ''; updateCardFilter(); cardFilter.blur(); }
+		});
+	}
+});
+</script>
+{% endblock %}

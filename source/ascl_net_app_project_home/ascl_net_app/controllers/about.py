@@ -1,6 +1,8 @@
 #!/usr/bin/python
 
 import re
+import subprocess
+from pathlib import Path
 import flask
 from flask import render_template, abort, request
 from markupsafe import Markup
@@ -17,23 +19,60 @@ _SUBMISSIONS_PAGE_ID = 29
 _RESOURCES_PAGE_ID = 697
 _EXPLAIN_PAGE_ID = 1442
 
+# Map WordPress page IDs to named routes (for subpages nav links)
+_PAGE_ID_TO_ROUTE = {
+	_ABOUT_PAGE_ID: "/about",
+	_SUBMISSIONS_PAGE_ID: "/submissions",
+	_RESOURCES_PAGE_ID: "/resources",
+	_EXPLAIN_PAGE_ID: "/explain",
+}
+
 
 def _wpautop(content: str) -> str:
-	"""Basic wpautop-style formatting to wrap loose text in <p> tags."""
+	"""Use WordPress's wpautop implementation to match production behavior."""
 	content = content or ""
 	if not content:
 		return ""
-	content = content.replace("\r\n", "\n").strip()
+
+	repo_root = Path(__file__).resolve().parents[5]
+	formatting_php = repo_root / "ascl_php_application" / "web_root" / "wordpress" / "wp-includes" / "formatting.php"
+
+	if formatting_php.exists():
+		php_code = (
+			f"require {formatting_php.as_posix()!r}; "
+			"$content = stream_get_contents(STDIN); "
+			"echo wpautop($content);"
+		)
+		try:
+			result = subprocess.run(
+				["php", "-r", php_code],
+				input=content,
+				text=True,
+				capture_output=True,
+				check=False,
+				timeout=3,
+			)
+			if result.returncode == 0 and result.stdout:
+				return result.stdout
+		except Exception:
+			pass
+
+	# Fallback if PHP/WordPress helper is unavailable.
+	return _wpautop_fallback(content)
+
+
+def _wpautop_fallback(content: str) -> str:
+	content = content.replace("\r\n", "\n").replace("\r", "\n").strip()
+	if re.search(r"<\s*/?\s*(p|div|ul|ol|li|table|blockquote|pre|h[1-6]|dl|dt|dd)\b", content, re.IGNORECASE):
+		return content
 	parts = re.split(r"\n\s*\n", content)
 	paragraphs = []
 	for part in parts:
 		part = part.strip()
 		if not part:
 			continue
-		if part.startswith("<p") or part.startswith("<div") or part.startswith("<ul") or part.startswith("<ol"):
-			paragraphs.append(part)
-		else:
-			paragraphs.append(f"<p>{part}</p>")
+		part = part.replace("\n", "<br />\n")
+		paragraphs.append(f"<p>{part}</p>")
 	return "\n".join(paragraphs)
 
 
@@ -50,6 +89,23 @@ def _fetch_wp_page(page_id: int):
 	)
 	with db.engine.connect() as conn:
 		return conn.execute(sql, {"id": page_id}).mappings().first()
+
+
+def _title_case(s):
+	"""Capitalize first letter of each word, but preserve all-uppercase words like ASCL."""
+	words = s.split()
+	result = []
+	for w in words:
+		if w.isupper() and len(w) > 1:
+			result.append(w)
+		elif '/' in w:
+			result.append('/'.join(
+				p if (p.isupper() and len(p) > 1) else p.capitalize()
+				for p in w.split('/')
+			))
+		else:
+			result.append(w.capitalize())
+	return ' '.join(result)
 
 
 def _fetch_subpages(parent_id: int):
@@ -74,17 +130,19 @@ def _render_wp_page(page_id: int, back: str = None):
 		abort(404)
 
 	parent_id = page["post_parent"] or page["ID"]
-	subpages = _fetch_subpages(parent_id) if parent_id else []
+	subpages_raw = _fetch_subpages(parent_id) if parent_id else []
+	subpages = [{"ID": sp["ID"], "post_title": _title_case(sp["post_title"])} for sp in subpages_raw]
 	content_html = Markup(_wpautop(page["post_content"] or ""))
 	back_link = (back or "").strip().lstrip("/")
 
 	return render_template(
 		"about.html",
-		page_title=page["post_title"],
+		page_title=_title_case(page["post_title"]),
 		content=content_html,
 		subpages=subpages,
 		current_page=page["ID"],
 		back=back_link,
+		page_routes=_PAGE_ID_TO_ROUTE,
 	)
 
 
@@ -95,9 +153,8 @@ def about():
 
 @about_page.route("/submissions", methods=['GET'])
 def submissions():
-	"""Redirect to the code submission form."""
-	from flask import redirect
-	return redirect('/code/submit')
+	"""Render the WordPress-backed submissions information page."""
+	return _render_wp_page(_SUBMISSIONS_PAGE_ID)
 
 
 @about_page.route("/resources", methods=['GET'])

@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="admin-layout">
+	<!-- Left Navigation -->
+	<nav class="admin-nav" id="admin-nav">
+		<button class="nav-toggle" id="nav-toggle" onclick="toggleAdminNav()" title="Toggle navigation">
+			<span class="toggle-icon">&#9664;</span>
+		</button>
+		<div class="nav-content">
+			<div class="nav-section">
+				<div class="nav-section-title">Main</div>
+				<a href="{{ url_for('admin_page.admin_home') }}" class="nav-link {% if request.endpoint == 'admin_page.admin_home' %}active{% endif %}">
+					<span class="nav-icon">&#8962;</span><span class="nav-text">Home</span>
+				</a>
+				<a href="{{ url_for('admin_page.admin_dashboard') }}" class="nav-link {% if request.endpoint == 'admin_page.admin_dashboard' %}active{% endif %}">
+					<span class="nav-icon">&#9635;</span><span class="nav-text">Dashboard</span>
+				</a>
+				<a href="{{ url_for('admin_page.insert_code') }}" class="nav-link {% if request.endpoint == 'admin_page.insert_code' %}active{% endif %}">
+					<span class="nav-icon">&#43;</span><span class="nav-text">Add Code</span>
+				</a>
+			</div>
+			<div class="nav-section">
+				<div class="nav-section-title">Code Lists</div>
+				<a href="{{ url_for('admin_page.unpublished_codes') }}" class="nav-link {% if request.endpoint == 'admin_page.unpublished_codes' %}active{% endif %}">
+					<span class="nav-icon">&#9744;</span><span class="nav-text">Unpublished</span>
+				</a>
+				<a href="{{ url_for('admin_page.archived_codes') }}" class="nav-link {% if request.endpoint == 'admin_page.archived_codes' %}active{% endif %}">
+					<span class="nav-icon">&#128451;</span><span class="nav-text">Archived</span>
+				</a>
+				<a href="{{ url_for('admin_page.notes_attention') }}" class="nav-link {% if request.endpoint == 'admin_page.notes_attention' %}active{% endif %}">
+					<span class="nav-icon">&#9888;</span><span class="nav-text">Needs Attention</span>
+				</a>
+			</div>
+			<div class="nav-section">
+				<div class="nav-section-title">Utilities</div>
+				<a href="{{ url_for('admin_page.utility_full_table') }}" class="nav-link {% if request.endpoint == 'admin_page.utility_full_table' %}active{% endif %}">
+					<span class="nav-icon">&#9638;</span><span class="nav-text">Full ASCL Table</span>
+				</a>
+				<a href="{{ url_for('admin_page.utility_simple_table') }}" class="nav-link {% if request.endpoint == 'admin_page.utility_simple_table' %}active{% endif %}">
+					<span class="nav-icon">&#9637;</span><span class="nav-text">Simple ASCL Table</span>
+				</a>
+				<a href="{{ url_for('admin_page.utility_all_links') }}" class="nav-link {% if request.endpoint == 'admin_page.utility_all_links' %}active{% endif %}">
+					<span class="nav-icon">&#9776;</span><span class="nav-text">All Links List</span>
+				</a>
+				<a href="{{ url_for('admin_page.utility_site_links_list') }}" class="nav-link {% if request.endpoint == 'admin_page.utility_site_links_list' %}active{% endif %}">
+					<span class="nav-icon">&#127760;</span><span class="nav-text">Site Links List</span>
+				</a>
+			</div>
+			<div class="nav-section">
+				<div class="nav-section-title">Account</div>
+				<a href="{{ url_for('admin_page.user_cp') }}" class="nav-link {% if request.endpoint == 'admin_page.user_cp' %}active{% endif %}">
+					<span class="nav-icon">&#9881;</span><span class="nav-text">User CP</span>
+				</a>
+				<a href="{{ url_for('admin_page.admin_logout') }}" class="nav-link">
+					<span class="nav-icon">&#10140;</span><span class="nav-text">Logout</span>
+				</a>
+			</div>
+		</div>
+	</nav>
+
+	<!-- Main Content -->
+	<main class="admin-main">
+		{% with messages = get_flashed_messages(with_categories=true) %}
+			{% if messages %}
+				{% for category, message in messages %}
+					<div class="admin-notice {% if category == 'error' %}notice-warning{% elif category == 'success' %}notice-success{% else %}notice-info{% endif %}">
+						<span class="notice-badge">{% if category == 'error' %}ERROR{% elif category == 'success' %}SUCCESS{% else %}INFO{% endif %}</span>
+						<span>{{ message|safe }}</span>
+					</div>
+				{% endfor %}
+			{% endif %}
+		{% endwith %}
+
+		{% block admin_content %}{% endblock %}
+	</main>
+</div>
+
+<style>
+/* Admin Layout */
+.admin-layout {
+	display: flex;
+	min-height: calc(100vh - 200px);
+	margin: -20px -20px -40px -20px;
+}
+
+/* Left Navigation */
+.admin-nav {
+	width: 200px;
+	min-width: 200px;
+	background: #2c3e50;
+	color: #ecf0f1;
+	transition: width 0.2s ease, min-width 0.2s ease;
+	position: relative;
+	overflow: hidden;
+}
+.admin-nav.collapsed {
+	width: 50px;
+	min-width: 50px;
+}
+.admin-nav.collapsed .nav-text,
+.admin-nav.collapsed .nav-section-title {
+	opacity: 0;
+	visibility: hidden;
+}
+.admin-nav.collapsed .nav-link {
+	justify-content: center;
+	padding: 12px 0;
+}
+.admin-nav.collapsed .nav-icon {
+	margin-right: 0;
+}
+.admin-nav.collapsed .toggle-icon {
+	transform: rotate(180deg);
+}
+
+.nav-toggle {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	background: rgba(255,255,255,0.1);
+	border: none;
+	color: #ecf0f1;
+	width: 28px;
+	height: 28px;
+	border-radius: 4px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 10;
+}
+.nav-toggle:hover {
+	background: rgba(255,255,255,0.2);
+}
+.toggle-icon {
+	font-size: 12px;
+	transition: transform 0.2s ease;
+}
+
+.nav-content {
+	padding: 50px 0 20px 0;
+}
+
+.nav-section {
+	margin-bottom: 20px;
+}
+.nav-section-title {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	color: #7f8c8d;
+	padding: 8px 15px;
+	letter-spacing: 0.5px;
+	white-space: nowrap;
+	transition: opacity 0.2s ease;
+}
+
+.nav-link {
+	display: flex;
+	align-items: center;
+	padding: 10px 15px;
+	color: #bdc3c7;
+	text-decoration: none;
+	font-size: 14px;
+	transition: background 0.15s ease, color 0.15s ease;
+	white-space: nowrap;
+}
+.nav-link:hover {
+	background: rgba(255,255,255,0.1);
+	color: #fff;
+}
+.nav-link.active {
+	background: #3498db;
+	color: #fff;
+}
+.nav-icon {
+	width: 20px;
+	margin-right: 10px;
+	text-align: center;
+	font-size: 16px;
+	flex-shrink: 0;
+}
+.nav-text {
+	transition: opacity 0.2s ease;
+}
+
+/* Main Content */
+.admin-main {
+	flex: 1;
+	padding: 20px;
+	background: #fff;
+	overflow-x: auto;
+}
+
+/* Existing styles */
+.attention-alert {
+	background: #fff3cd;
+	border: 1px solid #ffc107;
+	border-left: 4px solid #e67e22;
+	padding: 12px 16px;
+	margin-bottom: 20px;
+	border-radius: 4px;
+	font-size: 15px;
+}
+.attention-alert strong {
+	color: #e67e22;
+}
+.attention-alert a {
+	margin-left: 10px;
+	color: #2980b9;
+	font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+	.admin-nav {
+		width: 50px;
+		min-width: 50px;
+	}
+	.admin-nav .nav-text,
+	.admin-nav .nav-section-title {
+		opacity: 0;
+		visibility: hidden;
+	}
+	.admin-nav .nav-link {
+		justify-content: center;
+		padding: 12px 0;
+	}
+	.admin-nav .nav-icon {
+		margin-right: 0;
+	}
+	.nav-toggle {
+		display: none;
+	}
+}
+</style>
+
+<script>
+function toggleAdminNav() {
+	var nav = document.getElementById('admin-nav');
+	nav.classList.toggle('collapsed');
+	// Save preference
+	localStorage.setItem('adminNavCollapsed', nav.classList.contains('collapsed'));
+}
+
+// Restore preference on load
+document.addEventListener('DOMContentLoaded', function() {
+	var collapsed = localStorage.getItem('adminNavCollapsed') === 'true';
+	if (collapsed) {
+		document.getElementById('admin-nav').classList.add('collapsed');
+	}
+});
+</script>
+{% endblock %}

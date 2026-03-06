@@ -1,84 +1,29 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 
-{% block title %}Admin{% endblock %}
+{% block title %}Admin Home{% endblock %}
 
-{% block content %}
-<h2>Admin</h2>
-
-{% with messages = get_flashed_messages(with_categories=true) %}
-	{% if messages %}
-		<ul class="flash-messages">
-		{% for category, message in messages %}
-			<li class="{{ category }}">{{ message|safe }}</li>
-		{% endfor %}
-		</ul>
-	{% endif %}
-{% endwith %}
-
-<div class="admin-summary">
-	<p><strong>Published views:</strong> {{ published_views }}</p>
-	<p><strong>Unpublished views:</strong> {{ unpublished_views }}</p>
-</div>
+{% block admin_content %}
+<h1>Admin Home</h1>
 
 {% if current_user %}
-	<p>Signed in as <strong>{{ current_user.username }}</strong>. <a href="{{ url_for('admin_page.admin_logout') }}">Logout</a></p>
-
-	<div class="admin-nav">
-		<h3>Code Management</h3>
-		<ul>
-			<li><a href="{{ url_for('admin_page.insert_code') }}" class="action-link">Add New Code</a></li>
-			<li><a href="{{ url_for('admin_page.unpublished_codes') }}">Unpublished codes</a></li>
-			<li><a href="{{ url_for('admin_page.archived_codes') }}">Archived codes</a></li>
-		</ul>
-
-		<h3>Quick Links</h3>
-		<ul>
-			<li><a href="/dashboard">Public Dashboard</a></li>
-			<li><a href="/code/all">Browse All Codes</a></li>
-		</ul>
-
-		<h3>Raw Data</h3>
-		<ul>
-			<li><a href="{{ url_for('admin_page.utility_ascl') }}">Full ASCL Table</a></li>
-			<li><a href="{{ url_for('admin_page.utility_ascl2') }}">Simple ASCL Table</a></li>
-			<li><a href="{{ url_for('admin_page.utility_links') }}">All Links List (plain text)</a></li>
-			<li><a href="{{ url_for('admin_page.utility_site_links') }}">Site Links List (plain text)</a></li>
-		</ul>
+	{% if attention_count > 0 %}
+	<div class="attention-alert">
+		<strong>{{ attention_count }}</strong> note{{ 's' if attention_count != 1 else '' }} need{{ '' if attention_count != 1 else 's' }} attention.
+		<a href="{{ url_for('admin_page.notes_attention') }}">View &rarr;</a>
 	</div>
+	{% endif %}
 
-	<style>
-	.admin-nav h3 {
-		margin-top: 1.5rem;
-		margin-bottom: 0.5rem;
-		font-size: 1rem;
-		color: #555;
-	}
-	.admin-nav ul {
-		margin: 0;
-		padding-left: 1.5rem;
-	}
-	.admin-nav li {
-		margin-bottom: 0.5rem;
-	}
-	.action-link {
-		font-weight: bold;
-		color: #2c3e50;
-	}
-	</style>
+	<p>Any high level information here?</p>
+
 {% else %}
-	<h3>Login</h3>
-	<form action="{{ url_for('admin_page.admin_login') }}" method="post" class="admin-login-form">
-		<div>
+	<div class="forms">
+		<form action="{{ url_for('admin_page.admin_login') }}" method="post">
 			<label for="username">Username</label>
-			<input type="text" name="username" id="username" required />
-		</div>
-		<div>
+			<input type="text" name="username" id="username" maxlength="20" />
 			<label for="password">Password</label>
-			<input type="password" name="password" id="password" required />
-		</div>
-		<div>
-			<button type="submit">Login</button>
-		</div>
-	</form>
+			<input type="password" name="password" id="password" maxlength="20" />
+			<input type="submit" name="mysubmit" value="Login" />
+		</form>
+	</div>
 {% endif %}
 {% endblock %}

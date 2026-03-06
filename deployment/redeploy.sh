@@ -11,6 +11,12 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# Check that secrets file exists before deploying
+if [ ! -f /etc/ascl/secrets.cfg ]; then
+    echo "ERROR: /etc/ascl/secrets.cfg not found. Create it from secrets.cfg.example."
+    exit 1
+fi
+
 REPO_PATH="/home/demitri/repositories/ASCL/alt_ascl/source/ascl_net_app_project_home"
 DEPLOY_PATH="/var/www/ascl_net_app"
 DM_DBCORE_PATH="/home/demitri/repositories/ASCL/dm-dbcore"

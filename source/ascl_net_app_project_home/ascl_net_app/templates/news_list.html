@@ -3,33 +3,216 @@
 {% block title %}ASCL News{% endblock %}
 
 {% block content %}
-<div class="codelist">
-	<h2>ASCL News</h2>
-	{% if posts %}
-		<ul class="news-list">
-			{% for post in posts %}
-				<li class="news-item">
-					<div class="news-title">
-						<a href="/news/{{ post.slug }}">{{ post.title }}</a>
-					</div>
-					<div class="news-date">{{ post.date.strftime("%Y-%m-%d") if post.date else "" }}</div>
-					<div class="news-excerpt">{{ post.excerpt }}</div>
-				</li>
-			{% endfor %}
-		</ul>
-		{% if total_pages > 1 %}
-			<div class="pagination">
-				{% if page > 1 %}
-					<a href="/news?page={{ page - 1 }}">Previous</a>
-				{% endif %}
-				<span>Page {{ page }} of {{ total_pages }}</span>
-				{% if page < total_pages %}
-					<a href="/news?page={{ page + 1 }}">Next</a>
-				{% endif %}
+<div class="codelist news-layout">
+	<div class="news-main">
+		<h2>ASCL News</h2>
+
+		{% if q or category or archive %}
+			<div class="news-filters">
+				<strong>Filtered:</strong>
+				{% if q %}<span>search "{{ q }}"</span>{% endif %}
+				{% if category %}<span>category "{{ category }}"</span>{% endif %}
+				{% if archive %}<span>archive "{{ archive }}"</span>{% endif %}
+				<a href="/news">clear</a>
 			</div>
 		{% endif %}
-	{% else %}
-		<p>No news posts found.</p>
-	{% endif %}
+
+		{% if posts %}
+			<ul class="news-list">
+				{% for post in posts %}
+					<li class="news-item">
+						<div class="news-title">
+							<a href="/news/{{ post.slug }}">{{ post.title }}</a>
+						</div>
+						<div class="news-meta">{{ post.date.strftime("%B %-d, %Y") if post.date else "" }}{% if post.author %} &mdash; {{ post.author }}{% endif %}</div>
+						<div class="news-content">{{ post.content }}</div>
+					</li>
+				{% endfor %}
+			</ul>
+			{% if total_pages > 1 %}
+				<div class="news-pagination-wrap">
+					{% set start_result = ((page - 1) * page_size) + 1 %}
+					{% set end_result = ((page - 1) * page_size) + (posts|length) %}
+					<p class="news-result-count">Results {{ start_result }}-{{ end_result }} of {{ total }}</p>
+					<div class="admin-pagination news-pagination">
+						{% if page > 1 %}
+							<a href="{{ url_for('news_page.news_index', page=page - 1, q=q or None, category=category or None, archive=archive or None) }}" class="btn btn-small">Previous</a>
+						{% else %}
+							<span class="btn btn-small disabled">Previous</span>
+						{% endif %}
+
+						{% for p in range(1, total_pages + 1) %}
+							{% if p == page %}
+								<strong class="current-page">{{ p }}</strong>
+							{% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+								<a href="{{ url_for('news_page.news_index', page=p, q=q or None, category=category or None, archive=archive or None) }}" class="btn btn-small">{{ p }}</a>
+							{% elif p == 4 and page > 5 %}
+								<span class="ellipsis">...</span>
+							{% elif p == total_pages - 2 and page < total_pages - 4 %}
+								<span class="ellipsis">...</span>
+							{% endif %}
+						{% endfor %}
+
+						{% if page < total_pages %}
+							<a href="{{ url_for('news_page.news_index', page=page + 1, q=q or None, category=category or None, archive=archive or None) }}" class="btn btn-small">Next</a>
+						{% else %}
+							<span class="btn btn-small disabled">Next</span>
+						{% endif %}
+					</div>
+				</div>
+			{% endif %}
+		{% else %}
+			<p>No news posts found.</p>
+		{% endif %}
+	</div>
+
+	<aside class="news-sidebar">
+		<div class="news-side-block">
+			<h3>Search News</h3>
+			<form action="/news" method="get" class="news-search">
+				<input type="text" name="q" value="{{ q }}" placeholder="Search news">
+				{% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
+				{% if archive %}<input type="hidden" name="archive" value="{{ archive }}">{% endif %}
+				<button type="submit">Search</button>
+			</form>
+		</div>
+
+		<div class="news-side-block">
+			<h3>Recent Posts</h3>
+			<ul class="news-side-list">
+				{% for item in sidebar.recent_posts %}
+					<li><a href="/news/{{ item.slug }}">{{ item.title }}</a></li>
+				{% endfor %}
+			</ul>
+		</div>
+
+		<div class="news-side-block">
+			<h3>Categories</h3>
+			<ul class="news-side-list">
+				{% for item in sidebar.categories %}
+					<li>
+						<a href="{{ url_for('news_page.news_index', category=item.slug) }}">{{ item.name }}</a>
+						<span class="news-count">({{ item.post_count }})</span>
+					</li>
+				{% endfor %}
+			</ul>
+		</div>
+
+		<div class="news-side-block">
+			<h3>Archives</h3>
+			<ul class="news-side-list">
+				{% for item in sidebar.archives %}
+					<li class="archive-item" data-month="{{ item.archive_key }}">
+						<a href="{{ url_for('news_page.news_index', archive=item.archive_key) }}">{{ item.archive_label }}</a>
+						<span class="news-count">({{ item.post_count }})</span>
+					</li>
+				{% endfor %}
+			</ul>
+		</div>
+	</aside>
 </div>
+
+<div class="archive-popup" id="archive-popup"></div>
+
+<style>
+.archive-popup {
+	display: none;
+	position: absolute;
+	background: #fff;
+	border: 1px solid #ccc;
+	box-shadow: 2px 2px 8px rgba(0,0,0,0.15);
+	padding: 8px 12px;
+	z-index: 100;
+	max-width: 340px;
+	min-width: 200px;
+	font-size: 13px;
+	line-height: 1.4;
+}
+.archive-popup h4 {
+	margin: 0 0 4px 0;
+	font-size: 14px;
+	border-bottom: 1px solid #e5e5e5;
+	padding-bottom: 4px;
+}
+.archive-popup ul {
+	list-style: none;
+	padding-left: 0 !important;
+	margin: 0;
+}
+.archive-popup li {
+	margin: 2px 0;
+	padding-left: 0 !important;
+}
+.archive-popup a {
+	text-decoration: none;
+	color: #2980b9;
+}
+.archive-popup a:hover {
+	text-decoration: underline;
+}
+</style>
+
+<script>
+(function() {
+	var popup = document.getElementById('archive-popup');
+	var archiveData = {{ sidebar.archive_posts | tojson }};
+	var hideTimer = null;
+	var currentItem = null;
+
+	function escapeHtml(str) {
+		var d = document.createElement('div');
+		d.textContent = str;
+		return d.innerHTML;
+	}
+
+	function showPopup(li) {
+		var month = li.dataset.month;
+		var posts = archiveData[month];
+		currentItem = li;
+
+		if (!posts || !posts.length) return;
+
+		var label = li.querySelector('a').textContent;
+		var html = '<h4>' + escapeHtml(label) + '</h4><ul>';
+		posts.forEach(function(p) {
+			html += '<li><a href="/news/' + p.slug + '">' + escapeHtml(p.title) + '</a></li>';
+		});
+		html += '</ul>';
+		popup.innerHTML = html;
+		popup.style.display = 'block';
+
+		// Position to the left of the sidebar item
+		var rect = li.getBoundingClientRect();
+		var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+		var scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+		var popupWidth = popup.offsetWidth;
+		var left = rect.left + scrollLeft - popupWidth - 10;
+		if (left < 5) left = 5;
+		popup.style.top = (rect.top + scrollTop - 4) + 'px';
+		popup.style.left = left + 'px';
+	}
+
+	function hidePopup() {
+		hideTimer = setTimeout(function() {
+			popup.style.display = 'none';
+			currentItem = null;
+		}, 200);
+	}
+
+	function cancelHide() {
+		if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+	}
+
+	document.querySelectorAll('.archive-item').forEach(function(li) {
+		li.addEventListener('mouseenter', function() {
+			cancelHide();
+			showPopup(li);
+		});
+		li.addEventListener('mouseleave', hidePopup);
+	});
+
+	popup.addEventListener('mouseenter', cancelHide);
+	popup.addEventListener('mouseleave', hidePopup);
+})();
+</script>
 {% endblock %}

@@ -73,6 +73,10 @@ instance/
 # Passwords should NEVER be in these files - use ~/.my.cnf, ~/.pgpass, or ENV vars instead
 source/ascl_net_app_project_home/ascl_net_app/configuration_files/local*.cfg
 
+# Secrets file (actual secrets loaded at runtime from /etc/ascl/secrets.cfg)
+secrets.cfg
+!secrets.cfg.example
+
 # Scrapy stuff:
 .scrapy
 

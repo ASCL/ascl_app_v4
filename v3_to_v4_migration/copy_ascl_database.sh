@@ -67,3 +67,18 @@ echo "Verifying table count..."
 TABLE_COUNT=$(mysql --defaults-file="$tmp" --protocol=TCP --host=127.0.0.1 --port=3307 \
   -D "$TARGET_DB" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$TARGET_DB';")
 echo "✓ $TARGET_DB has $TABLE_COUNT tables"
+
+# Run migration to normalize PHP-serialized fields
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MIGRATE_SCRIPT="$SCRIPT_DIR/migrate_serialized_to_links.py"
+
+if [ -f "$MIGRATE_SCRIPT" ]; then
+  echo ""
+  echo "Running PHP-serialized field migration..."
+  python3 "$MIGRATE_SCRIPT" "$TARGET_DB"
+  echo "✓ Field migration completed"
+else
+  echo ""
+  echo "⚠ Migration script not found: $MIGRATE_SCRIPT"
+  echo "  Skipping PHP-serialized field migration"
+fi

@@ -1,0 +1,654 @@
+<div class="dashboard-container">
+	<h1>ASCL Statistics Dashboard</h1>
+
+	<!-- Overall Statistics -->
+	<div class="stats-grid-bar">
+		<span><strong>{{ stats.published_codes|number_format }}</strong> codes in the ASCL</span>
+		<span><strong>{{ stats.total_citations|number_format }}</strong> citations in ADS</span>
+		<span><strong>{{ stats.codes_this_year|number_format }}</strong> added this year</span>
+		<span><strong>{{ stats.pending_submissions|number_format }}</strong> pending</span>
+		<span><strong>{{ stats.ads_indexed|number_format }}</strong> indexed in ADS ({{ stats.ads_indexed_pct }}%)</span>
+		<span><strong>{{ stats.codes_with_citations|number_format }}</strong> with citations ({{ stats.codes_with_citations_pct }}%)</span>
+		<span class="stat-muted"><strong>{{ stats.total_keywords|number_format }}</strong> keywords</span>
+		<span><strong>{{ stats.total_links|number_format }}</strong> external links</span>
+	</div>
+
+	{% if is_admin and admin_stats %}
+	<!-- Admin-Only Statistics -->
+	<section class="dashboard-section admin-stats-section">
+		<h2>Admin Statistics</h2>
+		<div class="admin-stats-grid">
+			<div class="admin-stat-group">
+				<h3><a href="{{ url_for('admin_page.codes_awaiting_ids') }}">Codes Awaiting ASCL IDs</a></h3>
+				<ul class="admin-stat-list">
+					<li>Published: <strong>{{ admin_stats.awaiting_ids_published }}</strong></li>
+					<li>Unpublished: <strong>{{ admin_stats.awaiting_ids_unpublished }}</strong></li>
+					<li>Total: <strong>{{ admin_stats.awaiting_ids_total }}</strong></li>
+				</ul>
+			</div>
+			<div class="admin-stat-group">
+				<h3>Codes Missing&hellip;</h3>
+				<ul class="admin-stat-list">
+					<li>&hellip;preferred citation method: <a href="{{ url_for('admin_page.codes_missing_citation_method') }}"><strong>{{ admin_stats.missing_citation_method }}</strong></a></li>
+					<li>&hellip;&ldquo;described in&rdquo; and &ldquo;used in&rdquo;: <a href="{{ url_for('admin_page.codes_missing_described_used') }}"><strong>{{ admin_stats.missing_described_used }}</strong></a> (<a href="{{ url_for('admin_page.codes_missing_described_used', status='published') }}">{{ admin_stats.missing_described_used_pub }} published</a>)</li>
+				</ul>
+			</div>
+			<div class="admin-stat-group">
+				<h3><a href="{{ url_for('admin_page.codes_submitted_by_authors') }}">Codes Submitted by Authors</a></h3>
+				<ul class="admin-stat-list">
+					<li>Total: <strong>{{ admin_stats.submitted_by_authors }}</strong></li>
+					<li>With ASCL IDs: <strong>{{ admin_stats.submitted_by_authors_with_ids }}</strong></li>
+				</ul>
+			</div>
+		</div>
+	</section>
+	{% endif %}
+
+	<!-- Charts Row (Responsive) -->
+	<div class="charts-row">
+		<!-- Codes by Year -->
+		<section class="dashboard-section chart-section">
+			<h2>Codes Added by Year</h2>
+			<div class="chart-container">
+				<canvas id="codesPerYearChart"></canvas>
+			</div>
+		</section>
+
+		<!-- Citations by Year -->
+		<section class="dashboard-section chart-section">
+			<h2>Citations by Year</h2>
+			<div class="chart-container">
+				<canvas id="citationsPerYearChart"></canvas>
+			</div>
+		</section>
+	</div>
+
+	<!-- Citations by Journal -->
+	<section class="dashboard-section">
+		<h2>Citations by Journal</h2>
+		<div class="chart-container pie-chart-container">
+			<canvas id="citationsByJournalChart"></canvas>
+		</div>
+
+		<div class="journal-table-wrap">
+			<div class="journal-table-toolbar">
+				<input type="text" id="journal-filter" class="journal-filter" placeholder="Filter journals…">
+				{% if stats.all_journal_citations|length > 20 %}
+				<button class="btn btn-small journal-toggle" id="journal-toggle" onclick="toggleJournalRows()">
+					Show all {{ stats.all_journal_citations|length }} journals
+				</button>
+				{% endif %}
+			</div>
+			<table class="data-table" id="journal-table">
+				<thead>
+					<tr>
+						<th>#</th>
+						<th>Abbreviation</th>
+						<th>Journal</th>
+						<th>Citations</th>
+						<th>%</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in stats.all_journal_citations %}
+					<tr class="journal-row{% if loop.index > 20 %} journal-hidden{% endif %}">
+						<td>{{ loop.index }}</td>
+						<td>{{ item.journal }}</td>
+						<td>{{ item.full_name }}</td>
+						<td>{{ item.count }}</td>
+						<td>{{ item.pct }}%</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<!-- Most Cited Codes -->
+	<section class="dashboard-section">
+		<h2>Most Cited Codes</h2>
+		<div class="code-list">
+			<table class="data-table compact-table">
+				<thead>
+					<tr>
+						<th>Rank</th>
+						<th>ASCL ID</th>
+						<th>Title</th>
+						<th>Citations</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in stats.most_cited %}
+					<tr>
+						<td>{{ loop.index }}</td>
+						<td><a href="/{{ item.code.ascl_id }}">ascl:{{ item.code.ascl_id }}</a></td>
+						<td><a href="/{{ item.code.ascl_id }}">{{ item.code.title }}</a></td>
+						<td>{{ item.citation_count }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+</div>
+
+<style>
+.dashboard-container {
+	padding: 16px 20px;
+	max-width: 1400px;
+	margin: 0 auto;
+}
+
+.dashboard-container > h1 {
+	margin: 0 0 12px 0;
+	font-size: 24px;
+}
+
+.dashboard-section {
+	margin-bottom: 24px;
+	background: #f8f9fa;
+	padding: 16px 20px;
+	border-radius: 8px;
+}
+
+.dashboard-section h2 {
+	margin-top: 0;
+	margin-bottom: 12px;
+	color: #333;
+	border-bottom: 2px solid #352bb3;
+	padding-bottom: 8px;
+	font-size: 18px;
+}
+
+.stats-grid-bar {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 0 24px;
+	font-size: 14px;
+	color: #444;
+	margin-bottom: 16px;
+	line-height: 1.5;
+}
+
+.stats-grid-bar strong {
+	color: #352bb3;
+	font-size: 15px;
+}
+
+.stat-muted, .stat-muted strong {
+	color: #aaa;
+}
+
+.data-table {
+	width: 100%;
+	background: white;
+	border-collapse: collapse;
+	border-radius: 8px;
+	overflow: hidden;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.data-table thead {
+	background: #262255;
+	color: white;
+}
+
+.data-table th,
+.data-table td {
+	padding: 12px;
+	text-align: left;
+	border-bottom: 1px solid #ddd;
+}
+
+.data-table tbody tr:hover {
+	background: #f5f5f5;
+}
+
+.data-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.code-list {
+	overflow-x: auto;
+}
+
+.chart-container {
+	background: white;
+	padding: 16px;
+	border-radius: 8px;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	height: 320px;
+}
+
+.chart-container canvas {
+	width: 100%;
+	height: 100%;
+}
+
+.charts-row {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+	margin-bottom: 24px;
+	align-items: start;
+}
+
+.chart-section {
+	min-width: 0;
+	margin-bottom: 0;
+}
+
+.pie-chart-container {
+	height: 360px;
+	max-width: 700px;
+	margin: 0 auto;
+}
+
+.journal-table-wrap {
+	margin-top: 20px;
+}
+
+#journal-table th,
+#journal-table td,
+.compact-table th,
+.compact-table td {
+	padding: 4px 10px;
+	font-size: 13px;
+	line-height: 1.3;
+}
+
+.journal-table-toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.journal-filter {
+	width: 280px;
+	padding: 6px 10px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-size: 14px;
+}
+
+.journal-hidden {
+	display: none;
+}
+
+.journal-toggle {
+	cursor: pointer;
+	background: #f0f0f0;
+	border: 1px solid #ccc;
+	padding: 6px 14px;
+	border-radius: 4px;
+	font-size: 13px;
+}
+
+.journal-toggle:hover {
+	background: #e0e0e0;
+}
+
+/* Admin-only stats */
+.admin-stats-section {
+	border-left: 4px solid #c0392b;
+	padding: 2px 12px 6px 12px;
+}
+
+.admin-stats-section h2 {
+	margin-bottom: 4px;
+	padding-bottom: 2px;
+}
+
+.admin-stats-grid {
+	display: grid;
+	grid-template-columns: repeat(3, auto);
+	gap: 4px 32px;
+	justify-content: start;
+}
+
+.admin-stat-group h3 {
+	margin: 0 0 1px 0;
+	font-size: 14px;
+	color: #555;
+	font-weight: 600;
+}
+
+.admin-stat-group h3 a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.admin-stat-group h3 a:hover {
+	text-decoration: underline;
+}
+
+ul.admin-stat-list {
+	margin: 0;
+	padding: 0 !important;
+	padding-left: 0 !important;
+	list-style: disc inside;
+	font-size: 13px;
+	line-height: 1.4;
+	color: #444;
+}
+
+ul.admin-stat-list li {
+	margin: 0;
+	padding: 0 !important;
+	padding-left: 0 !important;
+}
+
+.admin-stat-list a {
+	color: #c0392b;
+	text-decoration: none;
+}
+
+.admin-stat-list a:hover {
+	text-decoration: underline;
+}
+
+.admin-stat-list strong {
+	color: #c0392b;
+}
+
+/* Responsive: Stack charts on narrow screens */
+@media (max-width: 700px) {
+	.charts-row {
+		grid-template-columns: 1fr;
+	}
+	.admin-stats-grid {
+		grid-template-columns: 1fr;
+	}
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+	// Codes Per Year Chart
+	const ctx = document.getElementById('codesPerYearChart').getContext('2d');
+
+	// Prepare data from Flask template
+	const years = [
+		{% for item in stats.codes_by_year %}
+		{{ item.year }}{% if not loop.last %},{% endif %}
+		{% endfor %}
+	];
+
+	const counts = [
+		{% for item in stats.codes_by_year %}
+		{{ item.count }}{% if not loop.last %},{% endif %}
+		{% endfor %}
+	];
+
+	// Create gradient
+	const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+	gradient.addColorStop(0, '#352bb3');   // Site purple
+	gradient.addColorStop(1, '#5a4dd4');   // Lighter purple
+
+	new Chart(ctx, {
+		type: 'bar',
+		data: {
+			labels: years,
+			datasets: [{
+				label: 'Codes Added',
+				data: counts,
+				backgroundColor: gradient,
+				borderColor: '#262255',  // Dark purple from header
+				borderWidth: 1,
+				borderRadius: 6,
+				hoverBackgroundColor: '#ff7e00',  // Orange hover color from site
+			}]
+		},
+		options: {
+			responsive: true,
+			maintainAspectRatio: false,
+			plugins: {
+				legend: {
+					display: false
+				},
+				tooltip: {
+					backgroundColor: '#262255',
+					titleColor: '#fff',
+					bodyColor: '#fff',
+					padding: 12,
+					displayColors: false,
+					callbacks: {
+						title: function(context) {
+							return 'Year ' + context[0].label;
+						},
+						label: function(context) {
+							return context.parsed.y + ' codes added';
+						}
+					}
+				}
+			},
+			scales: {
+				y: {
+					beginAtZero: true,
+					ticks: {
+						precision: 0,
+						font: {
+							size: 12
+						}
+					},
+					grid: {
+						color: 'rgba(0, 0, 0, 0.05)'
+					}
+				},
+				x: {
+					grid: {
+						display: false
+					},
+					ticks: {
+						font: {
+							size: 11
+						}
+					}
+				}
+			}
+		}
+	});
+
+	// Citations Per Year Chart
+	const ctx2 = document.getElementById('citationsPerYearChart').getContext('2d');
+
+	// Prepare data from Flask template
+	const citationYears = [
+		{% for item in stats.citations_by_year %}
+		{{ item.year }}{% if not loop.last %},{% endif %}
+		{% endfor %}
+	];
+
+	const citationCounts = [
+		{% for item in stats.citations_by_year %}
+		{{ item.count }}{% if not loop.last %},{% endif %}
+		{% endfor %}
+	];
+
+	// Create gradient for citations (teal/green to distinguish from codes)
+	const gradient2 = ctx2.createLinearGradient(0, 0, 0, 400);
+	gradient2.addColorStop(0, '#0d9488');   // Teal
+	gradient2.addColorStop(1, '#14b8a6');   // Lighter teal
+
+	new Chart(ctx2, {
+		type: 'bar',
+		data: {
+			labels: citationYears,
+			datasets: [{
+				label: 'Citations',
+				data: citationCounts,
+				backgroundColor: gradient2,
+				borderColor: '#0f766e',  // Dark teal
+				borderWidth: 1,
+				borderRadius: 6,
+				hoverBackgroundColor: '#ff7e00',  // Orange hover color from site
+			}]
+		},
+		options: {
+			responsive: true,
+			maintainAspectRatio: false,
+			plugins: {
+				legend: {
+					display: false
+				},
+				tooltip: {
+					backgroundColor: '#0f766e',
+					titleColor: '#fff',
+					bodyColor: '#fff',
+					padding: 12,
+					displayColors: false,
+					callbacks: {
+						title: function(context) {
+							return 'Year ' + context[0].label;
+						},
+						label: function(context) {
+							return context.parsed.y + ' citations';
+						}
+					}
+				}
+			},
+			scales: {
+				y: {
+					beginAtZero: true,
+					ticks: {
+						precision: 0,
+						font: {
+							size: 12
+						}
+					},
+					grid: {
+						color: 'rgba(0, 0, 0, 0.05)'
+					}
+				},
+				x: {
+					grid: {
+						display: false
+					},
+					ticks: {
+						font: {
+							size: 11
+						}
+					}
+				}
+			}
+		}
+	});
+
+	// Citations by Journal Pie Chart
+	const ctx3 = document.getElementById('citationsByJournalChart').getContext('2d');
+
+	const journalNames = {{ stats.citations_by_journal|map(attribute='journal')|list|tojson }};
+
+	const journalPcts = [
+		{% for item in stats.citations_by_journal %}
+		{{ item.pct }}{% if not loop.last %},{% endif %}
+		{% endfor %}
+	];
+
+	const journalLabels = journalNames.map(function(name, i) {
+		return name + ' (' + journalPcts[i] + '%)';
+	});
+
+	const journalCounts = [
+		{% for item in stats.citations_by_journal %}
+		{{ item.count }}{% if not loop.last %},{% endif %}
+		{% endfor %}
+	];
+
+	const pieColors = [
+		'#352bb3', '#0d9488', '#e67e22', '#c0392b', '#2980b9',
+		'#8e44ad', '#27ae60', '#d4ac0d', '#1abc9c', '#e74c3c',
+		'#95a5a6'
+	];
+
+	new Chart(ctx3, {
+		type: 'doughnut',
+		data: {
+			labels: journalLabels,
+			datasets: [{
+				data: journalCounts,
+				backgroundColor: pieColors.slice(0, journalLabels.length),
+				borderWidth: 2,
+				borderColor: '#fff',
+				hoverOffset: 6,
+			}]
+		},
+		plugins: [ChartDataLabels],
+		options: {
+			responsive: true,
+			maintainAspectRatio: false,
+			plugins: {
+				legend: {
+					position: 'right',
+					labels: {
+						padding: 14,
+						font: { size: 13 },
+						usePointStyle: true,
+						pointStyleWidth: 12,
+					}
+				},
+				tooltip: {
+					backgroundColor: '#262255',
+					titleColor: '#fff',
+					bodyColor: '#fff',
+					padding: 12,
+					callbacks: {
+						label: function(context) {
+							return context.parsed + ' citations';
+						}
+					}
+				},
+				datalabels: {
+					color: '#fff',
+					font: { weight: 'bold', size: 12 },
+					formatter: function(value, context) {
+						var pct = journalPcts[context.dataIndex];
+						if (pct < 5) return '';
+						return journalNames[context.dataIndex] + '\n' + pct + '%';
+					},
+					textAlign: 'center',
+				}
+			}
+		}
+	});
+	// Journal table: show/hide and live filter
+	var journalExpanded = false;
+
+	window.toggleJournalRows = function() {
+		journalExpanded = !journalExpanded;
+		var rows = document.querySelectorAll('#journal-table .journal-row');
+		var btn = document.getElementById('journal-toggle');
+		rows.forEach(function(row, i) {
+			if (i >= 20) {
+				row.classList.toggle('journal-hidden', !journalExpanded);
+			}
+		});
+		btn.textContent = journalExpanded ? 'Show top 20 only' : 'Show all ' + rows.length + ' journals';
+	};
+
+	document.getElementById('journal-filter').addEventListener('input', function() {
+		var q = this.value.toLowerCase();
+		var rows = document.querySelectorAll('#journal-table .journal-row');
+		var btn = document.getElementById('journal-toggle');
+		rows.forEach(function(row) {
+			if (q) {
+				var text = row.textContent.toLowerCase();
+				row.style.display = text.indexOf(q) >= 0 ? '' : 'none';
+				row.classList.remove('journal-hidden');
+			} else {
+				row.style.display = '';
+				if (!journalExpanded) {
+					// re-apply collapse
+					var idx = parseInt(row.cells[0].textContent) - 1;
+					row.classList.toggle('journal-hidden', idx >= 20);
+				}
+			}
+		});
+		if (btn) btn.style.display = q ? 'none' : '';
+	});
+});
+</script>

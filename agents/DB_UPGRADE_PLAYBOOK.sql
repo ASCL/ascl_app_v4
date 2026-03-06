@@ -938,6 +938,66 @@ DROP COLUMN ascl_id;
 ALTER TABLE users MODIFY COLUMN password VARCHAR(60) NOT NULL;
 
 -- ============================================================================
+-- Step 18: Standardize Naming Conventions (keywords, junction tables)
+-- ============================================================================
+-- Conventions:
+--   - All primary keys named 'pk'
+--   - Foreign keys named '{table}_pk' (singular)
+--   - Junction tables named '{table1}_to_{table2}'
+--
+-- IMPORTANT: Must drop FKs BEFORE renaming columns they reference!
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- 18.1: Drop existing FK constraint (required before column renames)
+-- ----------------------------------------------------------------------------
+-- The FK fk_code_keywords_keyword references keywords.id, which we're renaming.
+-- Must drop it first, then recreate after renames.
+ALTER TABLE code_keywords DROP FOREIGN KEY fk_code_keywords_keyword;
+
+-- ----------------------------------------------------------------------------
+-- 18.2: Rename keywords.id → keywords.pk
+-- ----------------------------------------------------------------------------
+ALTER TABLE keywords CHANGE COLUMN id pk INT UNSIGNED NOT NULL AUTO_INCREMENT;
+
+-- ----------------------------------------------------------------------------
+-- 18.3: Rename code_keywords.keyword_id → keyword_pk (before table rename)
+-- ----------------------------------------------------------------------------
+ALTER TABLE code_keywords CHANGE COLUMN keyword_id keyword_pk INT UNSIGNED NOT NULL;
+
+-- ----------------------------------------------------------------------------
+-- 18.4: Rename code_keywords → code_to_keyword (junction table convention)
+-- ----------------------------------------------------------------------------
+RENAME TABLE code_keywords TO code_to_keyword;
+
+-- ----------------------------------------------------------------------------
+-- 18.5: Recreate FK with new column/table names
+-- ----------------------------------------------------------------------------
+ALTER TABLE code_to_keyword
+ADD CONSTRAINT fk_code_to_keyword_keyword
+FOREIGN KEY (keyword_pk) REFERENCES keywords(pk)
+ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ============================================================================
+-- Step 19: Rename Tables to Singular Form
+-- ============================================================================
+-- Convention: Table names should be singular (e.g., 'code' not 'codes')
+-- This aligns with SQLAlchemy class naming and improves consistency.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- 19.1: Rename ads_entries_new → ads_entry
+-- ----------------------------------------------------------------------------
+RENAME TABLE ads_entries_new TO ads_entry;
+ALTER TABLE ads_entry RENAME INDEX idx_ads_entries_new_code_pk TO idx_ads_entry_code_pk;
+
+-- ----------------------------------------------------------------------------
+-- 19.2: Rename code_aliases → code_alias
+-- ----------------------------------------------------------------------------
+RENAME TABLE code_aliases TO code_alias;
+ALTER TABLE code_alias RENAME INDEX idx_code_aliases_code_id TO idx_code_alias_code_id;
+
+-- ============================================================================
 -- UPGRADE COMPLETE
 -- ============================================================================
 -- Database: ascl_db_v4

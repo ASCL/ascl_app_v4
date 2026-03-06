@@ -1,215 +1,2915 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 
 {% block title %}{% if mode == 'insert' %}Add New Code{% else %}Edit Code{% endif %}{% endblock %}
 
-{% block content %}
-<h2>{% if mode == 'insert' %}Add New Code{% else %}Edit Code: {{ code.title }}{% endif %}</h2>
-
-{% with messages = get_flashed_messages(with_categories=true) %}
-	{% if messages %}
-		<ul class="flash-messages">
-		{% for category, message in messages %}
-			<li class="{{ category }}">{{ message|safe }}</li>
-		{% endfor %}
-		</ul>
-	{% endif %}
-{% endwith %}
-
-{% if current_user %}
-	<p>Signed in as <strong>{{ current_user.username }}</strong>. <a href="{{ url_for('admin_page.admin_logout') }}">Logout</a></p>
+{% block admin_content %}
+<h1>{% if mode == 'insert' %}Add a New Code{% else %}Editing Code <code>[ascl:{{ code.ascl_id }}]</code>{% endif %}</h1>
+{% if mode == 'update' and code.title %}
+<p class="code-title-banner">{{ code.title }}</p>
 {% endif %}
 
-<form method="POST" class="admin-form">
-	<div class="form-row">
-		<label for="ascl_id">ASCL ID</label>
-		<input type="text" name="ascl_id" id="ascl_id" value="{{ code.ascl_id or '0000.000' }}" maxlength="8" size="10" required>
-		{% if mode == 'insert' and next_ascl_id %}
-		<button type="button" onclick="document.getElementById('ascl_id').value='{{ next_ascl_id }}'" class="button small">Use {{ next_ascl_id }}</button>
-		{% endif %}
-		<span class="help-text">Format: YYMM.NNN (e.g., 2401.001) or 0000.000 for unpublished</span>
-	</div>
+{% if ascl_id_collision %}
+<div class="collision-notice">
+	<strong>ASCL ID Collision:</strong> The ID <code>{{ ascl_id_collision }}</code> was taken by another entry before you submitted.
+	Please click "Autofill" to get a new ID.
+</div>
+{% endif %}
 
-	<div class="form-row">
-		<label for="title">Title <span class="required">*</span></label>
-		<input type="text" name="title" id="title" value="{{ code.title or '' }}" maxlength="255" size="80" required>
-	</div>
+<p class="warning-note">WARNING: Failure to close HTML tags will most likely result in a crazy-looking website.</p>
 
-	<div class="form-row">
-		<label for="credit">Credit (Authors) <span class="required">*</span></label>
-		<textarea name="credit" id="credit" cols="100" rows="2" required>{{ code.credit or '' }}</textarea>
-		<span class="help-text">Author names, comma-separated</span>
+<!-- Sticky Action Bar -->
+<div class="sticky-action-bar" id="sticky-action-bar">
+	<div class="sticky-action-content">
+		<div class="sticky-buttons">
+			<button type="submit" form="code-form">{% if mode == 'insert' %}Add Code{% else %}Update Code{% endif %}</button>
+			<a href="{{ url_for('admin_page.admin_home') }}" class="button">Cancel</a>
+			{% if mode == 'update' %}
+			<a href="{{ url_for('admin_page.view_code', pk=code.pk) }}" class="button">View</a>
+			<a href="{{ url_for('admin_page.delete_code', pk=code.pk) }}" class="button danger">Delete</a>
+			{% endif %}
+		</div>
 	</div>
+</div>
 
-	<div class="form-row">
-		<label for="abstract">Abstract</label>
-		<textarea name="abstract" id="abstract" cols="100" rows="10">{{ code.abstract or '' }}</textarea>
-	</div>
-
-	<div class="form-row">
-		<label for="site_list">Site URLs</label>
-		<textarea name="site_list" id="site_list" cols="100" rows="3">{{ site_list_str or '' }}</textarea>
-		<span class="help-text">One URL per line</span>
-	</div>
-
-	<div class="form-row">
-		<label for="ref_list">Reference URLs</label>
-		<textarea name="ref_list" id="ref_list" cols="100" rows="3">{{ ref_list_str or '' }}</textarea>
-		<span class="help-text">One URL per line</span>
-	</div>
-
-	<div class="form-row">
-		<label for="described_in">Described In (Bibcodes)</label>
-		<textarea name="described_in" id="described_in" cols="100" rows="2">{{ described_in_str or '' }}</textarea>
-		<span class="help-text">ADS bibcodes, one per line</span>
-	</div>
-
-	<div class="form-row">
-		<label for="used_in">Used In (Bibcodes)</label>
-		<textarea name="used_in" id="used_in" cols="100" rows="2">{{ used_in_str or '' }}</textarea>
-		<span class="help-text">ADS bibcodes, one per line</span>
-	</div>
-
-	<div class="form-row">
-		<label for="citation_method">Preferred Citation Method</label>
-		<input type="text" name="citation_method" id="citation_method" value="{{ code.citation_method or '' }}" maxlength="255" size="80">
-	</div>
-
-	<div class="form-row">
-		<label for="see_also">See Also</label>
-		<input type="text" name="see_also" id="see_also" value="{{ code.see_also or '' }}" maxlength="255" size="80">
-		<span class="help-text">Related ASCL IDs or code names</span>
-	</div>
-
-	<div class="form-row">
-		<label for="aliases">Aliases</label>
-		<input type="text" name="aliases" id="aliases" value="{{ aliases_str or '' }}" maxlength="255" size="80">
-		<span class="help-text">Space-separated short names</span>
-	</div>
-
-	<div class="form-row">
-		<label for="keywords">Keywords</label>
-		<input type="text" name="keywords" id="keywords" value="{{ keywords_str or '' }}" maxlength="255" size="80">
-		<span class="help-text">Space-separated; use quotes for multi-word keywords (e.g., "N-body" cosmology)</span>
-	</div>
-
-	<div class="form-row">
-		<label for="email">Contact Email</label>
-		<input type="email" name="email" id="email" value="{{ code.email or '' }}" maxlength="254" size="50">
-	</div>
-
-	<div class="form-row">
-		<label for="doi">DOI</label>
-		<input type="text" name="doi" id="doi" value="{{ code.doi or '' }}" maxlength="255" size="50">
-		<span class="help-text">e.g., 10.5281/zenodo.12345</span>
-	</div>
-
-	<div class="form-row">
-		<label for="notes">Notes (Internal)</label>
-		<textarea name="notes" id="notes" cols="100" rows="3">{{ code.notes or '' }}</textarea>
-		<span class="help-text">Internal notes, not displayed publicly</span>
-	</div>
-
-	<div class="form-row checkbox-row">
-		<label for="published">
-			<input type="checkbox" name="published" id="published" value="1" {% if code.published == 1 %}checked{% endif %}>
-			Published
-		</label>
-	</div>
+<div class="forms">
+<form method="POST" id="code-form">
 
 	{% if mode == 'update' %}
-	<div class="form-row info-row">
-		<p><strong>PK:</strong> {{ code.pk }}</p>
-		<p><strong>Time Added:</strong> {{ code.time_added }}</p>
-		<p><strong>Time Updated:</strong> {{ code.time_updated }}</p>
-		<p><strong>Views:</strong> {{ code.views }}</p>
-		<p><strong>Bibcode:</strong> {{ code.bibcode or 'Not set' }}</p>
+	<div class="record-meta">
+		<span class="meta-item meta-left"><strong>Last updated:</strong> {{ code.time_updated.strftime('%Y-%m-%d %H:%M') if code.time_updated else 'Never' }}</span>
+		<span class="meta-item meta-right"><strong>codes.pk:</strong> {{ code.pk }}</span>
 	</div>
 	{% endif %}
 
-	<div class="form-actions">
-		<button type="submit" class="button primary">{% if mode == 'insert' %}Add Code{% else %}Update Code{% endif %}</button>
-		<a href="{{ url_for('admin_page.admin_home') }}" class="button">Cancel</a>
-		{% if mode == 'update' %}
-		<a href="{{ url_for('admin_page.view_code', pk=code.pk) }}" class="button">View</a>
-		{% endif %}
+	<!-- SECTION: Basic Information -->
+	<div class="form-section">
+		<h3 class="section-title">Basic Information</h3>
+
+			<div class="field-row-split">
+				<div class="field-half">
+					<div class="inline-label-field">
+						<label for="ascl_id">ASCL ID</label>
+						<div class="ascl-id-row">
+						<input type="text" name="ascl_id" id="ascl_id" value="{{ code.ascl_id or '0000.000' }}" maxlength="8">
+						{% if mode == 'insert' %}
+						<button type="button" id="autofill" onclick="fetchNextAsclId()">Autofill</button>
+						{% endif %}
+					</div>
+					</div>
+					<small>Leave blank or as 0000.000 for user-submitted codes.</small>
+				</div>
+				<div class="field-half">
+					<div class="inline-label-field">
+						<label for="published">Publish?</label>
+						<select name="published" id="published">
+							<option value="0" {% if not code.published or code.published == 0 %}selected{% endif %}>No</option>
+							<option value="1" {% if code.published == 1 %}selected{% endif %}>Yes</option>
+						</select>
+					</div>
+					<small>Unpublished codes are not publicly viewable.</small>
+				</div>
+			</div>
+
+		<div class="field-row">
+			<label for="title">Title</label>
+			<input type="text" name="title" id="title" value="{{ code.title or '' }}" maxlength="255" size="80" required>
+			<small>Simple HTML is ok &mdash; no anchors, though.</small>
+		</div>
+
+		<div class="field-row">
+			<label>Credit</label>
+			<div class="entry-manager">
+				<table class="entry-table" id="credit-table">
+					<thead><tr><th>Name</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="entry-input-row">
+					<input type="text" id="credit-input" placeholder="John A. Smith or Smith, John A." size="40" onkeydown="handleEnterKey(event, addCredit)">
+					<button type="button" onclick="addCredit()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="credit" id="credit_hidden" value="">
+			<small>Names auto-normalized to "Surname, Firstname I." format.</small>
+		</div>
+
+		<div class="field-row">
+			<label for="abstract">Abstract</label>
+			<textarea name="abstract" id="abstract" cols="100" rows="10">{{ code.abstract or '' }}</textarea>
+			<div class="insert-buttons">
+				<span>Insert HTML for</span>
+				<button type="button" onclick="insertAtCursor('abstract', '&lt;a href=&quot;&quot;&gt;&lt;/a&gt;')" title="Insert link template">Link</button>
+				<button type="button" onclick="insertAtCursor('abstract', '&amp;lt;')" title="Insert less-than sign">&lt;</button>
+				<button type="button" onclick="insertAtCursor('abstract', '&amp;gt;')" title="Insert greater-than sign">&gt;</button>
+			</div>
+			<small>HTML is ok. FYI, use &amp;gt; and &amp;lt; for &gt; and &lt; signs.</small>
+		</div>
 	</div>
+
+	<!-- SECTION: Links -->
+	<div class="form-section">
+		<h3 class="section-title">Links</h3>
+
+		<div class="field-row">
+			<label>Links</label>
+			<div class="url-manager">
+				<table class="url-table sortable-table" id="typed-links-table">
+					<thead><tr><th class="drag-col"></th><th>Type</th><th>URL</th><th>Status</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="url-input-row">
+					<select id="link-type-select">
+						<option value="">Type...</option>
+						{% for lt in url_link_types %}
+						<option value="{{ lt.short_name }}">{{ lt.name }}</option>
+						{% endfor %}
+					</select>
+					<input type="text" id="typed-link-input" placeholder="https://..." size="50" onkeydown="handleTypedLinkEnterKey(event)">
+					<span id="typed-link-status" class="url-check-status"></span>
+					<button type="button" onclick="addTypedLink()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="typed_links" id="typed_links_hidden" value="">
+			<small>
+				{% for lt in url_link_types %}
+				<strong>{{ lt.name }}</strong>{% if lt.description %}: {{ lt.description }}{% endif %}{% if not loop.last %} | {% endif %}
+				{% endfor %}
+			</small>
+		</div>
+	</div>
+
+	<!-- SECTION: Identity -->
+	<div class="form-section">
+		<h3 class="section-title">Identity &amp; Contact</h3>
+
+		<div class="field-row">
+			<label>Aliases</label>
+			<div class="alias-manager">
+				<table class="alias-table" id="alias-table">
+					<thead><tr><th>URL</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="alias-input-row">
+					<input type="text" id="alias-input" placeholder="alias" size="30" oninput="checkAliasInput()" onkeydown="handleEnterKey(event, addAlias)">
+					<span id="alias-status" class="alias-status"></span>
+					<button type="button" onclick="addAlias()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="aliases" id="aliases_hidden" value="">
+			<small>Aliases are short, alphanumeric strings to facilitate easy lookup (e.g. 'astropy'). Usually a code will only have one.</small>
+		</div>
+
+		{% if mode == 'update' %}
+		<div class="field-row">
+			<label for="time_added">Time Added</label>
+			<input type="text" name="time_added" id="time_added" value="{{ code.time_added }}" size="25" readonly>
+			<small>YYYY-MM-DD HH:MM:SS (read-only)</small>
+		</div>
+		{% endif %}
+
+		<div class="field-row">
+			<label>Email</label>
+			<div class="entry-manager">
+				<table class="entry-table" id="email-table">
+					<thead><tr><th>Email Address</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="entry-input-row">
+					<input type="email" id="email-input" placeholder="email@example.com" size="40" oninput="checkEmailInput()" onkeydown="handleEnterKey(event, addEmail)">
+					<span id="email-status" class="email-status"></span>
+					<button type="button" onclick="addEmail()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="email" id="email_hidden" value="">
+			<small><span class="private-note">Not publicly visible.</span></small>
+		</div>
+	</div>
+
+	<!-- SECTION: Bibliographic References -->
+	<div class="form-section">
+		<h3 class="section-title">Bibliographic References</h3>
+
+		<div class="field-row">
+			<label for="bibcode">Bibcode <span class="validation-status" id="bibcode-status"></span></label>
+			<input type="text" name="bibcode" id="bibcode" value="{{ code.bibcode or '' }}" maxlength="19" size="22" oninput="checkBibcode()">
+			<button type="button" id="import-credit-btn" onclick="importCreditsFromBibcode()">Import Authors to Credit</button>
+			<div id="bibcode-credit-info" class="field-info"></div>
+			<div id="bibcode-info" class="field-info"></div>
+			<small>19-character ADS bibcode (e.g., 2019ApJ...887..229S)</small>
+		</div>
+
+		<div class="field-row">
+			<label for="doi">DOI <span class="validation-status" id="doi-status"></span></label>
+			<input type="text" name="doi" id="doi" value="{{ code.doi or '' }}" maxlength="255" size="35" oninput="checkDOI()">
+			<div id="doi-info" class="field-info"></div>
+			<small>Format: 10.XXXX/suffix (e.g., 10.5281/zenodo.1234567)</small>
+		</div>
+
+		<div class="field-row">
+			<label>Described In (Bibcodes)</label>
+			<div class="bibcode-manager">
+				<table class="bibcode-table sortable-table" id="described-in-table">
+					<thead><tr><th class="drag-col"></th><th>Bibcode / URL</th><th>Title</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="bibcode-input-row">
+					<input type="text" id="described-in-input" placeholder="Bibcode or URL" size="50" oninput="checkBibcodeOrUrl('described-in')" onkeydown="handleEnterKey(event, addDescribedIn)">
+					<span id="described-in-status" class="bibcode-status"></span>
+					<button type="button" onclick="addDescribedIn()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="described_in_urls" id="described_in_urls_hidden" value="">
+			<small>19-char bibcodes or URLs.</small>
+		</div>
+
+		<div class="field-row">
+			<label>Used In (Bibcodes)</label>
+			<div class="bibcode-manager">
+				<table class="bibcode-table sortable-table" id="used-in-table">
+					<thead><tr><th class="drag-col"></th><th>Bibcode / URL</th><th>Title</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="bibcode-input-row">
+					<input type="text" id="used-in-input" placeholder="Bibcode or URL" size="50" oninput="checkBibcodeOrUrl('used-in')" onkeydown="handleEnterKey(event, addUsedIn)">
+					<span id="used-in-status" class="bibcode-status"></span>
+					<button type="button" onclick="addUsedIn()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="used_in_urls" id="used_in_urls_hidden" value="">
+			<small>19-char bibcodes or URLs.</small>
+		</div>
+	</div>
+
+	<!-- SECTION: Relationships & Metadata -->
+	<div class="form-section">
+		<h3 class="section-title">Relationships &amp; Metadata</h3>
+
+		<div class="field-row">
+			<label for="citation_method">Preferred Citation Method <span class="html-warning" id="citation-html-warning"></span></label>
+			<input type="text" name="citation_method" id="citation_method" value="{{ code.citation_method or '' }}" maxlength="255" size="80" oninput="checkForHTML(this, 'citation-html-warning'); updateCharCount()">
+			<small><span id="citation-char-count" class="char-count">0</span>/255 characters</small>
+		</div>
+
+		<div class="field-row">
+			<label>See Also</label>
+			<div class="seealso-manager">
+				<table class="seealso-table" id="seealso-table">
+					<thead><tr><th>ASCL ID</th><th>Title</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="seealso-input-row">
+					<input type="text" id="seealso-input" placeholder="YYMM.NNN" size="12" maxlength="8" oninput="checkSeeAlsoInput()" onkeydown="handleEnterKey(event, addSeeAlso)">
+					<span id="seealso-status" class="seealso-status"></span>
+					<button type="button" id="seealso-add-btn" onclick="addSeeAlso()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="see_also" id="see_also_hidden" value="">
+			<small>Related ASCL IDs.</small>
+		</div>
+
+		<div class="field-row">
+			<label>Keywords</label>
+			<div class="keyword-manager">
+				<div class="keyword-badges" id="keyword-badges"></div>
+				<div class="keyword-input-row">
+					<input type="text" id="keyword-input" placeholder="Enter keyword" size="30" oninput="checkKeywordInput()" onkeydown="handleEnterKey(event, addKeyword)">
+					<span id="keyword-status" class="keyword-status"></span>
+					<button type="button" onclick="addKeyword()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="keywords" id="keywords_hidden" value="">
+			<small>Add keywords one at a time. Spaces are permitted in keywords.</small>
+		</div>
+	</div>
+
+
 </form>
+</div>
+
+{% if mode == 'update' %}
+<div class="notes-section">
+	<h2>Notes</h2>
+
+		<div class="notes-list" id="notes-list">
+			<p class="notes-loading">Loading notes...</p>
+		</div>
+
+	<div class="add-note-form">
+		<h3>Add Note</h3>
+		<div class="note-form-row">
+			<label for="note-type">Type:</label>
+			<select id="note-type">
+				<option value="">Loading...</option>
+			</select>
+		</div>
+		<div class="note-form-row">
+			<label for="note-text">Note:</label>
+			<textarea id="note-text" rows="3" placeholder="Enter note..."></textarea>
+		</div>
+		<div class="note-form-row">
+			<button type="button" id="add-note-btn" onclick="addNote()">Add Note</button>
+			<span id="note-status"></span>
+		</div>
+	</div>
+</div>
+{% endif %}
+
+<script>
+// Toggle between rendered and raw legacy notes
+function toggleLegacyNotesRaw(event) {
+	event.preventDefault();
+	var rendered = document.getElementById('legacy-notes-rendered');
+	var raw = document.getElementById('legacy-notes-raw');
+	var link = event.target;
+
+	if (raw.style.display === 'none') {
+		rendered.style.display = 'none';
+		raw.style.display = 'block';
+		link.textContent = 'Show formatted';
+	} else {
+		rendered.style.display = 'block';
+		raw.style.display = 'none';
+		link.textContent = 'Show raw';
+	}
+}
+
+// Drag and drop reordering for tables
+var draggedRow = null;
+
+function handleDragStart(e) {
+	draggedRow = this;
+	this.classList.add('dragging');
+	e.dataTransfer.effectAllowed = 'move';
+	e.dataTransfer.setData('text/plain', this.dataset.index);
+}
+
+function handleDragOver(e) {
+	e.preventDefault();
+	e.dataTransfer.dropEffect = 'move';
+	var targetRow = e.target.closest('tr');
+	if (targetRow && targetRow !== draggedRow && targetRow.parentNode.tagName === 'TBODY') {
+		var tbody = targetRow.parentNode;
+		var rows = Array.from(tbody.rows);
+		var draggedIdx = rows.indexOf(draggedRow);
+		var targetIdx = rows.indexOf(targetRow);
+		if (draggedIdx < targetIdx) {
+			targetRow.parentNode.insertBefore(draggedRow, targetRow.nextSibling);
+		} else {
+			targetRow.parentNode.insertBefore(draggedRow, targetRow);
+		}
+	}
+}
+
+function handleDrop(e, dataArray, renderFn) {
+	e.preventDefault();
+	if (!draggedRow) return;
+	var tbody = draggedRow.parentNode;
+	var newOrder = Array.from(tbody.rows).map(function(row) {
+		return parseInt(row.dataset.index);
+	});
+	var reordered = newOrder.map(function(idx) {
+		return dataArray[idx];
+	});
+	dataArray.length = 0;
+	reordered.forEach(function(item) {
+		dataArray.push(item);
+	});
+	renderFn();
+}
+
+function handleDragEnd(e) {
+	this.classList.remove('dragging');
+	draggedRow = null;
+}
+
+// Fetch the next available ASCL ID from the server
+function fetchNextAsclId() {
+	var btn = document.getElementById('autofill');
+	var field = document.getElementById('ascl_id');
+
+	btn.disabled = true;
+	btn.textContent = '...';
+
+	fetch('/admin/api/next_ascl_id')
+		.then(response => response.json())
+		.then(data => {
+			if (data.next_ascl_id) {
+				field.value = data.next_ascl_id;
+			}
+		})
+		.catch(err => {
+			console.error('Failed to fetch next ASCL ID:', err);
+		})
+		.finally(() => {
+			btn.disabled = false;
+			btn.textContent = 'Autofill';
+		});
+}
+
+// HTML detection
+function checkForHTML(element, warningId) {
+	var warning = document.getElementById(warningId);
+	var htmlPattern = /<[a-zA-Z\/][^>]*>/;
+	var entityPattern = /&(lt|gt|amp|quot|nbsp);/i;
+	if (htmlPattern.test(element.value)) {
+		warning.textContent = "It looks like there is HTML in this field.";
+	} else if (entityPattern.test(element.value)) {
+		warning.textContent = "It looks like there are HTML entities in this field.";
+	} else {
+		warning.textContent = "";
+	}
+}
+
+// Bibcode validation (19 characters: YYYYJJJJJVVVVMPPPPA)
+var pendingBibcodeCheck = null;
+
+function isValidBibcode(value) {
+	// 19 chars: YYYYJJJJJVVVVMPPPPA
+	// Year (4 digits) + Journal (5) + Volume (4) + Qualifier (1) + Page (4) + Author (1)
+	// Most positions can contain letters, digits, dots, or &
+	if (value.length !== 19) return false;
+	// First 4 must be digits (year)
+	if (!/^\d{4}/.test(value)) return false;
+	// Rest can be alphanumeric, dots, or &
+	if (!/^\d{4}[A-Za-z0-9.&]{15}$/.test(value)) return false;
+	return true;
+}
+
+function checkBibcode() {
+	var input = document.getElementById('bibcode');
+	var statusSpan = document.getElementById('bibcode-status');
+	var infoDiv = document.getElementById('bibcode-info');
+	var value = input.value.trim();
+
+	// Clear pending check
+	if (pendingBibcodeCheck) {
+		clearTimeout(pendingBibcodeCheck);
+		pendingBibcodeCheck = null;
+	}
+
+	if (!value) {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'validation-status';
+		infoDiv.innerHTML = '';
+		return;
+	}
+
+	if (isValidBibcode(value)) {
+		statusSpan.innerHTML = '&#10003;';
+		statusSpan.className = 'validation-status valid';
+
+		// Debounce the ADS lookup
+		infoDiv.innerHTML = '<span class="title-loading">Looking up title...</span>';
+		pendingBibcodeCheck = setTimeout(function() {
+			fetchBibcodeTitle(value, function(title) {
+				// Make sure value hasn't changed
+				if (input.value.trim() === value) {
+					if (title) {
+						infoDiv.innerHTML = '<a href="https://ui.adsabs.harvard.edu/abs/' + value + '/abstract" target="_blank" class="field-link">' + title + '</a>';
+					} else {
+						infoDiv.innerHTML = '<a href="https://ui.adsabs.harvard.edu/abs/' + value + '/abstract" target="_blank" class="field-link field-link-notfound">View on ADS (title not found)</a>';
+					}
+				}
+			});
+		}, 500);
+	} else {
+		statusSpan.innerHTML = 'Invalid format';
+		statusSpan.className = 'validation-status invalid';
+		infoDiv.innerHTML = '';
+	}
+}
+
+// DOI validation (starts with 10., contains /)
+var pendingDOICheck = null;
+
+function isValidDOI(value) {
+	// DOI format: 10.XXXX/suffix where XXXX is registrant code
+	var doiRegex = /^10\.\d{4,}(\.\d+)*\/[^\s]+$/;
+	return doiRegex.test(value);
+}
+
+function checkDOI() {
+	var input = document.getElementById('doi');
+	var statusSpan = document.getElementById('doi-status');
+	var infoDiv = document.getElementById('doi-info');
+	var value = input.value.trim();
+
+	// Clear pending check
+	if (pendingDOICheck) {
+		clearTimeout(pendingDOICheck);
+		pendingDOICheck = null;
+	}
+
+	if (!value) {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'validation-status';
+		infoDiv.innerHTML = '';
+		return;
+	}
+
+	if (isValidDOI(value)) {
+		statusSpan.innerHTML = '&#10003;';
+		statusSpan.className = 'validation-status valid';
+
+		// Show DOI link immediately (doi.org resolves to target)
+		var doiUrl = 'https://doi.org/' + value;
+		infoDiv.innerHTML = '<a href="' + doiUrl + '" target="_blank" class="field-link">Open DOI: ' + value + '</a>';
+	} else {
+		statusSpan.innerHTML = 'Invalid format';
+		statusSpan.className = 'validation-status invalid';
+		infoDiv.innerHTML = '';
+	}
+}
+
+// Check if value is a valid bibcode or URL
+// Extract bibcode from ADS URL if present
+function extractBibcodeFromUrl(url) {
+	// Match ADS URLs like https://ui.adsabs.harvard.edu/abs/2013ascl.soft04002G/abstract
+	var match = url.match(/adsabs\.harvard\.edu\/abs\/([^\/]+)/i);
+	if (match && match[1] && isValidBibcode(match[1])) {
+		return match[1];
+	}
+	return null;
+}
+
+// Check if a bibcode or its ADS URL equivalent is already in a list
+function findDuplicateBibcodeOrUrl(value, items) {
+	// Direct duplicate
+	if (items.indexOf(value) !== -1) return value;
+
+	if (isValidBibcode(value)) {
+		// Value is a bibcode - check if any URL in the list contains this bibcode
+		for (var i = 0; i < items.length; i++) {
+			var extracted = extractBibcodeFromUrl(items[i]);
+			if (extracted === value) return items[i];
+		}
+	} else {
+		// Value is a URL - check if it contains a bibcode that's already in the list
+		var bibcode = extractBibcodeFromUrl(value);
+		if (bibcode) {
+			if (items.indexOf(bibcode) !== -1) return bibcode;
+			// Also check other URLs for the same bibcode
+			for (var i = 0; i < items.length; i++) {
+				var extracted = extractBibcodeFromUrl(items[i]);
+				if (extracted === bibcode) return items[i];
+			}
+		}
+	}
+	return null;
+}
+
+function isValidBibcodeOrUrl(value) {
+	if (isValidBibcode(value)) return { valid: true, type: 'bibcode', bibcode: value };
+	if (value.match(/^https?:\/\/.+/i)) {
+		var extracted = extractBibcodeFromUrl(value);
+		return { valid: true, type: 'url', bibcode: extracted };
+	}
+	return { valid: false, type: null, bibcode: null };
+}
+
+function checkBibcodeOrUrl(prefix) {
+	var input = document.getElementById(prefix + '-input');
+	var statusSpan = document.getElementById(prefix + '-status');
+	var value = input.value.trim();
+	var items = (prefix === 'described-in') ? describedInItems : usedInItems;
+
+	if (!value) {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'bibcode-status';
+		return;
+	}
+
+	// Check for duplicates (including bibcode/URL equivalents)
+	var duplicate = findDuplicateBibcodeOrUrl(value, items);
+	if (duplicate) {
+		if (duplicate === value) {
+			statusSpan.innerHTML = 'Already added';
+		} else {
+			statusSpan.innerHTML = 'Duplicate of ' + duplicate.substring(0, 30) + (duplicate.length > 30 ? '...' : '');
+		}
+		statusSpan.className = 'bibcode-status invalid';
+		return;
+	}
+
+	var result = isValidBibcodeOrUrl(value);
+	if (result.valid) {
+		if (result.type === 'bibcode') {
+			statusSpan.innerHTML = 'Bibcode &#10003;';
+		} else if (result.bibcode) {
+			statusSpan.innerHTML = 'ADS URL &#10003; (bibcode: ' + result.bibcode + ')';
+		} else {
+			statusSpan.innerHTML = 'URL &#10003;';
+		}
+		statusSpan.className = 'bibcode-status valid';
+	} else {
+		statusSpan.innerHTML = 'Not a valid bibcode or URL';
+		statusSpan.className = 'bibcode-status invalid';
+	}
+}
+
+// Handle Enter key to trigger Add button
+function handleEnterKey(event, addFunction) {
+	if (event.key === 'Enter') {
+		event.preventDefault();
+		addFunction();
+	}
+}
+
+// Insert text at cursor position in textarea
+function insertAtCursor(fieldId, text) {
+	var field = document.getElementById(fieldId);
+	var startPos = field.selectionStart;
+	var endPos = field.selectionEnd;
+	var before = field.value.substring(0, startPos);
+	var after = field.value.substring(endPos);
+	field.value = before + text + after;
+	field.selectionStart = field.selectionEnd = startPos + text.length;
+	field.focus();
+}
+
+// Character counter for citation method
+function updateCharCount() {
+	var field = document.getElementById('citation_method');
+	var counter = document.getElementById('citation-char-count');
+	var len = field.value.length;
+	counter.textContent = len;
+	if (len >= 240) {
+		counter.classList.add('near-limit');
+	} else {
+		counter.classList.remove('near-limit');
+	}
+}
+
+// Alias management
+var aliases = [];
+var aliasAvailability = {}; // Cache for alias availability checks
+var pendingAliasCheck = null;
+var currentCodePk = {% if code.pk %}{{ code.pk }}{% else %}null{% endif %};
+
+{% if aliases_str %}
+aliases = "{{ aliases_str }}".split(/\s+/).filter(a => a.trim());
+{% endif %}
+
+function renderAliasTable() {
+	var tbody = document.getElementById('alias-table').getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+	aliases.forEach(function(alias, index) {
+		var row = tbody.insertRow();
+		var cellUrl = row.insertCell(0);
+		var cellAction = row.insertCell(1);
+		cellUrl.innerHTML = '<span class="alias-prefix">https://ascl.net/</span>' + alias;
+		cellAction.innerHTML = '<button type="button" onclick="removeAlias(' + index + ')">Remove</button>';
+	});
+	document.getElementById('aliases_hidden').value = aliases.join(' ');
+}
+
+function checkAliasInput() {
+	var input = document.getElementById('alias-input');
+	var statusSpan = document.getElementById('alias-status');
+	var alias = input.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+
+	// Clear pending check
+	if (pendingAliasCheck) {
+		clearTimeout(pendingAliasCheck);
+		pendingAliasCheck = null;
+	}
+
+	// Empty input
+	if (!alias) {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'alias-status';
+		return;
+	}
+
+	// Check if already in current list
+	if (aliases.indexOf(alias) !== -1) {
+		statusSpan.innerHTML = 'Already added';
+		statusSpan.className = 'alias-status format-error';
+		return;
+	}
+
+	// Check cache first
+	if (aliasAvailability[alias] !== undefined) {
+		if (aliasAvailability[alias].available) {
+			statusSpan.innerHTML = 'Available';
+			statusSpan.className = 'alias-status status-ok';
+		} else {
+			statusSpan.innerHTML = 'Used by ' + aliasAvailability[alias].used_by_ascl_id;
+			statusSpan.className = 'alias-status status-warning';
+		}
+		return;
+	}
+
+	// Show checking status and debounce API call
+	statusSpan.innerHTML = 'Checking...';
+	statusSpan.className = 'alias-status checking';
+
+	pendingAliasCheck = setTimeout(function() {
+		var url = '/admin/api/check_alias/' + encodeURIComponent(alias);
+		if (currentCodePk) {
+			url += '?exclude_pk=' + currentCodePk;
+		}
+		fetch(url)
+			.then(response => response.json())
+			.then(data => {
+				aliasAvailability[alias] = data;
+				// Only update if input hasn't changed
+				var currentAlias = input.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+				if (currentAlias === alias) {
+					if (data.available) {
+						statusSpan.innerHTML = 'Available';
+						statusSpan.className = 'alias-status status-ok';
+					} else {
+						statusSpan.innerHTML = 'Used by ' + data.used_by_ascl_id;
+						statusSpan.className = 'alias-status status-warning';
+					}
+				}
+			})
+			.catch(err => {
+				aliasAvailability[alias] = { available: true };
+			});
+	}, 300); // 300ms debounce
+}
+
+function addAlias() {
+	var input = document.getElementById('alias-input');
+	var statusSpan = document.getElementById('alias-status');
+	var alias = input.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+
+	if (!alias) return;
+
+	// Check if already in current list
+	if (aliases.indexOf(alias) !== -1) {
+		statusSpan.innerHTML = 'Already added';
+		statusSpan.className = 'alias-status format-error';
+		return;
+	}
+
+	// Check if alias is used by another code
+	if (aliasAvailability[alias] && !aliasAvailability[alias].available) {
+		statusSpan.innerHTML = 'Used by ' + aliasAvailability[alias].used_by_ascl_id;
+		statusSpan.className = 'alias-status status-warning';
+		return;
+	}
+
+	aliases.push(alias);
+	renderAliasTable();
+	input.value = '';
+	statusSpan.innerHTML = '';
+	statusSpan.className = 'alias-status';
+}
+
+function removeAlias(index) {
+	aliases.splice(index, 1);
+	renderAliasTable();
+}
+
+// URL status cache and checking
+var urlStatusCache = {};
+
+function checkUrlStatus(url, callback) {
+	// Check cache first
+	if (urlStatusCache[url] !== undefined) {
+		callback(urlStatusCache[url]);
+		return;
+	}
+
+	fetch('/admin/api/check_url', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ url: url })
+	})
+	.then(response => response.json())
+	.then(data => {
+		urlStatusCache[url] = data.live;
+		callback(data.live);
+	})
+	.catch(() => {
+		urlStatusCache[url] = null; // Unknown
+		callback(null);
+	});
+}
+
+function getUrlStatusIcon(url) {
+	var status = urlStatusCache[url];
+	if (status === true) {
+		return '<span class="url-live" title="URL is live">&#10003;</span>';
+	} else if (status === false) {
+		return '<span class="url-broken" title="URL appears broken">&#9888;</span>';
+	} else {
+		return '<span class="url-unchecked" title="Not checked">-</span>';
+	}
+}
+
+function handleTypedLinkEnterKey(event) {
+	if (event.key === 'Enter') {
+		event.preventDefault();
+		var input = document.getElementById('typed-link-input');
+		var statusSpan = document.getElementById('typed-link-status');
+		var url = input.value.trim();
+
+		if (!url) return;
+
+		// Show checking status
+		statusSpan.innerHTML = '<span class="url-checking">Checking...</span>';
+
+		checkUrlStatus(url, function(isLive) {
+			if (isLive === true) {
+				statusSpan.innerHTML = '<span class="url-live">&#10003; Live</span>';
+			} else if (isLive === false) {
+				statusSpan.innerHTML = '<span class="url-broken">&#9888; Not reachable</span>';
+			} else {
+				statusSpan.innerHTML = '<span class="url-broken">&#9888; Check failed</span>';
+			}
+			addTypedLink();
+		});
+	}
+}
+
+// Unified typed links management
+var typedLinks = [];
+
+// Available link types (from server)
+var urlLinkTypes = {{ url_link_types | tojson }};
+
+{% if typed_links_json %}
+typedLinks = {{ typed_links_json | safe }};
+{% endif %}
+
+function getTypeName(shortName) {
+	for (var i = 0; i < urlLinkTypes.length; i++) {
+		if (urlLinkTypes[i].short_name === shortName) return urlLinkTypes[i].name;
+	}
+	return shortName;
+}
+
+function buildTypeSelect(selectedType, index) {
+	var html = '<select onchange="changeTypedLinkType(' + index + ', this.value)" class="link-type-select">';
+	for (var i = 0; i < urlLinkTypes.length; i++) {
+		var lt = urlLinkTypes[i];
+		html += '<option value="' + lt.short_name + '"' + (lt.short_name === selectedType ? ' selected' : '') + '>' + lt.name + '</option>';
+	}
+	html += '</select>';
+	return html;
+}
+
+function renderTypedLinksTable() {
+	var tbody = document.getElementById('typed-links-table').getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+	typedLinks.forEach(function(link, index) {
+		var row = tbody.insertRow();
+		row.draggable = true;
+		row.dataset.index = index;
+		row.addEventListener('dragstart', handleDragStart);
+		row.addEventListener('dragover', handleDragOver);
+		row.addEventListener('drop', function(e) { handleDrop(e, typedLinks, renderTypedLinksTable); });
+		row.addEventListener('dragend', handleDragEnd);
+		var cellDrag = row.insertCell(0);
+		var cellType = row.insertCell(1);
+		var cellUrl = row.insertCell(2);
+		var cellStatus = row.insertCell(3);
+		var cellAction = row.insertCell(4);
+		cellDrag.className = 'drag-handle';
+		cellDrag.innerHTML = '&#9776;';
+		cellType.innerHTML = buildTypeSelect(link.type, index);
+		cellUrl.innerHTML = '<a href="' + link.url + '" target="_blank">' + link.url + '</a>';
+		cellStatus.innerHTML = getUrlStatusIcon(link.url);
+		cellStatus.className = 'url-status-cell';
+		cellStatus.id = 'typed-link-status-' + index;
+		cellAction.innerHTML = '<button type="button" onclick="removeTypedLink(' + index + ')">Remove</button>';
+	});
+	document.getElementById('typed_links_hidden').value = JSON.stringify(typedLinks);
+}
+
+function checkAllTypedLinkStatuses() {
+	typedLinks.forEach(function(link, index) {
+		var cell = document.getElementById('typed-link-status-' + index);
+		if (!cell) return;
+		cell.innerHTML = '<span class="url-checking">...</span>';
+		checkUrlStatus(link.url, function(isLive) {
+			// Re-find cell in case table was re-rendered
+			var statusCell = document.getElementById('typed-link-status-' + index);
+			if (statusCell) {
+				statusCell.innerHTML = getUrlStatusIcon(link.url);
+			}
+		});
+	});
+}
+
+function changeTypedLinkType(index, newType) {
+	typedLinks[index].type = newType;
+	document.getElementById('typed_links_hidden').value = JSON.stringify(typedLinks);
+}
+
+function addTypedLink() {
+	var input = document.getElementById('typed-link-input');
+	var typeSelect = document.getElementById('link-type-select');
+	var statusSpan = document.getElementById('typed-link-status');
+	var url = input.value.trim();
+	var type = typeSelect.value;
+
+	if (!url) return;
+	if (!type) {
+		statusSpan.innerHTML = '<span class="url-broken">Select a link type first</span>';
+		return;
+	}
+
+	// Check for duplicate URL
+	var isDuplicate = typedLinks.some(function(l) { return l.url === url; });
+	if (isDuplicate) {
+		statusSpan.innerHTML = '<span class="url-broken">URL already added</span>';
+		return;
+	}
+
+	typedLinks.push({url: url, type: type});
+	renderTypedLinksTable();
+	input.value = '';
+	statusSpan.innerHTML = '';
+}
+
+function removeTypedLink(index) {
+	typedLinks.splice(index, 1);
+	renderTypedLinksTable();
+}
+
+// Credit management
+var credits = [];
+
+{% if credits_str is defined and credits_str %}
+credits = "{{ credits_str|e }}".split(/;\s*/).map(s => s.trim()).filter(s => s);
+{% elif code.credit %}
+credits = "{{ code.credit|e }}".split(/;\s*/).map(s => s.trim()).filter(s => s);
+{% endif %}
+
+function renderCreditTable() {
+	var tbody = document.getElementById('credit-table').getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+	credits.forEach(function(name, index) {
+		var row = tbody.insertRow();
+		var cellName = row.insertCell(0);
+		var cellAction = row.insertCell(1);
+		cellName.textContent = name;
+		cellAction.innerHTML = '<button type="button" onclick="removeCredit(' + index + ')">Remove</button>';
+	});
+	document.getElementById('credit_hidden').value = credits.join('; ');
+}
+
+function addCredit() {
+	var input = document.getElementById('credit-input');
+	var btn = input.parentElement.querySelector('button');
+	var name = input.value.trim();
+
+	if (!name) return;
+
+	// Disable input while normalizing
+	input.disabled = true;
+	btn.disabled = true;
+	btn.textContent = '...';
+
+	fetch('/admin/api/normalize_name', {
+		method: 'POST',
+		headers: {'Content-Type': 'application/json'},
+		body: JSON.stringify({name: name})
+	})
+	.then(response => response.json())
+	.then(data => {
+		var normalized = data.normalized || name;
+		if (credits.indexOf(normalized) === -1) {
+			credits.push(normalized);
+			renderCreditTable();
+		}
+		input.value = '';
+	})
+	.catch(err => {
+		// On error, add as-is
+		if (credits.indexOf(name) === -1) {
+			credits.push(name);
+			renderCreditTable();
+		}
+		input.value = '';
+	})
+	.finally(() => {
+		input.disabled = false;
+		btn.disabled = false;
+		btn.textContent = 'Add';
+		input.focus();
+	});
+}
+
+function removeCredit(index) {
+	credits.splice(index, 1);
+	renderCreditTable();
+}
+
+// Email management
+var emails = [];
+
+{% if code.email %}
+emails = "{{ code.email|e }}".split(/,\s*/).map(s => s.trim()).filter(s => s);
+{% endif %}
+
+function renderEmailTable() {
+	var tbody = document.getElementById('email-table').getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+	emails.forEach(function(email, index) {
+		var row = tbody.insertRow();
+		var cellEmail = row.insertCell(0);
+		var cellAction = row.insertCell(1);
+		cellEmail.textContent = email;
+		cellAction.innerHTML = '<button type="button" onclick="removeEmail(' + index + ')">Remove</button>';
+	});
+	document.getElementById('email_hidden').value = emails.join(', ');
+}
+
+function isValidEmail(email) {
+	// Standard email regex pattern
+	var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+	return emailRegex.test(email);
+}
+
+function checkEmailInput() {
+	var input = document.getElementById('email-input');
+	var statusSpan = document.getElementById('email-status');
+	var email = input.value.trim();
+
+	if (!email) {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'email-status';
+		return;
+	}
+
+	// Check if already in list
+	if (emails.indexOf(email) !== -1) {
+		statusSpan.innerHTML = 'Already added';
+		statusSpan.className = 'email-status format-error';
+		return;
+	}
+
+	// Validate format
+	if (!isValidEmail(email)) {
+		statusSpan.innerHTML = 'Invalid email format';
+		statusSpan.className = 'email-status format-error';
+		return;
+	}
+
+	statusSpan.innerHTML = '';
+	statusSpan.className = 'email-status';
+}
+
+function addEmail() {
+	var input = document.getElementById('email-input');
+	var statusSpan = document.getElementById('email-status');
+	var email = input.value.trim();
+
+	if (!email) return;
+
+	// Check for duplicate
+	if (emails.indexOf(email) !== -1) {
+		statusSpan.innerHTML = 'Already added';
+		statusSpan.className = 'email-status format-error';
+		return;
+	}
+
+	// Validate email format
+	if (!isValidEmail(email)) {
+		statusSpan.innerHTML = 'Invalid email format';
+		statusSpan.className = 'email-status format-error';
+		return;
+	}
+
+	emails.push(email);
+	renderEmailTable();
+	input.value = '';
+	statusSpan.innerHTML = '';
+	statusSpan.className = 'email-status';
+}
+
+function removeEmail(index) {
+	emails.splice(index, 1);
+	renderEmailTable();
+}
+
+// Bibcode title cache (shared between described_in and used_in)
+var bibcodeTitleCache = {};
+var bibcodeInfoCache = {};
+
+function fetchBibcodeInfo(bibcode, callback) {
+	if (bibcodeInfoCache[bibcode] !== undefined) {
+		callback(bibcodeInfoCache[bibcode]);
+		return;
+	}
+
+	fetch('/admin/api/bibcode_info/' + encodeURIComponent(bibcode))
+		.then(response => response.json())
+		.then(data => {
+			bibcodeInfoCache[bibcode] = data;
+			callback(data);
+		})
+		.catch(() => {
+			var fallback = { found: false, error: 'Lookup failed' };
+			bibcodeInfoCache[bibcode] = fallback;
+			callback(fallback);
+		});
+}
+
+function fetchBibcodeTitle(bibcode, callback) {
+	if (bibcodeTitleCache[bibcode] !== undefined) {
+		callback(bibcodeTitleCache[bibcode]);
+		return;
+	}
+
+	fetchBibcodeInfo(bibcode, function(data) {
+		var title = (data && data.found) ? data.title : null;
+		bibcodeTitleCache[bibcode] = title;
+		callback(title);
+	});
+}
+
+function importCreditsFromBibcode() {
+	var bibcodeInput = document.getElementById('bibcode');
+	var infoDiv = document.getElementById('bibcode-credit-info');
+	var btn = document.getElementById('import-credit-btn');
+	var bibcode = bibcodeInput.value.trim();
+
+	if (!bibcode || !isValidBibcode(bibcode)) {
+		infoDiv.innerHTML = '<span class="title-notfound">Enter a valid bibcode first.</span>';
+		return;
+	}
+
+	btn.disabled = true;
+	infoDiv.innerHTML = '<span class="title-loading">Loading authors...</span>';
+
+	fetchBibcodeInfo(bibcode, function(data) {
+		btn.disabled = false;
+		if (!data || !data.found) {
+			infoDiv.innerHTML = '<span class="title-notfound">No record found for this bibcode.</span>';
+			return;
+		}
+
+		var authors = Array.isArray(data.authors) ? data.authors : [];
+		if (authors.length === 0) {
+			infoDiv.innerHTML = '<span class="title-notfound">No authors returned for this bibcode.</span>';
+			return;
+		}
+
+		var added = 0;
+		authors.forEach(function(author) {
+			var clean = (author || '').trim();
+			if (clean && credits.indexOf(clean) === -1) {
+				credits.push(clean);
+				added += 1;
+			}
+		});
+		renderCreditTable();
+		infoDiv.innerHTML = '<span class="bibcode-title">Added ' + added + ' author' + (added === 1 ? '' : 's') + ' from ADS.</span>';
+	});
+}
+
+// Described In management
+var describedInItems = [];
+
+{% if described_in_urls %}
+describedInItems = "{{ described_in_urls }}".split(/\n/).map(s => s.trim()).filter(s => s);
+{% endif %}
+
+function renderDescribedInTable() {
+	var tbody = document.getElementById('described-in-table').getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+	describedInItems.forEach(function(item, index) {
+		var row = tbody.insertRow();
+		row.draggable = true;
+		row.dataset.index = index;
+		row.addEventListener('dragstart', handleDragStart);
+		row.addEventListener('dragover', handleDragOver);
+		row.addEventListener('drop', function(e) { handleDrop(e, describedInItems, renderDescribedInTable); });
+		row.addEventListener('dragend', handleDragEnd);
+		var cellDrag = row.insertCell(0);
+		var cellItem = row.insertCell(1);
+		var cellTitle = row.insertCell(2);
+		var cellAction = row.insertCell(3);
+		cellDrag.className = 'drag-handle';
+		cellDrag.innerHTML = '&#9776;';
+
+		// Check if URL contains a bibcode (ADS URL)
+		var extractedBibcode = item.match(/^https?:\/\//i) ? extractBibcodeFromUrl(item) : null;
+		var bibcodeToLookup = isValidBibcode(item) ? item : extractedBibcode;
+
+		// Make URLs clickable, bibcodes link to ADS
+		if (item.match(/^https?:\/\//i)) {
+			cellItem.innerHTML = '<a href="' + item + '" target="_blank">' + item + '</a>';
+			// If it's an ADS URL with a bibcode, fetch the title
+			if (extractedBibcode) {
+				if (bibcodeTitleCache[extractedBibcode] !== undefined) {
+					cellTitle.innerHTML = bibcodeTitleCache[extractedBibcode] ? '<span class="bibcode-title">' + bibcodeTitleCache[extractedBibcode] + '</span>' : '<span class="title-notfound">Not found</span>';
+				} else {
+					cellTitle.innerHTML = '<span class="title-loading">Loading...</span>';
+					fetchBibcodeTitle(extractedBibcode, function(title) {
+						var rows = document.getElementById('described-in-table').getElementsByTagName('tbody')[0].rows;
+						if (rows[index]) {
+							rows[index].cells[2].innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '<span class="title-notfound">Not found</span>';
+						}
+					});
+				}
+			} else {
+				cellTitle.innerHTML = '<span class="title-na">-</span>';
+			}
+		} else if (isValidBibcode(item)) {
+			cellItem.innerHTML = '<a href="https://ui.adsabs.harvard.edu/abs/' + item + '/abstract" target="_blank">' + item + '</a>';
+			// Show cached title or fetch it
+			if (bibcodeTitleCache[item] !== undefined) {
+				cellTitle.innerHTML = bibcodeTitleCache[item] ? '<span class="bibcode-title">' + bibcodeTitleCache[item] + '</span>' : '<span class="title-notfound">Not found</span>';
+			} else {
+				cellTitle.innerHTML = '<span class="title-loading">Loading...</span>';
+				fetchBibcodeTitle(item, function(title) {
+					var rows = document.getElementById('described-in-table').getElementsByTagName('tbody')[0].rows;
+					if (rows[index]) {
+						rows[index].cells[2].innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '<span class="title-notfound">Not found</span>';
+					}
+				});
+			}
+		} else {
+			cellItem.textContent = item;
+			cellTitle.innerHTML = '<span class="title-na">-</span>';
+		}
+
+		cellAction.innerHTML = '<button type="button" onclick="removeDescribedIn(' + index + ')">Remove</button>';
+	});
+	document.getElementById('described_in_urls_hidden').value = describedInItems.join('\n');
+}
+
+function addDescribedIn() {
+	var input = document.getElementById('described-in-input');
+	var statusSpan = document.getElementById('described-in-status');
+	var item = input.value.trim();
+
+	if (!item) return;
+
+	// Check for duplicate (including bibcode/URL equivalents)
+	var duplicate = findDuplicateBibcodeOrUrl(item, describedInItems);
+	if (duplicate) {
+		if (duplicate === item) {
+			statusSpan.innerHTML = 'Already added';
+		} else {
+			statusSpan.innerHTML = 'Duplicate of ' + duplicate.substring(0, 30) + (duplicate.length > 30 ? '...' : '');
+		}
+		statusSpan.className = 'bibcode-status invalid';
+		return;
+	}
+
+	// Validate as bibcode or URL
+	var result = isValidBibcodeOrUrl(item);
+	if (!result.valid) {
+		statusSpan.innerHTML = 'Not a valid bibcode or URL';
+		statusSpan.className = 'bibcode-status invalid';
+		return;
+	}
+
+	describedInItems.push(item);
+	renderDescribedInTable();
+	input.value = '';
+	statusSpan.innerHTML = '';
+	statusSpan.className = 'bibcode-status';
+}
+
+function removeDescribedIn(index) {
+	describedInItems.splice(index, 1);
+	renderDescribedInTable();
+}
+
+// Used In management
+var usedInItems = [];
+
+{% if used_in_urls %}
+usedInItems = "{{ used_in_urls }}".split(/\n/).map(s => s.trim()).filter(s => s);
+{% endif %}
+
+function renderUsedInTable() {
+	var tbody = document.getElementById('used-in-table').getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+	usedInItems.forEach(function(item, index) {
+		var row = tbody.insertRow();
+		row.draggable = true;
+		row.dataset.index = index;
+		row.addEventListener('dragstart', handleDragStart);
+		row.addEventListener('dragover', handleDragOver);
+		row.addEventListener('drop', function(e) { handleDrop(e, usedInItems, renderUsedInTable); });
+		row.addEventListener('dragend', handleDragEnd);
+		var cellDrag = row.insertCell(0);
+		var cellItem = row.insertCell(1);
+		var cellTitle = row.insertCell(2);
+		var cellAction = row.insertCell(3);
+		cellDrag.className = 'drag-handle';
+		cellDrag.innerHTML = '&#9776;';
+
+		// Check if URL contains a bibcode (ADS URL)
+		var extractedBibcode = item.match(/^https?:\/\//i) ? extractBibcodeFromUrl(item) : null;
+		var bibcodeToLookup = isValidBibcode(item) ? item : extractedBibcode;
+
+		// Make URLs clickable, bibcodes link to ADS
+		if (item.match(/^https?:\/\//i)) {
+			cellItem.innerHTML = '<a href="' + item + '" target="_blank">' + item + '</a>';
+			// If it's an ADS URL with a bibcode, fetch the title
+			if (extractedBibcode) {
+				if (bibcodeTitleCache[extractedBibcode] !== undefined) {
+					cellTitle.innerHTML = bibcodeTitleCache[extractedBibcode] ? '<span class="bibcode-title">' + bibcodeTitleCache[extractedBibcode] + '</span>' : '<span class="title-notfound">Not found</span>';
+				} else {
+					cellTitle.innerHTML = '<span class="title-loading">Loading...</span>';
+					fetchBibcodeTitle(extractedBibcode, function(title) {
+						var rows = document.getElementById('used-in-table').getElementsByTagName('tbody')[0].rows;
+						if (rows[index]) {
+							rows[index].cells[2].innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '<span class="title-notfound">Not found</span>';
+						}
+					});
+				}
+			} else {
+				cellTitle.innerHTML = '<span class="title-na">-</span>';
+			}
+		} else if (isValidBibcode(item)) {
+			cellItem.innerHTML = '<a href="https://ui.adsabs.harvard.edu/abs/' + item + '/abstract" target="_blank">' + item + '</a>';
+			// Show cached title or fetch it
+			if (bibcodeTitleCache[item] !== undefined) {
+				cellTitle.innerHTML = bibcodeTitleCache[item] ? '<span class="bibcode-title">' + bibcodeTitleCache[item] + '</span>' : '<span class="title-notfound">Not found</span>';
+			} else {
+				cellTitle.innerHTML = '<span class="title-loading">Loading...</span>';
+				fetchBibcodeTitle(item, function(title) {
+					var rows = document.getElementById('used-in-table').getElementsByTagName('tbody')[0].rows;
+					if (rows[index]) {
+						rows[index].cells[2].innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '<span class="title-notfound">Not found</span>';
+					}
+				});
+			}
+		} else {
+			cellItem.textContent = item;
+			cellTitle.innerHTML = '<span class="title-na">-</span>';
+		}
+
+		cellAction.innerHTML = '<button type="button" onclick="removeUsedIn(' + index + ')">Remove</button>';
+	});
+	document.getElementById('used_in_urls_hidden').value = usedInItems.join('\n');
+}
+
+function addUsedIn() {
+	var input = document.getElementById('used-in-input');
+	var statusSpan = document.getElementById('used-in-status');
+	var item = input.value.trim();
+
+	if (!item) return;
+
+	// Check for duplicate (including bibcode/URL equivalents)
+	var duplicate = findDuplicateBibcodeOrUrl(item, usedInItems);
+	if (duplicate) {
+		if (duplicate === item) {
+			statusSpan.innerHTML = 'Already added';
+		} else {
+			statusSpan.innerHTML = 'Duplicate of ' + duplicate.substring(0, 30) + (duplicate.length > 30 ? '...' : '');
+		}
+		statusSpan.className = 'bibcode-status invalid';
+		return;
+	}
+
+	// Validate as bibcode or URL
+	var result = isValidBibcodeOrUrl(item);
+	if (!result.valid) {
+		statusSpan.innerHTML = 'Not a valid bibcode or URL';
+		statusSpan.className = 'bibcode-status invalid';
+		return;
+	}
+
+	usedInItems.push(item);
+	renderUsedInTable();
+	input.value = '';
+	statusSpan.innerHTML = '';
+	statusSpan.className = 'bibcode-status';
+}
+
+function removeUsedIn(index) {
+	usedInItems.splice(index, 1);
+	renderUsedInTable();
+}
+
+// See Also management
+var seeAlsoItems = [];
+var seeAlsoCache = {}; // Cache for ASCL ID existence and title
+var currentInputStatus = null; // Track current input validation state
+var pendingCheck = null; // Track pending API check
+
+{% if code.see_also %}
+seeAlsoItems = "{{ code.see_also }}".split(/[;\s]+/).filter(a => a.trim());
+{% endif %}
+
+function renderSeeAlsoTable() {
+	var tbody = document.getElementById('seealso-table').getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+	seeAlsoItems.forEach(function(asclId, index) {
+		var row = tbody.insertRow();
+		var cellId = row.insertCell(0);
+		var cellTitle = row.insertCell(1);
+		var cellAction = row.insertCell(2);
+		cellId.innerHTML = '<a href="/' + asclId + '" target="_blank">' + asclId + '</a>';
+
+		// Show title from cache or fetch it
+		var cached = seeAlsoCache[asclId];
+		if (cached !== undefined) {
+			if (cached.exists && cached.title) {
+				cellTitle.innerHTML = '<span class="seealso-title">' + cached.title + '</span>';
+			} else if (cached.exists) {
+				cellTitle.innerHTML = '<span class="title-notfound">(no title)</span>';
+			} else {
+				cellTitle.innerHTML = '<span class="status-warning">Not found</span>';
+			}
+		} else {
+			cellTitle.innerHTML = '<span class="title-loading">Loading...</span>';
+			fetchSeeAlsoInfo(asclId, index);
+		}
+
+		cellAction.innerHTML = '<button type="button" onclick="removeSeeAlso(' + index + ')">Remove</button>';
+	});
+	document.getElementById('see_also_hidden').value = seeAlsoItems.join(';');
+}
+
+function fetchSeeAlsoInfo(asclId, rowIndex) {
+	fetch('/admin/api/check_ascl_id/' + asclId)
+		.then(response => response.json())
+		.then(data => {
+			seeAlsoCache[asclId] = { exists: data.exists, title: data.title };
+			var tbody = document.getElementById('seealso-table').getElementsByTagName('tbody')[0];
+			if (tbody.rows[rowIndex]) {
+				var cellTitle = tbody.rows[rowIndex].cells[1];
+				if (data.exists && data.title) {
+					cellTitle.innerHTML = '<span class="seealso-title">' + data.title + '</span>';
+				} else if (data.exists) {
+					cellTitle.innerHTML = '<span class="title-notfound">(no title)</span>';
+				} else {
+					cellTitle.innerHTML = '<span class="status-warning">Not found</span>';
+				}
+			}
+		})
+		.catch(err => {
+			seeAlsoCache[asclId] = { exists: false, title: null };
+		});
+}
+
+function checkSeeAlsoInput() {
+	var input = document.getElementById('seealso-input');
+	var statusSpan = document.getElementById('seealso-status');
+	var asclId = input.value.trim();
+
+	// Clear pending check
+	if (pendingCheck) {
+		clearTimeout(pendingCheck);
+		pendingCheck = null;
+	}
+
+	// Empty input
+	if (!asclId) {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'seealso-status';
+		currentInputStatus = null;
+		return;
+	}
+
+	// Validate format: YYMM.NNN
+	var formatRegex = /^\d{4}\.\d{3}$/;
+	if (!formatRegex.test(asclId)) {
+		statusSpan.innerHTML = 'ASCL format YYMM.NNN';
+		statusSpan.className = 'seealso-status format-hint';
+		currentInputStatus = 'invalid';
+		return;
+	}
+
+	// Check if already in list
+	if (seeAlsoItems.indexOf(asclId) !== -1) {
+		statusSpan.innerHTML = 'Already added';
+		statusSpan.className = 'seealso-status format-error';
+		currentInputStatus = 'duplicate';
+		return;
+	}
+
+	// Check cache first
+	var cached = seeAlsoCache[asclId];
+	if (cached !== undefined) {
+		if (cached.exists) {
+			statusSpan.innerHTML = 'Found';
+			statusSpan.className = 'seealso-status status-ok';
+		} else {
+			statusSpan.innerHTML = 'Not found';
+			statusSpan.className = 'seealso-status status-warning';
+		}
+		currentInputStatus = 'valid';
+		return;
+	}
+
+	// Show checking status and debounce API call
+	statusSpan.innerHTML = 'Checking...';
+	statusSpan.className = 'seealso-status checking';
+	currentInputStatus = 'checking';
+
+	pendingCheck = setTimeout(function() {
+		fetch('/admin/api/check_ascl_id/' + asclId)
+			.then(response => response.json())
+			.then(data => {
+				seeAlsoCache[asclId] = { exists: data.exists, title: data.title };
+				// Only update if input hasn't changed
+				if (input.value.trim() === asclId) {
+					if (data.exists) {
+						statusSpan.innerHTML = 'Found';
+						statusSpan.className = 'seealso-status status-ok';
+					} else {
+						statusSpan.innerHTML = 'Not found';
+						statusSpan.className = 'seealso-status status-warning';
+					}
+					currentInputStatus = 'valid';
+				}
+			})
+			.catch(err => {
+				seeAlsoCache[asclId] = { exists: false, title: null };
+				if (input.value.trim() === asclId) {
+					statusSpan.innerHTML = 'Not found';
+					statusSpan.className = 'seealso-status status-warning';
+					currentInputStatus = 'valid';
+				}
+			});
+	}, 300); // 300ms debounce
+}
+
+function addSeeAlso() {
+	var input = document.getElementById('seealso-input');
+	var statusSpan = document.getElementById('seealso-status');
+	var asclId = input.value.trim();
+
+	// Validate format: YYMM.NNN
+	var formatRegex = /^\d{4}\.\d{3}$/;
+	if (!formatRegex.test(asclId)) {
+		return; // Don't add invalid format
+	}
+
+	// Don't add duplicates
+	if (seeAlsoItems.indexOf(asclId) !== -1) {
+		return;
+	}
+
+	// Add to list (even if not found in database)
+	seeAlsoItems.push(asclId);
+	renderSeeAlsoTable();
+	input.value = '';
+	statusSpan.innerHTML = '';
+	statusSpan.className = 'seealso-status';
+	currentInputStatus = null;
+}
+
+function removeSeeAlso(index) {
+	seeAlsoItems.splice(index, 1);
+	renderSeeAlsoTable();
+}
+
+// Keyword management
+var keywords = [];
+var keywordCounts = {}; // Cache for keyword usage counts
+
+{% if keywords_str %}
+// Parse keywords - handle quoted keywords with spaces
+var kwStr = "{{ keywords_str|e }}";
+var kwRegex = /"([^"]+)"|'([^']+)'|(\S+)/g;
+var match;
+while ((match = kwRegex.exec(kwStr)) !== null) {
+	var kw = match[1] || match[2] || match[3];
+	if (kw) keywords.push(kw);
+}
+{% endif %}
+
+function renderKeywordBadges() {
+	var container = document.getElementById('keyword-badges');
+	container.innerHTML = '';
+	if (keywords.length > 0) {
+		container.classList.add('has-keywords');
+	} else {
+		container.classList.remove('has-keywords');
+	}
+	keywords.forEach(function(keyword, index) {
+		var badge = document.createElement('span');
+		badge.className = 'keyword-badge';
+		badge.setAttribute('data-keyword', keyword);
+
+		var text = document.createElement('span');
+		text.className = 'keyword-text';
+		text.textContent = keyword;
+
+		var count = document.createElement('span');
+		count.className = 'keyword-badge-count';
+		if (keywordCounts[keyword] !== undefined) {
+			count.textContent = '(' + keywordCounts[keyword] + ')';
+		} else {
+			count.textContent = '(...)';
+			fetchKeywordCount(keyword);
+		}
+
+		var removeBtn = document.createElement('span');
+		removeBtn.className = 'keyword-remove';
+		removeBtn.innerHTML = '&times;';
+		removeBtn.onclick = (function(i) {
+			return function() { removeKeyword(i); };
+		})(index);
+
+		badge.appendChild(text);
+		badge.appendChild(count);
+		badge.appendChild(removeBtn);
+		container.appendChild(badge);
+	});
+	updateKeywordsHidden();
+}
+
+function fetchKeywordCount(keyword) {
+	fetch('/admin/api/keyword_count/' + encodeURIComponent(keyword))
+		.then(response => response.json())
+		.then(data => {
+			keywordCounts[keyword] = data.count;
+			updateKeywordCountCell(keyword, data.count);
+		})
+		.catch(err => {
+			keywordCounts[keyword] = '?';
+			updateKeywordCountCell(keyword, '?');
+		});
+}
+
+function updateKeywordCountCell(keyword, count) {
+	var badge = document.querySelector('#keyword-badges .keyword-badge[data-keyword="' + keyword + '"]');
+	if (badge) {
+		var countSpan = badge.querySelector('.keyword-badge-count');
+		if (countSpan) {
+			countSpan.textContent = '(' + count + ')';
+		}
+	}
+}
+
+function checkKeywordInput() {
+	var input = document.getElementById('keyword-input');
+	var statusSpan = document.getElementById('keyword-status');
+	var keyword = input.value.trim();
+
+	if (!keyword) {
+		statusSpan.innerHTML = '';
+		return;
+	}
+
+	// Check if already in list (case-insensitive)
+	var lowerKeyword = keyword.toLowerCase();
+	var isDuplicate = keywords.some(function(k) { return k.toLowerCase() === lowerKeyword; });
+	if (isDuplicate) {
+		statusSpan.innerHTML = 'Already added';
+		statusSpan.className = 'keyword-status format-error';
+	} else {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'keyword-status';
+	}
+}
+
+function addKeyword() {
+	var input = document.getElementById('keyword-input');
+	var statusSpan = document.getElementById('keyword-status');
+	var keyword = input.value.trim();
+
+	if (!keyword) return;
+
+	// Check if already in list (case-insensitive)
+	var lowerKeyword = keyword.toLowerCase();
+	var isDuplicate = keywords.some(function(k) { return k.toLowerCase() === lowerKeyword; });
+	if (isDuplicate) {
+		statusSpan.innerHTML = 'Already added';
+		statusSpan.className = 'keyword-status format-error';
+		return;
+	}
+
+	keywords.push(keyword);
+	renderKeywordBadges();
+	input.value = '';
+	statusSpan.innerHTML = '';
+	statusSpan.className = 'keyword-status';
+}
+
+function removeKeyword(index) {
+	keywords.splice(index, 1);
+	renderKeywordBadges();
+}
+
+function updateKeywordsHidden() {
+	// Format keywords - quote those with spaces
+	var formatted = keywords.map(function(kw) {
+		if (kw.indexOf(' ') !== -1) {
+			return '"' + kw + '"';
+		}
+		return kw;
+	});
+	document.getElementById('keywords_hidden').value = formatted.join(' ');
+}
+
+// ==========================================
+// Notes Management
+// ==========================================
+var codePk = {% if code.pk %}{{ code.pk }}{% else %}null{% endif %};
+var noteTypes = [];
+
+function loadNoteTypes() {
+	var select = document.getElementById('note-type');
+	if (!select) return;
+
+	fetch('/admin/api/note_types')
+		.then(response => response.json())
+		.then(data => {
+			if (data.error) {
+				console.error('Note types error:', data.error);
+				select.innerHTML = '<option value="">Error: ' + data.error.substring(0, 30) + '</option>';
+				return;
+			}
+			noteTypes = data.types || [];
+			select.innerHTML = '<option value="">Select type...</option>';
+			noteTypes.forEach(function(t) {
+				var opt = document.createElement('option');
+				opt.value = t.pk;
+				opt.textContent = t.name;
+				// Default to 'general' if available
+				if (t.short_name === 'general') opt.selected = true;
+				select.appendChild(opt);
+			});
+		})
+		.catch(err => {
+			console.error('Note types fetch error:', err);
+			select.innerHTML = '<option value="">Error loading types</option>';
+		});
+}
+
+function loadNotes() {
+	if (!codePk) return;
+
+	var container = document.getElementById('notes-list');
+	if (!container) return;
+
+	fetch('/admin/api/code/' + codePk + '/notes')
+		.then(response => response.json())
+		.then(data => {
+			if (data.error) {
+				console.error('Notes error:', data.error);
+				container.innerHTML = '<p class="notes-error">Error: ' + data.error + '</p>';
+				return;
+			}
+			renderNotes(data.notes || []);
+		})
+		.catch(err => {
+			console.error('Notes fetch error:', err);
+			container.innerHTML = '<p class="notes-error">Error loading notes.</p>';
+		});
+}
+
+function renderNotes(notes) {
+	var container = document.getElementById('notes-list');
+	if (!container) return;
+
+	if (notes.length === 0) {
+		container.innerHTML = '<p class="no-notes">No new notes yet.</p>';
+		return;
+	}
+
+	var html = '';
+	notes.forEach(function(note) {
+		var collapsedClass = note.hidden ? ' note-collapsed' : '';
+		var pinnedClass = note.is_pinned ? ' note-pinned' : '';
+		var typeClass = ' note-type-' + (note.note_type_short || 'general');
+		var meta = formatDateMeta(note.created_at);
+
+		html += '<div class="note-item' + collapsedClass + pinnedClass + typeClass + '" data-pk="' + note.pk + '">';
+		html += '<div class="note-header">';
+		html += '<span class="note-meta">';
+		html += '<span class="note-author-chip">' + escapeInlineHtml(note.user || 'Unknown') + '</span>';
+		html += '<span class="note-meta-dot">&middot;</span>';
+		html += '<span class="note-meta-date">' + meta.date + '</span>';
+		html += '<span class="note-meta-dot">&middot;</span>';
+		html += '<span class="note-meta-time">' + meta.time + '</span>';
+		html += '<span class="note-meta-dot">&middot;</span>';
+		html += '<span class="note-type-badge">' + (note.note_type || 'Note') + '</span>';
+		html += '</span>';
+		if (note.is_pinned) html += '<span class="note-pin" title="Pinned">&#128204;</span>';
+		html += '<span class="note-actions">';
+		html += '<button type="button" onclick="togglePin(' + note.pk + ')" title="' + (note.is_pinned ? 'Unpin' : 'Pin') + '">' + (note.is_pinned ? 'Unpin' : 'Pin') + '</button>';
+		html += '<button type="button" onclick="toggleCollapse(' + note.pk + ', this)" title="' + (note.hidden ? 'Expand note' : 'Collapse note') + '">' + (note.hidden ? 'Expand' : 'Collapse') + '</button>';
+		html += '</span>';
+		html += '</div>';
+		html += '<div class="note-body">' + escapeHtml(note.note) + '</div>';
+		html += '</div>';
+	});
+
+	container.innerHTML = html;
+}
+
+function formatDate(isoString) {
+	if (!isoString) return '-';
+	var d = new Date(isoString);
+	return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+}
+
+function formatDateMeta(isoString) {
+	if (!isoString) return { date: '-', time: '-' };
+	var d = new Date(isoString);
+	return {
+		date: d.toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' }),
+		time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+	};
+}
+
+function escapeHtml(text) {
+	var div = document.createElement('div');
+	div.textContent = text;
+	return div.innerHTML.replace(/\n/g, '<br>');
+}
+
+function escapeInlineHtml(text) {
+	var div = document.createElement('div');
+	div.textContent = text;
+	return div.innerHTML;
+}
+
+function addNote() {
+	if (!codePk) {
+		alert('Please save the code first before adding notes.');
+		return;
+	}
+
+	var typeSelect = document.getElementById('note-type');
+	var textArea = document.getElementById('note-text');
+	var statusSpan = document.getElementById('note-status');
+	var btn = document.getElementById('add-note-btn');
+
+	var noteTypePk = typeSelect.value;
+	var noteText = textArea.value.trim();
+
+	if (!noteTypePk) {
+		statusSpan.textContent = 'Please select a note type.';
+		statusSpan.className = 'note-status error';
+		return;
+	}
+	if (!noteText) {
+		statusSpan.textContent = 'Please enter note text.';
+		statusSpan.className = 'note-status error';
+		return;
+	}
+
+	btn.disabled = true;
+	statusSpan.textContent = 'Adding...';
+	statusSpan.className = 'note-status';
+
+	fetch('/admin/api/code/' + codePk + '/notes', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			note_type_pk: noteTypePk,
+			note: noteText
+		})
+	})
+	.then(response => response.json())
+	.then(data => {
+		if (data.success) {
+			textArea.value = '';
+			statusSpan.textContent = 'Note added!';
+			statusSpan.className = 'note-status success';
+			loadNotes();
+			setTimeout(function() { statusSpan.textContent = ''; }, 2000);
+		} else {
+			statusSpan.textContent = data.error || 'Error adding note.';
+			statusSpan.className = 'note-status error';
+		}
+	})
+	.catch(err => {
+		statusSpan.textContent = 'Error adding note.';
+		statusSpan.className = 'note-status error';
+	})
+	.finally(function() {
+		btn.disabled = false;
+	});
+}
+
+function togglePin(notePk) {
+	fetch('/admin/api/note/' + notePk + '/toggle_pin', { method: 'POST' })
+		.then(response => response.json())
+		.then(data => {
+			if (data.success) loadNotes();
+		});
+}
+
+function toggleCollapse(notePk, buttonEl) {
+	var noteItem = document.querySelector('.note-item[data-pk="' + notePk + '"]');
+	if (!noteItem) return;
+
+	var collapsed = noteItem.classList.toggle('note-collapsed');
+	if (buttonEl) {
+		buttonEl.textContent = collapsed ? 'Expand' : 'Collapse';
+		buttonEl.title = collapsed ? 'Expand note' : 'Collapse note';
+	}
+}
+
+// Check existing fields for HTML on page load
+document.addEventListener('DOMContentLoaded', function() {
+	renderAliasTable();
+	renderTypedLinksTable();
+	checkAllTypedLinkStatuses();
+	renderCreditTable();
+	renderEmailTable();
+	renderDescribedInTable();
+	renderUsedInTable();
+	renderSeeAlsoTable();
+	renderKeywordBadges();
+	updateCharCount();
+
+	var htmlCheckFields = {
+		'citation_method': 'citation-html-warning'
+	};
+	for (var field in htmlCheckFields) {
+		var el = document.getElementById(field);
+		if (el && el.value) checkForHTML(el, htmlCheckFields[field]);
+	}
+
+	// Validate bibcode and DOI on load
+	if (document.getElementById('bibcode').value) checkBibcode();
+	if (document.getElementById('doi').value) checkDOI();
+
+	// Load notes if in update mode
+	if (codePk) {
+		loadNoteTypes();
+		loadNotes();
+	}
+});
+</script>
 
 <style>
-.admin-form {
-	max-width: 900px;
+.collision-notice {
+	background: #f8d7da;
+	border: 1px solid #f5c6cb;
+	color: #721c24;
+	padding: 12px 15px;
+	margin-bottom: 15px;
+	border-radius: 4px;
 }
-.admin-form .form-row {
-	margin-bottom: 1rem;
-}
-.admin-form label {
-	display: block;
+.collision-notice code {
+	background: #fff;
+	padding: 2px 6px;
+	border-radius: 3px;
 	font-weight: bold;
-	margin-bottom: 0.25rem;
 }
-.admin-form input[type="text"],
-.admin-form input[type="email"],
-.admin-form textarea {
-	width: 100%;
-	max-width: 700px;
-	padding: 0.5rem;
-	font-family: inherit;
-	font-size: 1rem;
-	border: 1px solid #ccc;
+.warning-note {
+	background: #fff3cd;
+	border: 1px solid #ffc107;
+	border-left: 4px solid #ffc107;
+	padding: 12px 15px;
+	margin-bottom: 20px;
+	border-radius: 4px;
+	font-size: 13px;
+	color: #856404;
+}
+.code-title-banner {
+	margin: 8px 0 16px 0;
+	padding: 10px 14px;
+	background: #eef4fb;
+	border-left: 4px solid #5d6d7e;
+	color: #2c3e50;
+	font-size: 18px;
+	font-weight: 600;
 	border-radius: 4px;
 }
-.admin-form textarea {
-	resize: vertical;
+.ascl-id-row {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
 }
-.admin-form .help-text {
-	display: block;
-	font-size: 0.85rem;
-	color: #666;
-	margin-top: 0.25rem;
+.ascl-id-row input[type="text"] {
+	width: 80px;
+	text-align: center;
 }
-.admin-form .required {
-	color: #c00;
-}
-.admin-form .checkbox-row label {
-	display: inline;
-	font-weight: normal;
-}
-.admin-form .info-row {
-	background: #f5f5f5;
-	padding: 1rem;
-	border-radius: 4px;
-}
-.admin-form .info-row p {
-	margin: 0.25rem 0;
-}
-.admin-form .form-actions {
-	margin-top: 1.5rem;
-	padding-top: 1rem;
-	border-top: 1px solid #ddd;
-}
-.admin-form .button {
-	display: inline-block;
-	padding: 0.5rem 1rem;
-	margin-right: 0.5rem;
-	text-decoration: none;
-	border: 1px solid #ccc;
-	border-radius: 4px;
-	background: #f5f5f5;
-	color: #333;
+.ascl-id-row button {
+	padding: 5px 10px;
+	font-size: 13px;
 	cursor: pointer;
 }
-.admin-form .button.primary {
+.forms label {
+	display: block;
+	margin-top: 12px;
+	color: #6058c4;
+	font-weight: bold;
+}
+.forms small {
+	color: #777;
+	font-size: 12px;
+}
+.forms input[type="text"],
+.forms input[type="email"],
+.forms textarea,
+.forms select {
+	font-size: 14px;
+	padding: 5px;
+	font-family: inherit;
+}
+.forms textarea {
+	width: 100%;
+	max-width: 700px;
+}
+.forms input[type="text"] {
+	max-width: 700px;
+}
+.forms select {
+	margin-right: 10px;
+}
+.forms hr {
+	margin: 20px 0;
+	border: none;
+	border-top: 1px solid #ccc;
+}
+.html-warning {
+	color: red;
+	font-size: 12px;
+	font-weight: normal;
+	margin-left: 10px;
+}
+.char-count {
+	font-weight: bold;
+}
+.char-count.near-limit {
+	color: red;
+}
+.insert-buttons {
+	margin: 4px 0;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+.insert-buttons span {
+	font-size: 12px;
+	color: #666;
+}
+.insert-buttons button {
+	padding: 2px 8px;
+	font-size: 12px;
+	cursor: pointer;
+	background: #f0f0f0;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+}
+.insert-buttons button:hover {
+	background: #e0e0e0;
+}
+.bibcode-manager {
+	margin: 5px 0 10px 0;
+	max-width: 600px;
+}
+.bibcode-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 8px;
+	font-size: 13px;
+}
+.bibcode-table th {
+	text-align: left;
+	background: #f5f5f5;
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+}
+.bibcode-table td {
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+	word-break: break-all;
+}
+.bibcode-table td:last-child {
+	width: 70px;
+	text-align: center;
+}
+.bibcode-table button {
+	padding: 3px 8px;
+	cursor: pointer;
+}
+.bibcode-input-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.bibcode-input-row input {
+	flex: 1;
+	max-width: 400px;
+}
+.bibcode-input-row button {
+	padding: 4px 12px;
+	cursor: pointer;
+}
+.bibcode-status {
+	font-size: 12px;
+}
+.bibcode-status.valid {
+	color: #27ae60;
+}
+.bibcode-status.invalid {
+	color: red;
+}
+.validation-status {
+	font-size: 12px;
+	margin-left: 8px;
+}
+.validation-status.valid {
+	color: #27ae60;
+}
+.validation-status.invalid {
+	color: red;
+}
+.bibcode-title {
+	font-size: 12px;
+	color: #555;
+	max-width: 300px;
+	display: inline-block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.title-loading {
+	font-size: 12px;
+	color: #888;
+	font-style: italic;
+}
+.title-notfound {
+	font-size: 12px;
+	color: #999;
+}
+.title-na {
+	color: #ccc;
+}
+.field-info {
+	margin: 4px 0;
+	font-size: 13px;
+}
+.field-link {
+	color: #2980b9;
+	text-decoration: none;
+}
+.field-link:hover {
+	text-decoration: underline;
+}
+.field-link-notfound {
+	color: #888;
+	font-style: italic;
+}
+.url-manager, .entry-manager {
+	margin: 5px 0 10px 0;
+	max-width: 600px;
+}
+.url-table, .entry-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 8px;
+	font-size: 13px;
+}
+.url-table th, .entry-table th {
+	text-align: left;
+	background: #f5f5f5;
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+}
+.url-table td, .entry-table td {
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+	word-break: break-all;
+}
+.url-table td:last-child, .entry-table td:last-child {
+	width: 70px;
+	text-align: center;
+}
+.url-table button, .entry-table button {
+	padding: 3px 8px;
+	cursor: pointer;
+}
+/* Drag and drop styles */
+.sortable-table tbody tr {
+	cursor: grab;
+}
+.sortable-table tbody tr:active {
+	cursor: grabbing;
+}
+.sortable-table tbody tr.dragging {
+	opacity: 0.5;
+	background: #e3f2fd;
+}
+.drag-col {
+	width: 30px;
+}
+.drag-handle {
+	width: 30px;
+	text-align: center;
+	color: #999;
+	cursor: grab;
+	user-select: none;
+}
+.drag-handle:hover {
+	color: #666;
+}
+.drag-handle:active {
+	cursor: grabbing;
+}
+.url-input-row, .entry-input-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.url-input-row input, .entry-input-row input {
+	flex: 1;
+	max-width: 400px;
+}
+.url-input-row button, .entry-input-row button {
+	padding: 4px 12px;
+	cursor: pointer;
+}
+.link-type-select {
+	font-size: 12px;
+	padding: 2px 4px;
+}
+.url-input-row select {
+	padding: 4px 8px;
+}
+.url-check-status {
+	font-size: 12px;
+}
+.url-checking {
+	color: #888;
+	font-style: italic;
+}
+.url-live {
+	color: #27ae60;
+}
+.url-broken {
+	color: #e67e22;
+}
+.url-unchecked {
+	color: #ccc;
+}
+.url-status-cell {
+	width: 50px;
+	text-align: center;
+}
+.private-note {
+	background: #fff9e6;
+	padding: 1px 4px;
+	border-radius: 2px;
+}
+.private-field {
+	background: #fffdf5 !important;
+	border-color: #e6dfc0 !important;
+}
+.alias-manager {
+	margin: 5px 0 10px 0;
+	max-width: 500px;
+}
+.alias-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 8px;
+	font-size: 13px;
+}
+.alias-table th {
+	text-align: left;
+	background: #f5f5f5;
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+}
+.alias-table td {
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+}
+.alias-table td:last-child {
+	width: 70px;
+	text-align: center;
+}
+.alias-table button {
+	padding: 3px 8px;
+	cursor: pointer;
+}
+.alias-prefix {
+	color: #888;
+}
+.alias-input-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.alias-input-row button {
+	padding: 4px 12px;
+	cursor: pointer;
+}
+.alias-status {
+	font-size: 12px;
+}
+.alias-status.status-ok {
+	color: #27ae60;
+}
+.alias-status.status-warning {
+	color: #e67e22;
+	font-weight: bold;
+}
+.alias-status.checking {
+	color: #888;
+	font-style: italic;
+}
+.alias-status.format-error {
+	color: red;
+}
+.seealso-manager {
+	margin: 5px 0 10px 0;
+	max-width: 600px;
+}
+.seealso-title {
+	font-size: 12px;
+	color: #555;
+	max-width: 300px;
+	display: inline-block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.seealso-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 8px;
+	font-size: 13px;
+}
+.seealso-table th {
+	text-align: left;
+	background: #f5f5f5;
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+}
+.seealso-table td {
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+}
+.seealso-table td:last-child {
+	width: 70px;
+	text-align: center;
+}
+.seealso-table button {
+	padding: 3px 8px;
+	cursor: pointer;
+}
+.seealso-input-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.seealso-input-row button {
+	padding: 4px 12px;
+	cursor: pointer;
+}
+.seealso-status {
+	font-size: 12px;
+}
+.seealso-status.status-ok {
+	color: #27ae60;
+}
+.seealso-status.status-warning {
+	color: #e67e22;
+	font-weight: bold;
+}
+.seealso-status.checking {
+	color: #888;
+	font-style: italic;
+}
+.seealso-status.format-error {
+	color: red;
+}
+.seealso-status.format-hint {
+	color: #555;
+}
+.status-ok {
+	color: #27ae60;
+	font-size: 12px;
+}
+.status-warning {
+	color: #e67e22;
+	font-weight: bold;
+	font-size: 12px;
+}
+.checking {
+	color: #888;
+	font-style: italic;
+	font-size: 12px;
+}
+.keyword-manager {
+	margin: 5px 0 10px 0;
+	max-width: 600px;
+}
+.keyword-badges {
+	display: none;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 10px;
+}
+.keyword-badges.has-keywords {
+	display: flex;
+}
+.keyword-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 8px;
+	background: #e7f1ff;
+	color: #0056b3;
+	border-radius: 4px;
+	font-size: 13px;
+}
+.keyword-text {
+	font-weight: 500;
+}
+.keyword-badge-count {
+	color: #666;
+	font-size: 11px;
+}
+.keyword-remove {
+	cursor: pointer;
+	color: #888;
+	font-size: 16px;
+	line-height: 1;
+	margin-left: 2px;
+	padding: 0 2px;
+}
+.keyword-remove:hover {
+	color: #c0392b;
+}
+.keyword-input-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.keyword-input-row button {
+	padding: 4px 12px;
+	cursor: pointer;
+}
+.keyword-status {
+	font-size: 12px;
+}
+.keyword-status.format-error {
+	color: red;
+}
+.email-status {
+	font-size: 12px;
+}
+.email-status.format-error {
+	color: red;
+}
+.info-box {
+	background: #f5f5f5;
+	padding: 10px 15px;
+	margin: 15px 0;
+	border-radius: 4px;
+	max-width: 400px;
+}
+.info-box p {
+	margin: 5px 0;
+}
+/* Notes Section */
+.notes-section {
+	margin-top: 40px;
+	padding-top: 20px;
+	border-top: 2px solid #ddd;
+}
+.notes-section h2 {
+	color: #2c3e50;
+	margin-bottom: 20px;
+}
+.legacy-notes {
+	background: #f9f9f9;
+	border: 1px solid #ddd;
+	border-left: 4px solid #999;
+	padding: 15px;
+	margin-bottom: 20px;
+	border-radius: 4px;
+}
+.legacy-notes h3 {
+	font-size: 14px;
+	color: #666;
+	margin: 0 0 10px 0;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+.toggle-raw-link {
+	font-size: 12px;
+	font-weight: normal;
+	color: #2980b9;
+}
+.toggle-raw-link:hover {
+	text-decoration: underline;
+}
+.legacy-note-raw {
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	padding: 10px;
+}
+.legacy-note-raw pre {
+	margin: 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-family: 'Consolas', 'Monaco', monospace;
+	font-size: 12px;
+	color: #333;
+}
+.legacy-note-content {
+	font-size: 14px;
+	color: #333;
+}
+/* Legacy notes table styling */
+.legacy-notes-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+.legacy-notes-table th {
+	background: #eee;
+	padding: 8px 10px;
+	text-align: left;
+	border: 1px solid #ddd;
+	font-weight: 600;
+	white-space: nowrap;
+}
+.legacy-notes-table td {
+	padding: 8px 10px;
+	border: 1px solid #ddd;
+	vertical-align: top;
+}
+.legacy-notes-table .note-date {
+	white-space: nowrap;
+	color: #666;
+	width: 90px;
+}
+.legacy-notes-table .note-initials {
+	white-space: nowrap;
+	font-weight: 600;
+	color: #2980b9;
+	width: 40px;
+	text-transform: uppercase;
+}
+.legacy-notes-table .note-content {
+	word-break: break-word;
+}
+.legacy-notes-table tr:nth-child(even) {
+	background: #fafafa;
+}
+.legacy-notes-table tr:hover {
+	background: #f5f5f5;
+}
+.legacy-notes-raw {
+	white-space: pre-wrap;
+	margin: 0;
+	font-family: inherit;
+	font-size: 13px;
+}
+.legacy-notes-unparsed {
+	margin-top: 15px;
+	padding-top: 10px;
+	border-top: 1px dashed #ccc;
+}
+.legacy-notes-unparsed pre {
+	margin: 5px 0 0 0;
+	white-space: pre-wrap;
+	font-size: 13px;
+}
+.notes-list {
+	margin-bottom: 30px;
+}
+.notes-loading, .notes-error {
+	color: #888;
+	font-style: italic;
+}
+.no-notes {
+	color: #888;
+	font-style: italic;
+	padding: 20px;
+	background: #f5f5f5;
+	border-radius: 4px;
+}
+.note-item {
+	border: 1px solid #ddd;
+	border-left: 4px solid transparent;
+	border-radius: 4px;
+	margin-bottom: 12px;
+	background: #fff;
+}
+.note-item.note-collapsed {
+	background: #fafafa;
+}
+.note-item.note-collapsed .note-body {
+	display: none;
+}
+.note-item.note-pinned {
+	border-left: 4px solid #3498db;
+}
+.note-item.note-type-attention {
+	border-left: 4px solid #e67e22;
+}
+.note-item.note-type-attention.note-pinned {
+	border-left: 4px solid #e67e22;
+}
+.note-item.note-type-legacy {
+	border-left: 4px solid #d97706;
+}
+.note-item.note-type-legacy.note-pinned {
+	border-left: 4px solid #d97706;
+}
+.note-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 12px;
+	background: #f8f9fa;
+	border-bottom: 1px solid #eee;
+	font-size: 13px;
+}
+.note-type-badge {
+	background: #e7f1ff;
+	color: #0056b3;
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+.note-type-attention .note-type-badge {
+	background: #fff3cd;
+	color: #856404;
+}
+.note-pin {
+	font-size: 14px;
+}
+.note-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: #6b7280;
+	flex: 1;
+	font-size: 12px;
+	line-height: 1.2;
+}
+.note-author-chip {
+	display: inline-block;
+	padding: 1px 8px;
+	background: #eceff3;
+	border-radius: 999px;
+	color: #4b5563;
+	font-weight: 600;
+}
+.note-meta-dot {
+	color: #9ca3af;
+}
+.note-meta-time {
+	font-family: inherit;
+	color: inherit;
+}
+.note-actions {
+	display: flex;
+	gap: 5px;
+}
+.note-actions button {
+	padding: 2px 8px;
+	font-size: 11px;
+	cursor: pointer;
+	background: #f0f0f0;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+}
+.note-actions button:hover {
+	background: #e0e0e0;
+}
+.note-body {
+	padding: 12px;
+	font-size: 14px;
+	line-height: 1.5;
+}
+.add-note-form {
+	background: #f8f9fa;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	padding: 20px;
+}
+.add-note-form h3 {
+	margin: 0 0 15px 0;
+	font-size: 16px;
+	color: #2c3e50;
+}
+.note-form-row {
+	margin-bottom: 12px;
+}
+.note-form-row label {
+	display: block;
+	margin-bottom: 4px;
+	font-weight: 600;
+	color: #555;
+	font-size: 13px;
+}
+.note-form-row select,
+.note-form-row textarea {
+	width: 100%;
+	max-width: 500px;
+	padding: 8px;
+	font-size: 14px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-family: inherit;
+}
+.note-form-row textarea {
+	max-width: 100%;
+	resize: vertical;
+}
+#add-note-btn {
+	padding: 8px 20px;
 	background: #2c3e50;
 	color: white;
-	border-color: #2c3e50;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 14px;
 }
-.admin-form .button:hover {
-	opacity: 0.9;
+#add-note-btn:hover {
+	background: #1a252f;
 }
-.admin-form .button.small {
-	padding: 0.25rem 0.5rem;
-	font-size: 0.85rem;
-	vertical-align: middle;
+#add-note-btn:disabled {
+	background: #95a5a6;
+	cursor: not-allowed;
+}
+.note-status {
+	margin-left: 10px;
+	font-size: 13px;
+}
+.note-status.success {
+	color: #27ae60;
+}
+.note-status.error {
+	color: #c0392b;
+}
+/* Record metadata bar */
+.record-meta {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 12px;
+	padding: 8px 12px;
+	margin-bottom: 15px;
+	background: #e8eef4;
+	border-radius: 4px;
+	font-size: 13px;
+	color: #555;
+}
+.record-meta .meta-item strong {
+	color: #333;
+}
+.record-meta .meta-right {
+	text-align: right;
+}
+/* Form Sections */
+.forms {
+	background: #f5f6f8;
+	padding: 20px;
+	border-radius: 8px;
+	margin-top: 15px;
+}
+.form-section {
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	padding: 0;
+	margin-bottom: 20px;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+	overflow: hidden;
+}
+.form-section.form-section-muted {
+	background: #fafafa;
+	border-color: #e0e0e0;
+}
+/* Field rows with alternating backgrounds */
+.field-row {
+	padding: 14px 20px;
+	margin: 0;
+	border-bottom: 1px solid #eee;
+}
+.field-row:last-of-type {
+	border-bottom: none;
+}
+.field-row:nth-child(odd) {
+	background: #fff;
+}
+.field-row:nth-child(even) {
+	background: #f0f4f8;
+}
+.field-row label {
+	margin-top: 0;
+}
+.field-row small {
+	display: block;
+	margin-top: 4px;
+}
+/* Split field row (two columns side by side) */
+.field-row-split {
+	display: flex;
+	gap: 0;
+	padding: 0;
+	margin: 0;
+	border-bottom: 1px solid #eee;
+	background: #f0f4f8;
+}
+.field-row-split .field-half {
+	flex: 1;
+	padding: 14px 20px;
+}
+.field-row-split .field-half:first-child {
+	border-right: 1px solid #eee;
+}
+.field-row-split .field-half label {
+	display: block;
+	margin-bottom: 4px;
+	font-weight: 600;
+}
+.field-row-split .field-half .inline-label-field {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 10px;
+}
+.field-row-split .field-half .inline-label-field label {
+	display: inline-block;
+	margin-top: 0;
+	margin-bottom: 0;
+	white-space: nowrap;
+}
+.field-row-split .field-half small {
+	display: block;
+	margin-top: 4px;
+}
+/* Section title spacing - use high specificity to override #ascl_body h3 */
+.form-section h3.section-title,
+h3.section-title {
+	font-size: 15px !important;
+	font-weight: 600 !important;
+	color: #fff !important;
+	background: #5d6d7e !important;
+	margin: 0 !important;
+	padding: 14px 20px !important;
+	border-bottom: 1px solid #4a5a6a !important;
+	max-width: none !important;
+	display: block !important;
+	width: auto !important;
+	font-family: 'Merriweather Sans', sans-serif !important;
+}
+/* Sticky Action Bar */
+.sticky-action-bar {
+	background: linear-gradient(135deg, rgba(44, 62, 80, 0.92) 0%, rgba(52, 73, 94, 0.92) 100%);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	padding: 12px 20px;
+	margin-bottom: 20px;
+	border-radius: 6px;
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+/* Allow sticky positioning in admin content pane */
+.admin-main {
+	overflow: visible !important;
+}
+.sticky-action-content {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	max-width: 100%;
+}
+.sticky-buttons {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.sticky-buttons button,
+.sticky-buttons .button {
+	display: inline-block;
+	padding: 8px 16px;
+	text-decoration: none;
+	border: none;
+	border-radius: 4px;
+	background: #27ae60;
+	color: white;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 500;
+}
+.sticky-buttons .button {
+	background: #7f8c8d;
+}
+.sticky-buttons .button.danger {
+	background: #c0392b;
+}
+.sticky-buttons button:hover {
+	background: #219a52;
+}
+.sticky-buttons .button:hover {
+	background: #6c7a7d;
+}
+.sticky-buttons .button.danger:hover {
+	background: #a93226;
 }
 </style>
 {% endblock %}

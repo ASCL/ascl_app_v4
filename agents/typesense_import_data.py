@@ -14,18 +14,21 @@ import json
 import argparse
 from datetime import datetime
 import pickle
+from pathlib import Path
 
-# Add ascl_core to path
-sys.path.insert(0, '/home/demitri/repositories/ASCL/alt_ascl/ascl_core')
-
-from database.connections import Trillian2DBConnection as db
-from database.ascldb.ASCLModelClasses import ASCLCode, Keyword, ASCLCodeToKeyword
+try:
+    from ascl_core.database.connections import Trillian2DBConnection as db
+    from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode, Keyword, ASCLCodeToKeyword
+except ModuleNotFoundError:
+    # Local-dev fallback when ascl_core is not installed.
+    repo_root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo_root / "ascl_core" / "source"))
+    from ascl_core.database.connections import Trillian2DBConnection as db
+    from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode, Keyword, ASCLCodeToKeyword
 
 # Typesense configuration
-TYPESENSE_HOST = 'localhost'
-TYPESENSE_PORT = 8108
-TYPESENSE_API_KEY = 'oWBN1v9zT9C3ZM48gblWobm4ibxcrFcn11hGpb3HiPzT9UOL'
-TYPESENSE_URL = f'http://{TYPESENSE_HOST}:{TYPESENSE_PORT}'
+TYPESENSE_URL = os.environ.get('TYPESENSE_URL', 'http://127.0.0.1:8108').rstrip('/')
+TYPESENSE_API_KEY = os.environ.get('TYPESENSE_API_KEY', '')
 
 # Headers for API requests
 HEADERS = {
@@ -118,9 +121,6 @@ def prepare_document(code, keywords_dict):
     if code_keywords:
         doc['keywords'] = code_keywords
 
-    if code.described_in:
-        doc['described_in'] = code.described_in
-
     # Generate URL for linking back to code page
     doc['url'] = f'/{code.ascl_id}'
 
@@ -135,14 +135,14 @@ def fetch_keywords_mapping(session):
     """
     print("Loading keywords mapping from database...")
 
-    # Query all keyword relationships
-    # JOIN code_keywords with keywords table
+    # Query all keyword relationships for current schema:
+    # code_to_keyword(code_pk, keyword_pk) -> keyword(pk, label)
     query = (
         session.query(
-            ASCLCodeToKeyword.code_id,
-            Keyword.keyword
+            ASCLCodeToKeyword.code_pk,
+            Keyword.label
         )
-        .join(Keyword, ASCLCodeToKeyword.keyword_id == Keyword.id)
+        .join(Keyword, ASCLCodeToKeyword.keyword_pk == Keyword.pk)
         .all()
     )
 
@@ -226,6 +226,10 @@ def main():
     print("ASCL Typesense Data Import")
     print("=" * 60)
     print()
+
+    if not TYPESENSE_API_KEY:
+        print("❌ TYPESENSE_API_KEY is not set. Export it and rerun.")
+        return False
 
     # Connect to database
     print("Connecting to MySQL database...")

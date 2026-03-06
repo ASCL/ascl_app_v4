@@ -26,7 +26,7 @@ Successfully completed Phase 1 of Typesense implementation:
 - **Data Directory**: `/var/lib/typesense`
 - **Log Directory**: `/var/log/typesense`
 - **API Port**: 8108
-- **API Key**: `oWBN1v9zT9C3ZM48gblWobm4ibxcrFcn11hGpb3HiPzT9UOL`
+- **API Key**: `<REDACTED - load from /etc/ascl/secrets.cfg>`
 
 ### Service Status
 ```bash
@@ -269,7 +269,7 @@ curl -H "X-TYPESENSE-API-KEY: <API_KEY>" \
 - 1 week (4-6 hours of work)
 
 ### Files to Create/Modify
-- `alt_ascl/ascl_core/search/typesense_client.py` - New
+- `ascl_core/source/ascl_core/search/typesense_client.py` - New
 - `alt_ascl/source/ascl_net_app_project_home/ascl_net_app/controllers/search.py` - Modify
 - `alt_ascl/source/ascl_net_app_project_home/ascl_net_app/templates/search_results.html` - New
 
@@ -332,13 +332,13 @@ ps aux | grep typesense
 
 ### View Collection Info
 ```bash
-curl -H "X-TYPESENSE-API-KEY: oWBN1v9zT9C3ZM48gblWobm4ibxcrFcn11hGpb3HiPzT9UOL" \
+curl -H "X-TYPESENSE-API-KEY: <REDACTED - load from /etc/ascl/secrets.cfg>" \
   http://localhost:8108/collections/codes
 ```
 
 ### Count Documents
 ```bash
-curl -H "X-TYPESENSE-API-KEY: oWBN1v9zT9C3ZM48gblWobm4ibxcrFcn11hGpb3HiPzT9UOL" \
+curl -H "X-TYPESENSE-API-KEY: <REDACTED - load from /etc/ascl/secrets.cfg>" \
   http://localhost:8108/collections/codes | grep num_documents
 # Output: "num_documents": 3984
 ```
@@ -346,7 +346,7 @@ curl -H "X-TYPESENSE-API-KEY: oWBN1v9zT9C3ZM48gblWobm4ibxcrFcn11hGpb3HiPzT9UOL" 
 ### Delete Collection (for testing)
 ```bash
 curl -X DELETE \
-  -H "X-TYPESENSE-API-KEY: oWBN1v9zT9C3ZM48gblWobm4ibxcrFcn11hGpb3HiPzT9UOL" \
+  -H "X-TYPESENSE-API-KEY: <REDACTED - load from /etc/ascl/secrets.cfg>" \
   http://localhost:8108/collections/codes
 ```
 

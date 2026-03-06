@@ -498,7 +498,7 @@ After setup completes:
 
 - Main TODO: `/home/demitri/repositories/ASCL/alt_ascl/agents/TODO_MASTER.md`
 - DB Upgrade Playbook: `/home/demitri/repositories/ASCL/alt_ascl/agents/DB_UPGRADE_PLAYBOOK.sql`
-- Connection Config: `/home/demitri/repositories/ASCL/alt_ascl/ascl_core/database/connections/Trillian2DBConnection.py`
+- Connection Config: `/home/demitri/repositories/ASCL/ascl_core/source/ascl_core/database/connections/Trillian2DBConnection.py`
 - Docker Compose: `/home/demitri/repositories/ASCL/alt_ascl/Docker/docker-compose.yml`
 
 ---

@@ -1,34 +1,32 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 
 {% block title %}{{ page_title }}{% endblock %}
 
-{% block content %}
+{% block admin_content %}
 <h2>{{ page_title }}</h2>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-	{% if messages %}
-		<ul class="flash-messages">
-		{% for category, message in messages %}
-			<li class="{{ category }}">{{ message|safe }}</li>
-		{% endfor %}
-		</ul>
-	{% endif %}
-{% endwith %}
-
-{% if current_user %}
-	<p>Signed in as <strong>{{ current_user.username }}</strong>. <a href="{{ url_for('admin_page.admin_logout') }}">Logout</a></p>
-{% endif %}
-
 {% if codes %}
+<div class="filter-section">
+	<input type="text" id="live-filter" placeholder="Filter by ASCL ID or title..." autocomplete="off">
+	{% if not hide_status_filters %}
+	<span class="filter-label">Show:</span>
+	<label class="filter-checkbox"><input type="checkbox" id="filter-unpublished" checked> Unpublished</label>
+	<label class="filter-checkbox"><input type="checkbox" id="filter-archived" checked> Archived</label>
+	{% endif %}
+	{% if show_ascl_id_filter %}
+	<span class="filter-label">|</span>
+	<label class="filter-checkbox"><input type="checkbox" id="filter-with-id" checked> With ASCL ID</label>
+	<label class="filter-checkbox"><input type="checkbox" id="filter-without-id" checked> Without ASCL ID</label>
+	{% endif %}
+</div>
+
 <p class="result-count">
 	{% if total_count %}
-		{{ total_count }} code{% if total_count != 1 %}s{% endif %} total
-		{% if total_pages > 1 %}
-		(showing {{ (page - 1) * per_page + 1 }}-{{ [page * per_page, total_count]|min }})
-		{% endif %}
+		{{ total_count }} code{% if total_count != 1 %}s{% endif %} total{% if total_pages > 1 %}, showing {{ (page - 1) * per_page + 1 }}&ndash;{{ [page * per_page, total_count]|min }}{% endif %}
 	{% else %}
 		{{ codes|length }} code{% if codes|length != 1 %}s{% endif %} found
 	{% endif %}
+	<span id="filter-count"></span>
 </p>
 
 {% if total_pages and total_pages > 1 %}
@@ -66,6 +64,11 @@
 			<a href="?page=1&per_page={{ pp }}">{{ pp }}</a>
 			{% endif %}
 		{% endfor %}
+		{% if per_page == 0 %}
+		<strong>All</strong>
+		{% else %}
+		<a href="?page=1&per_page=0">All</a>
+		{% endif %}
 	</span>
 </div>
 {% endif %}
@@ -75,8 +78,8 @@
 		<tr>
 			<th>ASCL ID</th>
 			<th>Title</th>
+			{% if not hide_keywords %}<th>Keywords</th>{% endif %}
 			<th>Status</th>
-			<th>Views</th>
 			<th>Added</th>
 			<th>Actions</th>
 		</tr>
@@ -86,6 +89,13 @@
 		<tr class="{% if code.archived == 1 %}archived{% endif %}">
 			<td>{{ code.ascl_id or code.pk }}</td>
 			<td>{{ code.title }}</td>
+			{% if not hide_keywords %}
+			<td class="keywords-cell">
+				{% for keyword in code.keywords %}
+				<span class="keyword-badge">{{ keyword.label }}</span>
+				{% endfor %}
+			</td>
+			{% endif %}
 			<td>
 				{% if code.published == 1 %}
 					<span class="status-badge published">Published</span>
@@ -96,7 +106,6 @@
 					<span class="status-badge archived">Archived</span>
 				{% endif %}
 			</td>
-			<td>{{ code.views or 0 }}</td>
 			<td>{{ code.time_added.strftime('%Y-%m-%d') if code.time_added else 'N/A' }}</td>
 			<td class="actions">
 				<a href="{{ url_for('admin_page.view_code', pk=code.pk) }}" class="btn btn-small">View</a>
@@ -156,6 +165,19 @@
 	background: #f8d7da;
 	color: #721c24;
 }
+.keywords-cell {
+	max-width: 250px;
+}
+.keyword-badge {
+	display: inline-block;
+	padding: 0.15rem 0.4rem;
+	margin: 0.1rem;
+	border-radius: 3px;
+	font-size: 0.7rem;
+	background: #e7f1ff;
+	color: #0056b3;
+	white-space: nowrap;
+}
 .actions {
 	white-space: nowrap;
 }
@@ -209,5 +231,148 @@
 .admin-pagination .per-page-selector a {
 	margin: 0 0.25rem;
 }
+.filter-section {
+	margin-bottom: 0.5rem;
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+#live-filter {
+	padding: 0.5rem 0.75rem;
+	font-size: 0.9rem;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	width: 300px;
+	max-width: 100%;
+}
+#live-filter:focus {
+	outline: none;
+	border-color: #2c3e50;
+	box-shadow: 0 0 0 2px rgba(44, 62, 80, 0.1);
+}
+#filter-count {
+	color: #888;
+	font-size: 0.85rem;
+	margin-left: 0.5rem;
+}
+#filter-count:not(:empty)::before {
+	content: "\2014\00a0";
+}
+.filter-label {
+	font-size: 0.9rem;
+	color: #666;
+	margin-left: 0.5rem;
+}
+.filter-checkbox {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	font-size: 0.9rem;
+	color: #333;
+	cursor: pointer;
+	user-select: none;
+}
+.filter-checkbox input[type="checkbox"] {
+	cursor: pointer;
+}
+.admin-table tr.filter-hidden {
+	display: none;
+}
+.no-filter-results {
+	text-align: center;
+	padding: 2rem;
+	color: #666;
+	font-style: italic;
+}
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+	const filterInput = document.getElementById('live-filter');
+	const filterCount = document.getElementById('filter-count');
+	const filterUnpublished = document.getElementById('filter-unpublished');
+	const filterArchived = document.getElementById('filter-archived');
+	const filterWithId = document.getElementById('filter-with-id');
+	const filterWithoutId = document.getElementById('filter-without-id');
+	const table = document.querySelector('.admin-table');
+
+	if (!filterInput || !table) return;
+
+	const tbody = table.querySelector('tbody');
+	const rows = tbody ? tbody.querySelectorAll('tr') : [];
+	const totalRows = rows.length;
+
+	function updateFilter() {
+		const searchTerm = filterInput.value.toLowerCase().trim();
+		const showUnpublished = filterUnpublished ? filterUnpublished.checked : true;
+		const showArchived = filterArchived ? filterArchived.checked : true;
+		const showWithId = filterWithId ? filterWithId.checked : true;
+		const showWithoutId = filterWithoutId ? filterWithoutId.checked : true;
+		let visibleCount = 0;
+
+		rows.forEach(function(row) {
+			const asclIdCell = row.cells[0];
+			const titleCell = row.cells[1];
+
+			if (!asclIdCell || !titleCell) return;
+
+			const asclId = asclIdCell.textContent.trim();
+			const title = titleCell.textContent.toLowerCase();
+			const statusIdx = {{ 2 if hide_keywords else 3 }};
+			const statusText = row.cells[statusIdx];
+			const statusContent = statusText ? statusText.textContent.toLowerCase() : '';
+
+			// Check text search match
+			const matchesSearch = searchTerm === '' || asclId.toLowerCase().includes(searchTerm) || title.includes(searchTerm);
+
+			// Check status filters
+			const isUnpublished = statusContent.includes('unpublished');
+			const isArchived = statusContent.includes('archived');
+
+			let matchesStatus = true;
+			if (isUnpublished && !showUnpublished) matchesStatus = false;
+			if (isArchived && !showArchived) matchesStatus = false;
+
+			// Check ASCL ID filter
+			let matchesIdFilter = true;
+			if (filterWithId || filterWithoutId) {
+				const hasAsclId = asclId !== '0000.000';
+				if (hasAsclId && !showWithId) matchesIdFilter = false;
+				if (!hasAsclId && !showWithoutId) matchesIdFilter = false;
+			}
+
+			if (matchesSearch && matchesStatus && matchesIdFilter) {
+				row.classList.remove('filter-hidden');
+				visibleCount++;
+			} else {
+				row.classList.add('filter-hidden');
+			}
+		});
+
+		// Update count display
+		const hasActiveFilter = searchTerm !== '' || !showUnpublished || !showArchived || !showWithId || !showWithoutId;
+		if (hasActiveFilter) {
+			filterCount.textContent = visibleCount + ' of ' + totalRows + ' shown';
+		} else {
+			filterCount.textContent = '';
+		}
+	}
+
+	filterInput.addEventListener('input', updateFilter);
+	if (filterUnpublished) filterUnpublished.addEventListener('change', updateFilter);
+	if (filterArchived) filterArchived.addEventListener('change', updateFilter);
+	if (filterWithId) filterWithId.addEventListener('change', updateFilter);
+	if (filterWithoutId) filterWithoutId.addEventListener('change', updateFilter);
+
+	// Allow clearing with Escape key
+	filterInput.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape') {
+			filterInput.value = '';
+			updateFilter();
+			filterInput.blur();
+		}
+	});
+});
+</script>
 {% endblock %}

@@ -94,7 +94,8 @@ The main web application that will serve the ASCL.net website.
 - **Configuration System**:
   - Loads `default.cfg` first
   - Overlays host-specific or deployment configs
-  - Supports uWSGI deployment with config passed via `flask-config-file` option
+  - Loads secrets from `/etc/ascl/secrets.cfg` (override with `ASCL_SECRETS_FILE` env var)
+  - Validates required secrets (`SECRET_KEY`, `ADS_API_TOKEN`, `TYPESENSE_API_KEY`) in production
 - **Features**:
   - Automatic blueprint registration
   - Database connection setup (PostgreSQL via SQLAlchemy)
@@ -341,9 +342,12 @@ The `ascldb` schema contains the core ASCL data:
 
 ---
 
-## Security Features (Added 2025-12-28)
+## Security Features
 
-### Password Hashing Upgrade
+### Secrets Management (Added 2026-02-20)
+Production secrets (`SECRET_KEY`, `ADS_API_TOKEN`, `TYPESENSE_API_KEY`) are externalized to `/etc/ascl/secrets.cfg`, which is **not committed to the repository**. The app loads this file after the main config and validates that all required secrets are present before starting in production mode. See `secrets.cfg.example` for the template.
+
+### Password Hashing Upgrade (Added 2025-12-28)
 The application now uses **bcrypt** for secure password hashing, replacing the deprecated SHA-1 algorithm:
 
 - **Algorithm**: Bcrypt with work factor 12 (adaptive hashing)
@@ -406,7 +410,8 @@ The application now uses **bcrypt** for secure password hashing, replacing the d
 
 **Configuration**:
 - `source/ascl_net_app_project_home/ascl_net_app/configuration_files/default.cfg` - Default config
-- `source/ascl_net_app_project_home/ascl_net_app/configuration_files/production.cfg` - Production config (MySQL)
+- `source/ascl_net_app_project_home/ascl_net_app/configuration_files/production.cfg` - Production config (MySQL, no secrets)
+- `source/ascl_net_app_project_home/ascl_net_app/configuration_files/secrets.cfg.example` - Template for `/etc/ascl/secrets.cfg`
 - `source/ascl_net_app_project_home/ascl_net_app/configuration_files/mysql_example.cfg` - MySQL template
 - `source/ascl_net_app_project_home/ascl_net_app/configuration_files/postgresql_example.cfg` - PostgreSQL template
 - `source/ascl_net_app_project_home/requirements.txt` - Python dependencies
@@ -509,9 +514,17 @@ The application now uses **bcrypt** for secure password hashing, replacing the d
 
 ---
 
-*Last Updated: 2025-12-28*
+*Last Updated: 2026-02-20*
 
 ## Changelog
+
+### 2026-02-20
+- ✅ Externalized secrets from repository (`SECRET_KEY`, `ADS_API_TOKEN`, `TYPESENSE_API_KEY`)
+- ✅ Added `/etc/ascl/secrets.cfg` loading with startup validation
+- ✅ Removed hardcoded secrets from `production.cfg`
+- ✅ Added `secrets.cfg.example` template
+- ✅ Redeploy script checks for secrets file before deploying
+- 📝 Updated SECURITY.md, DEPLOYMENT.md, PRODUCTION_DEPLOYMENT.md
 
 ### 2025-12-28
 - ✅ Implemented public statistics dashboard at `/dashboard`

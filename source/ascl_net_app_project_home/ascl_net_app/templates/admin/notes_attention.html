@@ -1,0 +1,152 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Notes Needing Attention{% endblock %}
+
+{% block admin_content %}
+<h1>Notes Needing Attention</h1>
+
+{% if feature_unavailable %}
+<div class="feature-unavailable">
+	<p><strong>Notes Feature Coming Soon</strong></p>
+	<p>The notes system requires additional database tables that have not yet been created.</p>
+</div>
+
+{% elif notes %}
+<p>{{ notes|length }} note{{ 's' if notes|length != 1 else '' }} requiring attention.</p>
+
+<table class="notes-table">
+	<thead>
+		<tr>
+			<th>Code</th>
+			<th>Note</th>
+			<th>Added By</th>
+			<th>Date</th>
+			<th></th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for note in notes %}
+		<tr class="{{ 'pinned' if note.is_pinned else '' }}">
+			<td class="code-cell">
+				<a href="{{ url_for('admin_page.update_code', pk=note.ascl_code.pk) }}">
+					{{ note.ascl_code.ascl_id }}
+				</a>
+				<span class="code-title">{{ note.ascl_code.title|truncate(40) }}</span>
+			</td>
+			<td class="note-cell">
+				{% if note.is_pinned %}<span class="pin-icon" title="Pinned">&#128204;</span>{% endif %}
+				{{ note.note|truncate(200) }}
+			</td>
+			<td class="user-cell">
+				{% if note.user %}
+					{{ note.user.username }}
+				{% else %}
+					<span class="no-user">-</span>
+				{% endif %}
+			</td>
+			<td class="date-cell">
+				{{ note.created_at.strftime('%Y-%m-%d') if note.created_at else '-' }}
+			</td>
+			<td class="action-cell">
+				<a href="{{ url_for('admin_page.update_code', pk=note.ascl_code.pk) }}">Edit Code</a>
+			</td>
+		</tr>
+		{% endfor %}
+	</tbody>
+</table>
+
+{% else %}
+<p class="no-notes">No notes requiring attention.</p>
+{% endif %}
+
+
+<style>
+.notes-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 20px 0;
+}
+.notes-table th {
+	text-align: left;
+	background: #f5f5f5;
+	padding: 10px 12px;
+	border: 1px solid #ddd;
+	font-weight: 600;
+}
+.notes-table td {
+	padding: 10px 12px;
+	border: 1px solid #ddd;
+	vertical-align: top;
+}
+.notes-table tr.pinned {
+	background: #fffef0;
+}
+.notes-table tr:hover {
+	background: #f9f9f9;
+}
+.notes-table tr.pinned:hover {
+	background: #fffde0;
+}
+.code-cell {
+	white-space: nowrap;
+}
+.code-cell a {
+	font-weight: 600;
+	color: #2980b9;
+}
+.code-title {
+	display: block;
+	font-size: 12px;
+	color: #666;
+	margin-top: 3px;
+}
+.note-cell {
+	max-width: 400px;
+	word-wrap: break-word;
+}
+.pin-icon {
+	margin-right: 5px;
+}
+.user-cell {
+	white-space: nowrap;
+}
+.no-user {
+	color: #999;
+}
+.date-cell {
+	white-space: nowrap;
+	color: #666;
+	font-size: 13px;
+}
+.action-cell {
+	white-space: nowrap;
+}
+.action-cell a {
+	color: #2980b9;
+	font-size: 13px;
+}
+.no-notes {
+	color: #27ae60;
+	font-style: italic;
+	padding: 20px;
+	background: #f0fff0;
+	border-radius: 4px;
+}
+.feature-unavailable {
+	background: #f8f9fa;
+	border: 1px solid #dee2e6;
+	border-left: 4px solid #6c757d;
+	padding: 20px 25px;
+	border-radius: 4px;
+	margin: 20px 0;
+}
+.feature-unavailable p {
+	margin: 5px 0;
+	color: #495057;
+}
+.feature-unavailable p:first-child {
+	font-size: 16px;
+	color: #343a40;
+}
+</style>
+{% endblock %}

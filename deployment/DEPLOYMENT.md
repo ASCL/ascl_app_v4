@@ -25,6 +25,14 @@ This guide covers deploying the ASCL Flask application to a production environme
 | `redeploy.sh` | Script to sync updates from dev repo | Run directly from repo |
 | `my.cnf.template` | MySQL credentials template | `/var/www/.my.cnf` |
 
+**Related configuration files (in source tree):**
+
+| File | Purpose | Install Location |
+|------|---------|------------------|
+| `secrets.cfg.example` | Template for application secrets | `/etc/ascl/secrets.cfg` |
+
+The secrets template is at `source/ascl_net_app_project_home/ascl_net_app/configuration_files/secrets.cfg.example`.
+
 ---
 
 ## Initial Deployment (Fresh Server)
@@ -89,7 +97,26 @@ sudo -u www-data UV_CACHE_DIR=/var/cache/uv uv pip install /var/www/ascl_core/
 sudo -u www-data UV_CACHE_DIR=/var/cache/uv uv pip install -r requirements.txt
 ```
 
-### Step 5: Configure MySQL Credentials
+### Step 5: Configure Application Secrets
+
+Create `/etc/ascl/secrets.cfg` with the required secrets:
+
+```bash
+sudo mkdir -p /etc/ascl
+sudo cp /home/demitri/repositories/ASCL/alt_ascl/source/ascl_net_app_project_home/ascl_net_app/configuration_files/secrets.cfg.example /etc/ascl/secrets.cfg
+sudo nano /etc/ascl/secrets.cfg  # Fill in actual values
+sudo chown root:www-data /etc/ascl/secrets.cfg
+sudo chmod 640 /etc/ascl/secrets.cfg
+```
+
+The secrets file must contain:
+- `SECRET_KEY` - Flask session signing key (generate with `python -c "import secrets; print(secrets.token_hex(32))"`)
+- `ADS_API_TOKEN` - NASA ADS API token for bibcode lookups
+- `TYPESENSE_API_KEY` - Typesense search server API key
+
+The app will refuse to start in production if any of these are missing. Override the default path (`/etc/ascl/secrets.cfg`) with the `ASCL_SECRETS_FILE` environment variable if needed.
+
+### Step 6: Configure MySQL Credentials
 
 Create `/var/www/.my.cnf` with the database credentials:
 
@@ -101,7 +128,7 @@ sudo chown www-data:www-data /var/www/.my.cnf
 sudo chmod 600 /var/www/.my.cnf
 ```
 
-### Step 6: Install Nginx Configuration
+### Step 7: Install Nginx Configuration
 
 ```bash
 DEPLOY_DIR=/home/demitri/repositories/ASCL/alt_ascl/deployment
@@ -110,7 +137,7 @@ sudo ln -sf /etc/nginx/sites-available/ascl_production /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### Step 7: Install and Start Systemd Service
+### Step 8: Install and Start Systemd Service
 
 ```bash
 DEPLOY_DIR=/home/demitri/repositories/ASCL/alt_ascl/deployment
@@ -120,7 +147,7 @@ sudo systemctl enable ascl_net_app
 sudo systemctl start ascl_net_app
 ```
 
-### Step 8: Create Log File
+### Step 9: Create Log File
 
 ```bash
 sudo touch /var/log/ascl_v4_uvicorn.log
@@ -140,12 +167,13 @@ sudo /home/demitri/repositories/ASCL/alt_ascl/deployment/redeploy.sh
 **Note**: The script must be run with `sudo`. It uses `runuser` (not nested `sudo`) to run pip commands as www-data, so no password prompts occur during execution.
 
 This script will:
-1. Stop the service
-2. Sync all files from development (excluding venv, cache, etc.)
-3. Update ownership
-4. Reinstall dependencies
-5. Start the service
-6. Show status
+1. Verify `/etc/ascl/secrets.cfg` exists (fails early if missing)
+2. Stop the service
+3. Sync all files from development (excluding venv, cache, etc.)
+4. Update ownership
+5. Reinstall dependencies
+6. Start the service
+7. Show status
 
 ---
 
@@ -220,6 +248,7 @@ sudo ss -tlnp | grep 5050
    ```
 
 2. Common issues:
+   - **Missing secrets**: The app requires `/etc/ascl/secrets.cfg` in production. See Step 5.
    - **Missing dependencies**: Run `uv pip install -r requirements.txt`
    - **Database connection**: Verify `/var/www/.my.cnf` has correct credentials
    - **Port already in use**: Check for existing processes on port 5050
@@ -278,6 +307,7 @@ When deploying or troubleshooting this application, follow these guidelines:
 - Virtual environment: `/var/www/ascl_net_app/.venv`
 - Service file: `/etc/systemd/system/ascl_net_app.service`
 - Nginx config: `/etc/nginx/sites-available/ascl_production`
+- Secrets file: `/etc/ascl/secrets.cfg` (SECRET_KEY, ADS_API_TOKEN, TYPESENSE_API_KEY)
 - MySQL credentials: `/var/www/.my.cnf`
 - Logs: `/var/log/ascl_v4_uvicorn.log`
 

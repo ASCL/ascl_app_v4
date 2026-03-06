@@ -30,7 +30,7 @@ USING_TYPESENSE = True  # Enable/disable Typesense
 TYPESENSE_HOST = 'localhost'
 TYPESENSE_PORT = 8108
 TYPESENSE_PROTOCOL = 'http'  # or 'https'
-TYPESENSE_API_KEY = 'oWBN1v9zT9C3ZM48gblWobm4ibxcrFcn11hGpb3HiPzT9UOL'
+TYPESENSE_API_KEY = '<REDACTED - load from /etc/ascl/secrets.cfg>'
 TYPESENSE_COLLECTION = 'codes'
 TYPESENSE_FALLBACK_TO_MYSQL = True
 ```

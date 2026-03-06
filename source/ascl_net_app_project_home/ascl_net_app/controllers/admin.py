@@ -5,7 +5,6 @@ from functools import wraps
 
 import flask
 from flask import render_template, request, redirect, url_for, session, flash
-from sqlalchemy import func
 import bcrypt
 
 admin_page = flask.Blueprint("admin_page", __name__, url_prefix="/admin")
@@ -105,13 +104,52 @@ def _get_models():
 	return ascldb
 
 
+def _split_credit_text(credit_text):
+	"""Split semicolon-delimited credit string into ordered author tokens."""
+	if not credit_text:
+		return []
+	return [token.strip() for token in credit_text.split(";") if token.strip()]
+
+
+def _credit_text_from_authors(code):
+	"""Build display credit string from related author rows when available."""
+	authors = getattr(code, "authors", None)
+	if not authors:
+		return getattr(code, "credit", "") or ""
+	names = []
+	for author in authors:
+		name = (getattr(author, "display_name", None) or getattr(author, "raw_name", None) or "").strip()
+		if name:
+			names.append(name)
+	return "; ".join(names)
+
+
+def _sync_authors_from_credit(db_session, ascldb, code_pk, credit_text):
+	"""Replace author rows for a code from semicolon-delimited credit text."""
+	if not hasattr(ascldb, "Author"):
+		return
+
+	db_session.query(ascldb.Author).filter(ascldb.Author.code_pk == code_pk).delete()
+	raw_credit_text = credit_text.strip() if credit_text else ""
+	for idx, token in enumerate(_split_credit_text(credit_text)):
+		author = ascldb.Author()
+		author.code_pk = code_pk
+		author.display_order = idx
+		author.raw_name = token
+		author.display_name = token
+		author.raw_credit_text = raw_credit_text
+		author.orcid_id = None
+		author.email = None
+		db_session.add(author)
+
+
 def _current_user(db_session=None):
 	ascldb = _get_models()
 	user_id = session.get("user_id")
 	if not user_id:
 		return None
 	db_session = db_session or _get_db_session()
-	return db_session.query(ascldb.User).filter(ascldb.User.id == user_id).one_or_none()
+	return db_session.query(ascldb.User).filter(ascldb.User.pk == user_id).one_or_none()
 
 
 def _login_required(view_func):
@@ -130,25 +168,39 @@ def admin_home():
 	db_session = _get_db_session()
 	ascldb = _get_models()
 
-	published_views = (
-		db_session.query(func.sum(ascldb.ASCLCode.views))
-		.filter(ascldb.ASCLCode.published == 1)
-		.scalar()
-		or 0
-	)
-	unpublished_views = (
-		db_session.query(func.sum(ascldb.ASCLCode.views))
-		.filter(ascldb.ASCLCode.published == 0)
-		.scalar()
-		or 0
+	attention_count = 0
+	current_usr = _current_user(db_session)
+
+	# Count notes needing attention (only if logged in and tables exist)
+	if current_usr:
+		try:
+			attention_count = (
+				db_session.query(ascldb.CodeNote)
+				.join(ascldb.NoteType)
+				.filter(
+					ascldb.NoteType.short_name == 'attention',
+					ascldb.CodeNote.hidden == False
+				)
+				.count()
+			)
+		except Exception:
+			# Tables may not exist yet
+			attention_count = 0
+
+	return render_template(
+		"admin/home.html",
+		current_user=current_usr,
+		attention_count=attention_count
 	)
 
-	template_dict = {
-		"current_user": _current_user(db_session),
-		"published_views": published_views,
-		"unpublished_views": unpublished_views,
-	}
-	return render_template("admin/home.html", **template_dict)
+
+@admin_page.route("/dashboard", methods=["GET"])
+@_login_required
+def admin_dashboard():
+	"""Dashboard rendered inside the admin layout (with sidebar)."""
+	from ascl_net_app.controllers.dashboard import _build_dashboard_context
+	ctx = _build_dashboard_context()
+	return render_template("admin/dashboard.html", **ctx)
 
 
 @admin_page.route("/login", methods=["POST"])
@@ -200,6 +252,79 @@ def admin_login():
 	return redirect(url_for("admin_page.admin_home"))
 
 
+@admin_page.route("/user_cp", methods=["GET"])
+@_login_required
+def user_cp():
+	db_session = _get_db_session()
+	current_usr = _current_user(db_session)
+	return render_template(
+		"admin/user_cp.html",
+		current_user=current_usr,
+	)
+
+
+@admin_page.route("/update_user", methods=["POST"])
+@_login_required
+def update_user():
+	db_session = _get_db_session()
+	current_usr = _current_user(db_session)
+
+	real_name = request.form.get("real_name", "").strip()
+	if not real_name:
+		flash("Real name is required.", "error")
+	else:
+		current_usr.real_name = real_name
+		db_session.commit()
+		flash("User info updated.", "success")
+
+	return redirect(url_for("admin_page.user_cp"))
+
+
+@admin_page.route("/update_password", methods=["POST"])
+@_login_required
+def update_password():
+	db_session = _get_db_session()
+	current_usr = _current_user(db_session)
+
+	current_password = request.form.get("password", "")
+	new_password = request.form.get("new_password", "")
+	new_password_confirm = request.form.get("new_password_confirm", "")
+
+	if not current_password or not new_password or not new_password_confirm:
+		flash("All password fields are required.", "error")
+		return redirect(url_for("admin_page.user_cp"))
+
+	if len(new_password) < 8:
+		flash("New password must be at least 8 characters.", "error")
+		return redirect(url_for("admin_page.user_cp"))
+
+	if new_password != new_password_confirm:
+		flash("New passwords do not match.", "error")
+		return redirect(url_for("admin_page.user_cp"))
+
+	# Check lockout
+	if getattr(current_usr, "login_attempts", 0) >= 9:
+		session.clear()
+		flash("Too many failed attempts. You have been logged out.", "error")
+		return redirect(url_for("admin_page.admin_home"))
+
+	# Verify current password
+	is_valid, _ = _verify_password(current_password, current_usr.password)
+	if not is_valid:
+		current_usr.login_attempts = getattr(current_usr, "login_attempts", 0) + 1
+		db_session.commit()
+		flash("Current password is incorrect.", "error")
+		return redirect(url_for("admin_page.user_cp"))
+
+	# Update password
+	current_usr.password = _hash_password_bcrypt(new_password)
+	current_usr.login_attempts = 0
+	db_session.commit()
+	flash("Password updated.", "success")
+
+	return redirect(url_for("admin_page.user_cp"))
+
+
 @admin_page.route("/logout", methods=["GET"])
 def admin_logout():
 	session.clear()
@@ -210,71 +335,100 @@ def admin_logout():
 @admin_page.route("/unpublished", methods=["GET"])
 @_login_required
 def unpublished_codes():
+	from sqlalchemy.orm import selectinload
+
 	db_session = _get_db_session()
 	ascldb = _get_models()
 
-	# Pagination parameters
+	# Pagination parameters (per_page=0 means show all)
 	page = int(request.args.get("page", 1))
 	per_page = int(request.args.get("per_page", 50))
 
+	load_options = [selectinload(ascldb.ASCLCode.keywords)]
+	if hasattr(ascldb.ASCLCode, "authors"):
+		load_options.append(selectinload(ascldb.ASCLCode.authors))
+
 	base_query = (
 		db_session.query(ascldb.ASCLCode)
+		.options(*load_options)
 		.filter(ascldb.ASCLCode.published == 0, ascldb.ASCLCode.archived == 0)
 	)
 
 	total_count = base_query.count()
 
-	codes = (
-		base_query
-		.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
-		.offset((page - 1) * per_page)
-		.limit(per_page)
-		.all()
-	)
+	if per_page == 0:
+		# Show all results
+		codes = (
+			base_query
+			.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
+			.all()
+		)
+		total_pages = 1
+	else:
+		codes = (
+			base_query
+			.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
+			.offset((page - 1) * per_page)
+			.limit(per_page)
+			.all()
+		)
+		import math
+		total_pages = math.ceil(total_count / per_page) if per_page > 0 else 1
 
-	import math
-	total_pages = math.ceil(total_count / per_page) if per_page > 0 else 1
+	# Build credit text for card view
+	codes_credit = {code.pk: _credit_text_from_authors(code) for code in codes}
 
 	return render_template(
-		"admin/codes_list.html",
+		"admin/unpublished.html",
 		page_title="Unpublished Codes",
 		codes=codes,
+		codes_credit=codes_credit,
 		current_user=_current_user(db_session),
 		page=page,
 		per_page=per_page,
 		total_count=total_count,
 		total_pages=total_pages,
-		list_type="unpublished",
 	)
 
 
 @admin_page.route("/archived", methods=["GET"])
 @_login_required
 def archived_codes():
+	from sqlalchemy.orm import selectinload
+
 	db_session = _get_db_session()
 	ascldb = _get_models()
 
-	# Pagination parameters
+	# Pagination parameters (per_page=0 means show all)
 	page = int(request.args.get("page", 1))
 	per_page = int(request.args.get("per_page", 50))
 
 	base_query = (
 		db_session.query(ascldb.ASCLCode)
+		.options(selectinload(ascldb.ASCLCode.keywords))
 		.filter(ascldb.ASCLCode.archived == 1)
 	)
 
 	total_count = base_query.count()
 
-	codes = (
-		base_query
-		.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
-		.offset((page - 1) * per_page)
-		.limit(per_page)
-		.all()
-	)
-
-	import math
-	total_pages = math.ceil(total_count / per_page) if per_page > 0 else 1
+	if per_page == 0:
+		# Show all results
+		codes = (
+			base_query
+			.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
+			.all()
+		)
+		total_pages = 1
+	else:
+		codes = (
+			base_query
+			.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
+			.offset((page - 1) * per_page)
+			.limit(per_page)
+			.all()
+		)
+		import math
+		total_pages = math.ceil(total_count / per_page) if per_page > 0 else 1
 
 	return render_template(
 		"admin/codes_list.html",
@@ -286,6 +440,36 @@ def archived_codes():
 		total_count=total_count,
 		total_pages=total_pages,
 		list_type="archived",
+	)
+
+
+@admin_page.route("/notes/attention", methods=["GET"])
+@_login_required
+def notes_attention():
+	"""List all notes that need attention."""
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	try:
+		notes = (
+			db_session.query(ascldb.CodeNote)
+			.join(ascldb.NoteType)
+			.join(ascldb.ASCLCode)
+			.filter(
+				ascldb.NoteType.short_name == 'attention',
+				ascldb.CodeNote.hidden == False
+			)
+			.order_by(ascldb.CodeNote.is_pinned.desc(), ascldb.CodeNote.created_at.desc())
+			.all()
+		)
+	except Exception as e:
+		flash(f"Error loading notes: {e}", "error")
+		notes = []
+
+	return render_template(
+		"admin/notes_attention.html",
+		notes=notes,
+		current_user=_current_user(db_session),
 	)
 
 
@@ -309,13 +493,27 @@ def view_code(pk):
 	aliases_str = " ".join([a.alias for a in code.aliases]) if code.aliases else ""
 
 	# Get keywords as space-separated string
-	keywords_str = " ".join([k.keyword for k in code.keywords]) if code.keywords else ""
+	keywords_str = " ".join([k.label for k in code.keywords]) if code.keywords else ""
+
+	# Get links from link table
+	site_urls = _get_links_for_code(db_session, ascldb, pk, 'code-site')
+	reference_urls = _get_links_for_code(db_session, ascldb, pk, 'reference')
+	described_in_urls = _get_links_for_code(db_session, ascldb, pk, 'described-in')
+	used_in_urls = _get_links_for_code(db_session, ascldb, pk, 'used-in')
+
+	# Get see_also as space-separated ASCL IDs
+	see_also_str = _get_see_also_for_code(db_session, pk)
 
 	return render_template(
 		"admin/view_code.html",
 		code=code,
 		aliases_str=aliases_str,
 		keywords_str=keywords_str,
+		site_urls=site_urls,
+		reference_urls=reference_urls,
+		described_in_urls=described_in_urls,
+		used_in_urls=used_in_urls,
+		see_also_str=see_also_str,
 		current_user=_current_user(db_session),
 	)
 
@@ -368,13 +566,9 @@ def update_code(pk):
 			code.ascl_id = ascl_id
 			code.title = title
 			code.credit = credit
+			_sync_authors_from_credit(db_session, ascldb, pk, credit)
 			code.abstract = request.form.get("abstract", "").strip()
-			code.site_list = _prep_list_for_db(request.form.get("site_list", ""))
-			code.ref_list = _prep_list_for_db(request.form.get("ref_list", ""))
-			code.described_in = _prep_list_for_db(request.form.get("described_in", ""))
-			code.used_in = _prep_list_for_db(request.form.get("used_in", ""))
 			code.citation_method = request.form.get("citation_method", "").strip()
-			code.see_also = request.form.get("see_also", "").strip()
 			code.email = request.form.get("email", "").strip()
 			code.notes = request.form.get("notes", "").strip()
 			code.published = new_published
@@ -400,39 +594,54 @@ def update_code(pk):
 			# Update keywords
 			_update_keywords(db_session, ascldb, pk, request.form.get("keywords", ""))
 
+			# Update links (stored in link table, not codes table)
+			_update_all_typed_links(db_session, ascldb, pk, request.form.get("typed_links", ""))
+			_update_links_for_code(db_session, ascldb, pk, 'described-in', request.form.get("described_in_urls", ""))
+			_update_links_for_code(db_session, ascldb, pk, 'used-in', request.form.get("used_in_urls", ""))
+
+			# Update see_also relationships
+			_update_see_also_for_code(db_session, ascldb, pk, request.form.get("see_also", ""))
+
 			db_session.commit()
-			flash(f"Code updated successfully. <a href='/code/v/{pk}'>View it here</a>.", "success")
+			flash(f"Code updated successfully. <a href='/{code.ascl_id}'>View it here</a>.", "success")
 			return redirect(url_for("admin_page.view_code", pk=pk))
 
 	# GET request - load current data
 	# Get aliases as space-separated string
 	aliases_str = " ".join([a.alias for a in code.aliases]) if code.aliases else ""
+	credits_str = _credit_text_from_authors(code)
 
 	# Get keywords as space-separated string (quote keywords with spaces)
 	keywords_list = []
 	for k in code.keywords:
-		if " " in k.keyword:
-			keywords_list.append(f'"{k.keyword}"')
+		if " " in k.label:
+			keywords_list.append(f'"{k.label}"')
 		else:
-			keywords_list.append(k.keyword)
+			keywords_list.append(k.label)
 	keywords_str = " ".join(keywords_list)
 
-	# Prep lists for form display (unserialize PHP arrays)
-	site_list_str = _prep_list_for_form(code.site_list)
-	ref_list_str = _prep_list_for_form(code.ref_list)
-	described_in_str = _prep_list_for_form(code.described_in)
-	used_in_str = _prep_list_for_form(code.used_in)
+	# Get links from link table
+	import json
+	url_link_types = _get_url_link_types(db_session)
+	typed_links = _get_all_typed_links_for_code(db_session, pk)
+	described_in_urls = _get_links_for_code(db_session, ascldb, pk, 'described-in')
+	used_in_urls = _get_links_for_code(db_session, ascldb, pk, 'used-in')
+
+	# Get see_also as space-separated ASCL IDs
+	see_also_str = _get_see_also_for_code(db_session, pk)
 
 	return render_template(
 		"admin/edit_code.html",
 		code=code,
 		mode="update",
+		credits_str=credits_str,
 		aliases_str=aliases_str,
 		keywords_str=keywords_str,
-		site_list_str=site_list_str,
-		ref_list_str=ref_list_str,
-		described_in_str=described_in_str,
-		used_in_str=used_in_str,
+		url_link_types=url_link_types,
+		typed_links_json=json.dumps(typed_links),
+		described_in_urls=described_in_urls,
+		used_in_urls=used_in_urls,
+		see_also_str=see_also_str,
 		current_user=_current_user(db_session),
 	)
 
@@ -467,31 +676,10 @@ def archive_code(pk):
 @_login_required
 def insert_code():
 	"""Add a new code."""
+	from datetime import datetime
+
 	db_session = _get_db_session()
 	ascldb = _get_models()
-
-	# Calculate next ASCL ID suggestion
-	from datetime import datetime
-	current_yymm = datetime.now().strftime("%y%m")
-
-	# Find highest ASCL ID for current month
-	latest = (
-		db_session.query(ascldb.ASCLCode)
-		.filter(ascldb.ASCLCode.ascl_id.like(f"{current_yymm}.%"))
-		.order_by(ascldb.ASCLCode.ascl_id.desc())
-		.first()
-	)
-
-	if latest and latest.ascl_id:
-		try:
-			last_num = int(latest.ascl_id.split(".")[1])
-			next_num = last_num + 1
-		except (ValueError, IndexError):
-			next_num = 1
-	else:
-		next_num = 1
-
-	next_ascl_id = f"{current_yymm}.{next_num:03d}"
 
 	if request.method == "POST":
 		# Validate required fields
@@ -512,12 +700,36 @@ def insert_code():
 					ascldb.ASCLCode.ascl_id == ascl_id
 				).first()
 				if existing:
-					flash(f"ASCL ID {ascl_id} is already in use.", "error")
+					# ASCL ID collision - re-render form with collision notice
+					# Recreate a mock code with the submitted data so user doesn't lose work
+					class MockCode:
+						pass
+					mock_code = MockCode()
+					mock_code.pk = None
+					mock_code.ascl_id = ascl_id
+					mock_code.title = title
+					mock_code.credit = credit
+					mock_code.abstract = request.form.get("abstract", "").strip()
+					mock_code.citation_method = request.form.get("citation_method", "").strip()
+					mock_code.email = request.form.get("email", "").strip()
+					mock_code.notes = request.form.get("notes", "").strip()
+					mock_code.published = int(request.form.get("published", 0))
+					mock_code.doi = request.form.get("doi", "").strip()
+					mock_code.bibcode = request.form.get("bibcode", "").strip()
+
 					return render_template(
 						"admin/edit_code.html",
-						code=None,
+						code=mock_code,
 						mode="insert",
-						next_ascl_id=next_ascl_id,
+						credits_str=credit,
+						ascl_id_collision=ascl_id,
+						aliases_str=request.form.get("aliases", ""),
+						keywords_str=request.form.get("keywords", ""),
+						url_link_types=_get_url_link_types(db_session),
+						typed_links_json=request.form.get("typed_links", "[]"),
+						described_in_urls=request.form.get("described_in_urls", ""),
+						used_in_urls=request.form.get("used_in_urls", ""),
+						see_also_str=request.form.get("see_also", ""),
 						current_user=_current_user(db_session),
 					)
 
@@ -527,12 +739,7 @@ def insert_code():
 			code.title = title
 			code.credit = credit
 			code.abstract = request.form.get("abstract", "").strip()
-			code.site_list = _prep_list_for_db(request.form.get("site_list", ""))
-			code.ref_list = _prep_list_for_db(request.form.get("ref_list", ""))
-			code.described_in = _prep_list_for_db(request.form.get("described_in", ""))
-			code.used_in = _prep_list_for_db(request.form.get("used_in", ""))
 			code.citation_method = request.form.get("citation_method", "").strip()
-			code.see_also = request.form.get("see_also", "").strip()
 			code.email = request.form.get("email", "").strip()
 			code.notes = request.form.get("notes", "").strip()
 			code.published = int(request.form.get("published", 0))
@@ -540,12 +747,11 @@ def insert_code():
 			code.time_added = datetime.now()
 			code.time_updated = datetime.now()
 			code.archived = 0
-			code.views = 0
 
 			# Set added_by from current user
 			current_user = _current_user(db_session)
 			if current_user:
-				code.added_by = current_user.id
+				code.added_by = current_user.pk
 
 			# Generate bibcode if publishing
 			if code.published == 1 and ascl_id != "0000.000":
@@ -556,6 +762,7 @@ def insert_code():
 			db_session.flush()  # Get the PK
 
 			pk = code.pk
+			_sync_authors_from_credit(db_session, ascldb, pk, credit)
 
 			# Add aliases
 			_update_aliases(db_session, ascldb, pk, request.form.get("aliases", ""))
@@ -563,8 +770,16 @@ def insert_code():
 			# Add keywords
 			_update_keywords(db_session, ascldb, pk, request.form.get("keywords", ""))
 
+			# Add links (stored in link table)
+			_update_all_typed_links(db_session, ascldb, pk, request.form.get("typed_links", ""))
+			_update_links_for_code(db_session, ascldb, pk, 'described-in', request.form.get("described_in_urls", ""))
+			_update_links_for_code(db_session, ascldb, pk, 'used-in', request.form.get("used_in_urls", ""))
+
+			# Add see_also relationships
+			_update_see_also_for_code(db_session, ascldb, pk, request.form.get("see_also", ""))
+
 			db_session.commit()
-			flash(f"Code added successfully. <a href='/code/v/{pk}'>View it here</a>.", "success")
+			flash(f"Code added successfully. <a href='/{code.ascl_id}'>View it here</a>.", "success")
 			return redirect(url_for("admin_page.view_code", pk=pk))
 
 	# GET request - show empty form
@@ -576,12 +791,7 @@ def insert_code():
 			self.title = ""
 			self.credit = ""
 			self.abstract = ""
-			self.site_list = ""
-			self.ref_list = ""
-			self.described_in = ""
-			self.used_in = ""
 			self.citation_method = ""
-			self.see_also = ""
 			self.email = ""
 			self.notes = ""
 			self.published = 0
@@ -591,13 +801,14 @@ def insert_code():
 		"admin/edit_code.html",
 		code=MockCode(),
 		mode="insert",
+		credits_str="",
 		aliases_str="",
 		keywords_str="",
-		site_list_str="",
-		ref_list_str="",
-		described_in_str="",
-		used_in_str="",
-		next_ascl_id=next_ascl_id,
+		url_link_types=_get_url_link_types(db_session),
+		typed_links_json="[]",
+		described_in_urls="",
+		used_in_urls="",
+		see_also_str="",
 		current_user=_current_user(db_session),
 	)
 
@@ -616,8 +827,8 @@ def delete_code(pk):
 
 	if request.method == "POST":
 		# Delete related records first (due to FK constraints)
-		db_session.query(ascldb.ASCLCodeAlias).filter(ascldb.ASCLCodeAlias.code_id == pk).delete()
-		db_session.query(ascldb.ASCLCodeToKeyword).filter(ascldb.ASCLCodeToKeyword.code_id == pk).delete()
+		db_session.query(ascldb.ASCLCodeAlias).filter(ascldb.ASCLCodeAlias.code_pk == pk).delete()
+		db_session.query(ascldb.ASCLCodeToKeyword).filter(ascldb.ASCLCodeToKeyword.code_pk == pk).delete()
 
 		# Delete the code
 		db_session.delete(code)
@@ -637,42 +848,184 @@ def delete_code(pk):
 # Helper Functions for Code Management
 # ==========================================
 
-def _prep_list_for_db(text):
-	"""Convert newline-separated URLs to PHP serialized array for database storage."""
-	if not text or not text.strip():
-		return None
+def _get_link_type_pk(db_session, ascldb, short_name):
+	"""Get or create a link_type pk by short_name."""
+	link_type = db_session.query(ascldb.LinkType).filter(
+		ascldb.LinkType.short_name == short_name
+	).first()
+	if link_type:
+		return link_type.pk
+	# Create if doesn't exist
+	new_type = ascldb.LinkType()
+	new_type.short_name = short_name
+	new_type.name = short_name.replace('-', ' ').title()
+	db_session.add(new_type)
+	db_session.flush()
+	return new_type.pk
 
-	import phpserialize
-	lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
-	if not lines:
-		return None
 
-	# PHP serialize as indexed array
-	return phpserialize.dumps(lines).decode("utf-8")
+def _get_url_link_types(db_session):
+	"""Get all link types except described-in and used-in (those have special bibcode UI).
+	Returns list of {pk, short_name, name, description}."""
+	from sqlalchemy import text
+	results = db_session.execute(text("""
+		SELECT pk, short_name, name, description FROM link_type
+		WHERE short_name NOT IN ('described-in', 'used-in')
+		ORDER BY pk
+	""")).fetchall()
+	return [
+		{"pk": row.pk, "short_name": row.short_name, "name": row.name, "description": row.description}
+		for row in results
+	]
 
 
-def _prep_list_for_form(serialized):
-	"""Convert PHP serialized array to newline-separated text for form display."""
-	if not serialized:
-		return ""
+def _get_all_typed_links_for_code(db_session, code_pk):
+	"""Get all URL-type links for a code (excludes described-in and used-in).
+	Returns list of {url, type} ordered by display_order."""
+	from sqlalchemy import text
+	results = db_session.execute(text("""
+		SELECT l.url, lt.short_name as type
+		FROM link l
+		JOIN link_type lt ON l.link_type_pk = lt.pk
+		WHERE l.code_pk = :code_pk AND lt.short_name NOT IN ('described-in', 'used-in')
+		ORDER BY l.display_order, l.pk
+	"""), {"code_pk": code_pk}).fetchall()
+	return [{"url": row.url, "type": row.type} for row in results]
+
+
+def _update_all_typed_links(db_session, ascldb, code_pk, links_json_str):
+	"""Update URL-type links from JSON array of {url, type, display_order}.
+	Deletes existing URL-type links (not described-in/used-in), inserts new ones."""
+	import json
+	from sqlalchemy import text
+
+	# Delete existing URL-type links (not described-in or used-in)
+	db_session.execute(text("""
+		DELETE l FROM link l
+		JOIN link_type lt ON l.link_type_pk = lt.pk
+		WHERE l.code_pk = :code_pk AND lt.short_name NOT IN ('described-in', 'used-in')
+	"""), {"code_pk": code_pk})
+
+	if not links_json_str or not links_json_str.strip():
+		return
 
 	try:
-		import phpserialize
-		data = phpserialize.loads(serialized.encode("utf-8") if isinstance(serialized, str) else serialized)
-		if isinstance(data, dict):
-			return "\n".join(str(v) for v in data.values())
-		elif isinstance(data, (list, tuple)):
-			return "\n".join(str(item) for item in data)
-		return str(data)
-	except Exception:
-		# If deserialization fails, return as-is
-		return serialized if serialized else ""
+		links = json.loads(links_json_str)
+	except (json.JSONDecodeError, TypeError):
+		return
+
+	# Build a short_name → pk cache
+	type_cache = {}
+
+	for order, link_data in enumerate(links):
+		url = (link_data.get("url") or "").strip()
+		type_short = (link_data.get("type") or "").strip()
+		if not url or not type_short:
+			continue
+
+		if type_short not in type_cache:
+			type_cache[type_short] = _get_link_type_pk(db_session, ascldb, type_short)
+
+		new_link = ascldb.Link()
+		new_link.code_pk = code_pk
+		new_link.url = url
+		new_link.link_type_pk = type_cache[type_short]
+		new_link.display_order = order
+		db_session.add(new_link)
+
+
+def _get_links_for_code(db_session, ascldb, code_pk, link_type_short_name):
+	"""Get URLs for a code by link type, as newline-separated string."""
+	from sqlalchemy import text
+	query = text("""
+		SELECT l.url FROM link l
+		JOIN link_type lt ON l.link_type_pk = lt.pk
+		WHERE l.code_pk = :code_pk AND lt.short_name = :link_type
+		ORDER BY l.display_order, l.pk
+	""")
+	results = db_session.execute(query, {
+		"code_pk": code_pk,
+		"link_type": link_type_short_name
+	}).fetchall()
+	return "\n".join(row.url for row in results)
+
+
+def _update_links_for_code(db_session, ascldb, code_pk, link_type_short_name, urls_text):
+	"""Update links for a code by link type from newline-separated URLs."""
+	from sqlalchemy import text
+
+	# Get link_type_pk
+	link_type_pk = _get_link_type_pk(db_session, ascldb, link_type_short_name)
+
+	# Delete existing links of this type for this code
+	db_session.execute(text("""
+		DELETE FROM link WHERE code_pk = :code_pk AND link_type_pk = :link_type_pk
+	"""), {"code_pk": code_pk, "link_type_pk": link_type_pk})
+
+	if not urls_text or not urls_text.strip():
+		return
+
+	# Insert new links
+	urls = [url.strip() for url in urls_text.strip().split("\n") if url.strip()]
+	for order, url in enumerate(urls):
+		new_link = ascldb.Link()
+		new_link.code_pk = code_pk
+		new_link.url = url
+		new_link.link_type_pk = link_type_pk
+		new_link.display_order = order
+		db_session.add(new_link)
+
+
+def _get_see_also_for_code(db_session, code_pk):
+	"""Get see_also ASCL IDs for a code, as space-separated string."""
+	from sqlalchemy import text
+	query = text("""
+		SELECT c.ascl_id FROM code_see_also csa
+		JOIN codes c ON csa.related_code_pk = c.pk
+		WHERE csa.code_pk = :code_pk
+		ORDER BY csa.display_order, csa.pk
+	""")
+	results = db_session.execute(query, {"code_pk": code_pk}).fetchall()
+	return " ".join(row.ascl_id for row in results)
+
+
+def _update_see_also_for_code(db_session, ascldb, code_pk, see_also_text):
+	"""Update see_also relationships from space/semicolon-separated ASCL IDs."""
+	from sqlalchemy import text
+	import re
+
+	# Delete existing see_also for this code
+	db_session.execute(text("""
+		DELETE FROM code_see_also WHERE code_pk = :code_pk
+	"""), {"code_pk": code_pk})
+
+	if not see_also_text or not see_also_text.strip():
+		return
+
+	# Parse ASCL IDs (space or semicolon separated)
+	ascl_ids = re.split(r'[;\s]+', see_also_text.strip())
+	ascl_ids = [aid.strip() for aid in ascl_ids if aid.strip()]
+
+	# Build lookup of ascl_id -> pk
+	if ascl_ids:
+		codes = db_session.query(ascldb.ASCLCode.pk, ascldb.ASCLCode.ascl_id).filter(
+			ascldb.ASCLCode.ascl_id.in_(ascl_ids)
+		).all()
+		ascl_lookup = {c.ascl_id: c.pk for c in codes}
+
+		for order, ascl_id in enumerate(ascl_ids):
+			related_pk = ascl_lookup.get(ascl_id)
+			if related_pk:
+				db_session.execute(text("""
+					INSERT INTO code_see_also (code_pk, related_code_pk, display_order)
+					VALUES (:code_pk, :related_pk, :display_order)
+				"""), {"code_pk": code_pk, "related_pk": related_pk, "display_order": order})
 
 
 def _update_aliases(db_session, ascldb, code_pk, aliases_text):
 	"""Update code aliases from space-separated text."""
 	# Clear existing aliases
-	db_session.query(ascldb.ASCLCodeAlias).filter(ascldb.ASCLCodeAlias.code_id == code_pk).delete()
+	db_session.query(ascldb.ASCLCodeAlias).filter(ascldb.ASCLCodeAlias.code_pk == code_pk).delete()
 
 	if not aliases_text or not aliases_text.strip():
 		return
@@ -685,7 +1038,7 @@ def _update_aliases(db_session, ascldb, code_pk, aliases_text):
 		if alias and alias not in seen:
 			seen.add(alias)
 			new_alias = ascldb.ASCLCodeAlias()
-			new_alias.code_id = code_pk
+			new_alias.code_pk = code_pk
 			new_alias.alias = alias
 			db_session.add(new_alias)
 
@@ -695,7 +1048,7 @@ def _update_keywords(db_session, ascldb, code_pk, keywords_text):
 	import shlex
 
 	# Clear existing keyword associations
-	db_session.query(ascldb.ASCLCodeToKeyword).filter(ascldb.ASCLCodeToKeyword.code_id == code_pk).delete()
+	db_session.query(ascldb.ASCLCodeToKeyword).filter(ascldb.ASCLCodeToKeyword.code_pk == code_pk).delete()
 
 	if not keywords_text or not keywords_text.strip():
 		return
@@ -712,21 +1065,22 @@ def _update_keywords(db_session, ascldb, code_pk, keywords_text):
 			continue
 
 		# Check if keyword exists
-		existing = db_session.query(ascldb.Keyword).filter(ascldb.Keyword.keyword == kw).first()
+		existing = db_session.query(ascldb.Keyword).filter(ascldb.Keyword.label == kw).first()
 		if existing:
-			kw_id = existing.id
+			kw_pk = existing.pk
 		else:
 			# Create new keyword
 			new_kw = ascldb.Keyword()
-			new_kw.keyword = kw
+			new_kw.label = kw
+			new_kw.short_name = kw.lower().replace(' ', '-')
 			db_session.add(new_kw)
-			db_session.flush()  # Get the ID
-			kw_id = new_kw.id
+			db_session.flush()  # Get the PK
+			kw_pk = new_kw.pk
 
 		# Create association
 		assoc = ascldb.ASCLCodeToKeyword()
-		assoc.code_id = code_pk
-		assoc.keyword_id = kw_id
+		assoc.code_pk = code_pk
+		assoc.keyword_pk = kw_pk
 		db_session.add(assoc)
 
 
@@ -734,9 +1088,9 @@ def _update_keywords(db_session, ascldb, code_pk, keywords_text):
 # Utility / Raw Data Routes
 # ==========================================
 
-@admin_page.route("/utility/ascl", methods=["GET"])
+@admin_page.route("/utility/full_table", methods=["GET"])
 @_login_required
-def utility_ascl():
+def utility_full_table():
 	"""Full ASCL table with all details."""
 	db_session = _get_db_session()
 	ascldb = _get_models()
@@ -764,9 +1118,9 @@ def utility_ascl():
 	)
 
 
-@admin_page.route("/utility/ascl2", methods=["GET"])
+@admin_page.route("/utility/simple_table", methods=["GET"])
 @_login_required
-def utility_ascl2():
+def utility_simple_table():
 	"""Simple ASCL table with just ID and title."""
 	db_session = _get_db_session()
 	ascldb = _get_models()
@@ -793,9 +1147,9 @@ def utility_ascl2():
 	)
 
 
-@admin_page.route("/utility/links", methods=["GET"])
+@admin_page.route("/utility/all_links", methods=["GET"])
 @_login_required
-def utility_links():
+def utility_all_links():
 	"""All links as plain text."""
 	db_session = _get_db_session()
 	ascldb = _get_models()
@@ -812,15 +1166,15 @@ def utility_links():
 
 @admin_page.route("/utility/site_links", methods=["GET"])
 @_login_required
-def utility_site_links():
+def utility_site_links_list():
 	"""Site links only as plain text."""
 	db_session = _get_db_session()
 	ascldb = _get_models()
 
-	# Query from link table where link_type is 'Code Site' (pk=1)
+	# Query from link table where link_type is 'code-site' (pk=2)
 	links = (
 		db_session.query(ascldb.Link.url)
-		.filter(ascldb.Link.link_type_pk == 1)
+		.filter(ascldb.Link.link_type_pk == 2)
 		.all()
 	)
 
@@ -829,3 +1183,568 @@ def utility_site_links():
 
 	from flask import Response
 	return Response(output, mimetype="text/plain; charset=utf-8")
+
+
+@admin_page.route("/api/check_ascl_id/<ascl_id>", methods=["GET"])
+@_login_required
+def check_ascl_id(ascl_id):
+	"""Check if an ASCL ID exists in the database. Returns JSON."""
+	from flask import jsonify
+	import re
+
+	# Validate format: YYMM.NNN
+	if not re.match(r'^\d{4}\.\d{3}$', ascl_id):
+		return jsonify({"valid": False, "exists": False, "error": "Invalid format"})
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	code = db_session.query(ascldb.ASCLCode).filter(ascldb.ASCLCode.ascl_id == ascl_id).first()
+
+	return jsonify({
+		"valid": True,
+		"exists": code is not None,
+		"title": code.title if code else None
+	})
+
+
+@admin_page.route("/api/next_ascl_id", methods=["GET"])
+@_login_required
+def next_ascl_id():
+	"""Get the next available ASCL ID for the current month. Returns JSON."""
+	from flask import jsonify
+	from datetime import datetime
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	current_yymm = datetime.now().strftime("%y%m")
+
+	# Find highest ASCL ID for current month
+	latest = (
+		db_session.query(ascldb.ASCLCode)
+		.filter(ascldb.ASCLCode.ascl_id.like(f"{current_yymm}.%"))
+		.order_by(ascldb.ASCLCode.ascl_id.desc())
+		.first()
+	)
+
+	if latest and latest.ascl_id:
+		try:
+			last_num = int(latest.ascl_id.split(".")[1])
+			next_num = last_num + 1
+		except (ValueError, IndexError):
+			next_num = 1
+	else:
+		next_num = 1
+
+	next_id = f"{current_yymm}.{next_num:03d}"
+
+	return jsonify({"next_ascl_id": next_id})
+
+
+@admin_page.route("/api/keyword_count/<path:keyword>", methods=["GET"])
+@_login_required
+def keyword_count(keyword):
+	"""Get the count of codes using a keyword. Returns JSON."""
+	from flask import jsonify
+	from sqlalchemy import func
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	# Count codes with this keyword (case-insensitive)
+	count = db_session.query(func.count(ascldb.ASCLCodeToKeyword.code_pk)).join(
+		ascldb.Keyword,
+		ascldb.ASCLCodeToKeyword.keyword_pk == ascldb.Keyword.pk
+	).filter(
+		func.lower(ascldb.Keyword.label) == keyword.lower()
+	).scalar() or 0
+
+	return jsonify({"keyword": keyword, "count": count})
+
+
+@admin_page.route("/api/check_alias/<alias>", methods=["GET"])
+@_login_required
+def check_alias(alias):
+	"""Check if an alias is already used by another code. Returns JSON."""
+	from flask import jsonify
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	# Optional: exclude a specific code_pk when editing
+	exclude_pk = request.args.get("exclude_pk", type=int)
+
+	# Check if alias exists (case-insensitive)
+	query = db_session.query(ascldb.ASCLCodeAlias).filter(
+		ascldb.ASCLCodeAlias.alias == alias.lower()
+	)
+
+	if exclude_pk:
+		query = query.filter(ascldb.ASCLCodeAlias.code_pk != exclude_pk)
+
+	existing = query.first()
+
+	if existing:
+		# Get the code that uses this alias
+		code = db_session.query(ascldb.ASCLCode).filter(
+			ascldb.ASCLCode.pk == existing.code_pk
+		).first()
+		return jsonify({
+			"available": False,
+			"used_by_ascl_id": code.ascl_id if code else None,
+			"used_by_title": code.title if code else None
+		})
+
+	return jsonify({"available": True})
+
+
+@admin_page.route("/api/typesense_status", methods=["GET"])
+@_login_required
+def typesense_status():
+	"""Return live Typesense connectivity/auth status for admin debugging."""
+	from flask import jsonify
+	from ascl_net_app.services.typesense_client import get_typesense_client
+
+	try:
+		typesense = get_typesense_client()
+		healthy = typesense.is_healthy(force_check=True)
+		stats = typesense.get_stats() if healthy else None
+
+		return jsonify({
+			"enabled": bool(typesense.enabled),
+			"base_url": typesense.base_url,
+			"collection": typesense.collection,
+			"healthy": bool(healthy),
+			"authenticated": stats is not None,
+			"fallback_to_mysql": bool(typesense.fallback_to_mysql),
+			"num_documents": (stats or {}).get("num_documents"),
+		})
+	except Exception:
+		flask.current_app.logger.exception("Typesense status check failed")
+		return jsonify({"error": "Typesense status check failed"}), 500
+
+
+@admin_page.route("/api/normalize_name", methods=["POST"])
+@_login_required
+def normalize_name():
+	"""Normalize an author name to 'Last, First M.' format. Returns JSON."""
+	from flask import jsonify
+	from nameparser import HumanName
+
+	data = request.get_json()
+	if not data or "name" not in data:
+		return jsonify({"error": "Missing 'name' field"}), 400
+
+	name_input = data["name"].strip()
+	if not name_input:
+		return jsonify({"error": "Empty name"}), 400
+
+	# Parse the name
+	name = HumanName(name_input)
+
+	# Build normalized format: "Last, First M."
+	parts = []
+
+	# Last name (including suffix like Jr., III, etc.)
+	last = name.last
+	if name.suffix:
+		last = f"{last} {name.suffix}"
+
+	if last:
+		parts.append(last)
+
+	# First name and middle initial(s)
+	first_parts = []
+	if name.first:
+		first_parts.append(name.first)
+	if name.middle:
+		# Convert middle names to initials
+		middle_initials = " ".join(
+			m[0] + "." if len(m) > 1 and not m.endswith(".") else m
+			for m in name.middle.split()
+		)
+		first_parts.append(middle_initials)
+
+	if first_parts:
+		if parts:
+			parts[0] += ","
+		parts.extend(first_parts)
+
+	normalized = " ".join(parts) if parts else name_input
+
+	return jsonify({
+		"original": name_input,
+		"normalized": normalized,
+		"parsed": {
+			"first": name.first,
+			"middle": name.middle,
+			"last": name.last,
+			"suffix": name.suffix,
+			"title": name.title
+		}
+	})
+
+
+@admin_page.route("/api/check_url", methods=["POST"])
+@_login_required
+def check_url():
+	"""Check if a URL is reachable. Returns JSON with status."""
+	from flask import jsonify
+	import requests
+
+	data = request.get_json()
+	if not data or "url" not in data:
+		return jsonify({"error": "Missing 'url' field"}), 400
+
+	url = data["url"].strip()
+	if not url:
+		return jsonify({"error": "Empty URL"}), 400
+
+	# Ensure URL has a scheme
+	if not url.startswith(('http://', 'https://')):
+		url = 'https://' + url
+
+	try:
+		# Use HEAD request first (faster), fall back to GET if HEAD fails
+		response = requests.head(url, timeout=10, allow_redirects=True)
+		if response.status_code >= 400:
+			# Some servers don't support HEAD, try GET
+			response = requests.get(url, timeout=10, allow_redirects=True, stream=True)
+			response.close()
+
+		is_live = response.status_code < 400
+		return jsonify({
+			"url": url,
+			"live": is_live,
+			"status_code": response.status_code
+		})
+	except requests.exceptions.Timeout:
+		return jsonify({"url": url, "live": False, "error": "Timeout"})
+	except requests.exceptions.ConnectionError:
+		return jsonify({"url": url, "live": False, "error": "Connection failed"})
+	except requests.exceptions.RequestException as e:
+		return jsonify({"url": url, "live": False, "error": str(e)})
+
+
+@admin_page.route("/api/bibcode_info/<bibcode>", methods=["GET"])
+@_login_required
+def bibcode_info(bibcode):
+	"""Fetch bibcode info from ADS. Returns JSON with title and authors."""
+	from flask import jsonify
+	import requests
+
+	# ADS API endpoint
+	ads_url = f"https://api.adsabs.harvard.edu/v1/search/query"
+
+	ads_token = flask.current_app.config.get("ADS_API_TOKEN", "")
+
+	try:
+		headers = {"Authorization": f"Bearer {ads_token}"}
+		params = {
+			"q": f"bibcode:{bibcode}",
+			"fl": "title,author,year,bibcode"
+		}
+		response = requests.get(ads_url, headers=headers, params=params, timeout=10)
+
+		if response.status_code == 200:
+			data = response.json()
+			if data.get("response", {}).get("numFound", 0) > 0:
+				doc = data["response"]["docs"][0]
+				return jsonify({
+					"bibcode": bibcode,
+					"found": True,
+					"title": doc.get("title", [""])[0],
+					"authors": doc.get("author", []),
+					"year": doc.get("year")
+				})
+
+		return jsonify({"bibcode": bibcode, "found": False, "error": "Not found"})
+
+	except Exception as e:
+		return jsonify({"bibcode": bibcode, "found": False, "error": str(e)})
+
+
+# ==========================================
+# Notes API
+# ==========================================
+
+@admin_page.route("/api/note_types", methods=["GET"])
+@_login_required
+def get_note_types():
+	"""Get all note types for dropdown."""
+	from flask import jsonify
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	try:
+		types = (
+			db_session.query(ascldb.NoteType)
+			.order_by(ascldb.NoteType.display_order)
+			.all()
+		)
+		return jsonify({
+			"types": [
+				{"pk": t.pk, "short_name": t.short_name, "name": t.name}
+				for t in types
+				if t.short_name != 'legacy'  # Don't allow creating legacy notes
+			]
+		})
+	except Exception as e:
+		return jsonify({"error": str(e)}), 500
+
+
+@admin_page.route("/api/code/<int:code_pk>/notes", methods=["GET"])
+@_login_required
+def get_code_notes(code_pk):
+	"""Get all notes for a code."""
+	from flask import jsonify
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	try:
+		notes = (
+			db_session.query(ascldb.CodeNote)
+			.filter(ascldb.CodeNote.code_pk == code_pk)
+			.order_by(ascldb.CodeNote.is_pinned.desc(), ascldb.CodeNote.created_at.desc())
+			.all()
+		)
+		return jsonify({
+			"notes": [
+				{
+					"pk": n.pk,
+					"note": n.note,
+					"note_type": n.note_type.name if n.note_type else None,
+					"note_type_short": n.note_type.short_name if n.note_type else None,
+					"user": n.user.username if n.user else None,
+					"created_at": n.created_at.isoformat() if n.created_at else None,
+					"is_pinned": n.is_pinned,
+					"hidden": n.hidden
+				}
+				for n in notes
+			]
+		})
+	except Exception as e:
+		return jsonify({"error": str(e)}), 500
+
+
+@admin_page.route("/api/code/<int:code_pk>/notes", methods=["POST"])
+@_login_required
+def add_code_note(code_pk):
+	"""Add a new note to a code."""
+	from flask import jsonify
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	data = request.get_json()
+	if not data:
+		return jsonify({"error": "Missing JSON data"}), 400
+
+	note_text = data.get("note", "").strip()
+	note_type_pk = data.get("note_type_pk")
+
+	if not note_text:
+		return jsonify({"error": "Note text is required"}), 400
+	if not note_type_pk:
+		return jsonify({"error": "Note type is required"}), 400
+
+	try:
+		# Verify code exists
+		code = db_session.query(ascldb.ASCLCode).filter(ascldb.ASCLCode.pk == code_pk).first()
+		if not code:
+			return jsonify({"error": "Code not found"}), 404
+
+		# Get current user
+		current_usr = _current_user(db_session)
+
+		# Create note
+		note = ascldb.CodeNote()
+		note.code_pk = code_pk
+		note.user_pk = current_usr.pk if current_usr else None
+		note.note_type_pk = int(note_type_pk)
+		note.note = note_text
+		note.is_pinned = False
+		note.hidden = False
+
+		db_session.add(note)
+		db_session.commit()
+
+		return jsonify({
+			"success": True,
+			"note": {
+				"pk": note.pk,
+				"note": note.note,
+				"note_type": note.note_type.name if note.note_type else None,
+				"note_type_short": note.note_type.short_name if note.note_type else None,
+				"user": current_usr.username if current_usr else None,
+				"created_at": note.created_at.isoformat() if note.created_at else None,
+				"is_pinned": note.is_pinned,
+				"hidden": note.hidden
+			}
+		})
+	except Exception as e:
+		db_session.rollback()
+		return jsonify({"error": str(e)}), 500
+
+
+@admin_page.route("/api/note/<int:note_pk>/toggle_pin", methods=["POST"])
+@_login_required
+def toggle_note_pin(note_pk):
+	"""Toggle the pinned status of a note."""
+	from flask import jsonify
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	try:
+		note = db_session.query(ascldb.CodeNote).filter(ascldb.CodeNote.pk == note_pk).first()
+		if not note:
+			return jsonify({"error": "Note not found"}), 404
+
+		note.is_pinned = not note.is_pinned
+		db_session.commit()
+
+		return jsonify({"success": True, "is_pinned": note.is_pinned})
+	except Exception as e:
+		db_session.rollback()
+		return jsonify({"error": str(e)}), 500
+
+
+@admin_page.route("/api/note/<int:note_pk>/toggle_hidden", methods=["POST"])
+@_login_required
+def toggle_note_hidden(note_pk):
+	"""Toggle the hidden status of a note."""
+	from flask import jsonify
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	try:
+		note = db_session.query(ascldb.CodeNote).filter(ascldb.CodeNote.pk == note_pk).first()
+		if not note:
+			return jsonify({"error": "Note not found"}), 404
+
+		note.hidden = not note.hidden
+		db_session.commit()
+
+		return jsonify({"success": True, "hidden": note.hidden})
+	except Exception as e:
+		db_session.rollback()
+		return jsonify({"error": str(e)}), 500
+
+
+# ==========================================
+# Dashboard Admin Stat Detail Pages
+# ==========================================
+
+def _paginated_code_list(base_query, page_title, **extra):
+	"""Render a paginated codes_list.html from a base SQLAlchemy query."""
+	import math
+	from sqlalchemy.orm import selectinload
+
+	ascldb = _get_models()
+	db_session = base_query.session
+
+	base_query = base_query.options(selectinload(ascldb.ASCLCode.keywords))
+
+	page = int(request.args.get("page", 1))
+	per_page = int(request.args.get("per_page", 50))
+
+	total_count = base_query.count()
+
+	ordered = base_query.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
+
+	if per_page == 0:
+		codes = ordered.all()
+		total_pages = 1
+	else:
+		codes = ordered.offset((page - 1) * per_page).limit(per_page).all()
+		total_pages = math.ceil(total_count / per_page) if per_page > 0 else 1
+
+	return render_template(
+		"admin/codes_list.html",
+		page_title=page_title,
+		codes=codes,
+		current_user=_current_user(db_session),
+		page=page,
+		per_page=per_page,
+		total_count=total_count,
+		total_pages=total_pages,
+		**extra,
+	)
+
+
+@admin_page.route("/codes/awaiting-ids", methods=["GET"])
+@_login_required
+def codes_awaiting_ids():
+	"""Codes with ascl_id = '0000.000' (no assigned ID yet)."""
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	query = db_session.query(ascldb.ASCLCode).filter(ascldb.ASCLCode.ascl_id == '0000.000')
+
+	return _paginated_code_list(query, "Codes Awaiting ASCL IDs", hide_keywords=True)
+
+
+@admin_page.route("/codes/missing-citation-method", methods=["GET"])
+@_login_required
+def codes_missing_citation_method():
+	"""Codes with assigned IDs that have no preferred citation method."""
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	query = (
+		db_session.query(ascldb.ASCLCode)
+		.filter(ascldb.ASCLCode.ascl_id != '0000.000')
+		.filter((ascldb.ASCLCode.citation_method == None) | (ascldb.ASCLCode.citation_method == ''))
+	)
+
+	return _paginated_code_list(query, "Codes Missing Preferred Citation Method")
+
+
+@admin_page.route("/codes/missing-described-used", methods=["GET"])
+@_login_required
+def codes_missing_described_used():
+	"""Codes missing both 'described in' and 'used in' links."""
+	from sqlalchemy import distinct
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	codes_with_di_or_ui = (
+		db_session.query(distinct(ascldb.Link.code_pk))
+		.filter(ascldb.Link.link_type_pk.in_([4, 5]))
+		.subquery()
+	)
+
+	query = (
+		db_session.query(ascldb.ASCLCode)
+		.filter(~ascldb.ASCLCode.pk.in_(db_session.query(codes_with_di_or_ui)))
+	)
+
+	status = request.args.get("status")
+	if status == "published":
+		query = query.filter(ascldb.ASCLCode.ascl_id != '0000.000')
+		title = 'Published Codes Missing "Described In" and "Used In"'
+	else:
+		title = 'All Codes Missing "Described In" and "Used In"'
+
+	return _paginated_code_list(query, title)
+
+
+@admin_page.route("/codes/submitted-by-authors", methods=["GET"])
+@_login_required
+def codes_submitted_by_authors():
+	"""Codes whose notes indicate author submission."""
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	query = (
+		db_session.query(ascldb.ASCLCode)
+		.filter(ascldb.ASCLCode.notes.like('Submitted by:%'))
+	)
+
+	return _paginated_code_list(query, "Codes Submitted by Authors", show_ascl_id_filter=True)

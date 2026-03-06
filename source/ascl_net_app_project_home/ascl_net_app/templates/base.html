@@ -14,6 +14,12 @@
 {% block extra_css %}{% endblock %}
 </head>
 <body>
+{% if is_admin_logged_in %}
+<div id="admin-banner">
+	<a href="/admin" class="admin-badge">ADMIN</a>
+	<span class="admin-right">Signed in as {{ admin_username }} | <a href="/admin/logout">Logout</a></span>
+</div>
+{% endif %}
 <div id="ascl_header">
 
 	<h1>ASCL.net</h1>
@@ -38,7 +44,7 @@
 	</div>
 </div>
 <div id="ascl_body">
-<div class="inner_padding">{% block content %}{% endblock %}</div>
+<div class="inner_padding">{% block admin_notices %}{% endblock %}{% block content %}{% endblock %}</div>
 </div>
 <div id="footer">
 	<div class="inner_padding">
@@ -55,5 +61,6 @@
 	</div>
 </div>
 {% block extra_js %}{% endblock %}
+<script src="{{ url_for('static', filename='js/search_typeahead.js') }}"></script>
 </body>
 </html>

@@ -1,10 +1,10 @@
 #!/bin/bash
 # Restore the WordPress backup into the dev MySQL instance.
 # Usage:
-#   ./restore_wordpress_backup.sh [target_db] [path_to_sql]
+#   ./restore_wordpress_backup.sh [target_db] [path_to_sql_or_sql_gz]
 # Defaults:
 #   target_db: ascl_wordpress
-#   path_to_sql: <repo_root>/ascl_wordpress-backup_2025.11.29.sql
+#   path_to_sql_or_sql_gz: <repo_root>/ascl_wordpress-backup_2025.11.29.sql(.gz)
 #
 # This mirrors the credential handling used in copy_ascl_database.sh and
 # drops/recreates the target database before import.
@@ -21,6 +21,12 @@ fi
 
 if [[ ! -f "$SQL_FILE" ]]; then
   echo "❌ SQL backup not found: $SQL_FILE" >&2
+  exit 1
+fi
+
+if [[ "$SQL_FILE" != *.sql && "$SQL_FILE" != *.sql.gz ]]; then
+  echo "❌ Unsupported backup format: $SQL_FILE" >&2
+  echo "   Expected .sql or .sql.gz" >&2
   exit 1
 fi
 
@@ -47,6 +53,10 @@ mysql --defaults-file="$tmp" --protocol=TCP --host=127.0.0.1 --port=3307 \
 
 # Import the backup
 echo "Importing $SQL_FILE into $TARGET_DB..."
-mysql --defaults-file="$tmp" --protocol=TCP --host=127.0.0.1 --port=3307 "$TARGET_DB" < "$SQL_FILE"
+if [[ "$SQL_FILE" == *.gz ]]; then
+  gzip -dc "$SQL_FILE" | mysql --defaults-file="$tmp" --protocol=TCP --host=127.0.0.1 --port=3307 "$TARGET_DB"
+else
+  mysql --defaults-file="$tmp" --protocol=TCP --host=127.0.0.1 --port=3307 "$TARGET_DB" < "$SQL_FILE"
+fi
 
 echo "✓ Restore complete."

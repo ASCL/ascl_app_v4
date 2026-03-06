@@ -44,7 +44,7 @@ This migration unpacks PHP-serialized link data from the `codes` table into a no
 
 ### 3. SQLAlchemy Model Updates
 
-**File**: `alt_ascl/ascl_core/database/ascldb/ASCLModelClasses.py`
+**File**: `ascl_core/source/ascl_core/database/ascldb/ASCLModelClasses.py`
 
 - Renamed class: `LinkNew` → `Link`
 - Updated table reference: `'links_new'` → `'link'`
@@ -289,7 +289,7 @@ After successful migration:
 
 - `alt_ascl/agents/DB_UPGRADE_PLAYBOOK.sql` - Added Step 8 (link_type updates, table rename)
 - `alt_ascl/agents/migrate_php_links_to_table.py` - New migration script
-- `alt_ascl/ascl_core/database/ascldb/ASCLModelClasses.py` - Renamed LinkNew → Link
+- `ascl_core/source/ascl_core/database/ascldb/ASCLModelClasses.py` - Renamed LinkNew → Link
 - `alt_ascl/agents/TODO_MASTER.md` - Documented migration task (DATA-011)
 - `~/.my.cnf` - Fixed MySQL credentials (user: ascl_db, database: ascl_db_v4)
 

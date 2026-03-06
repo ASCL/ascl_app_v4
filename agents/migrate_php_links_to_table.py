@@ -23,11 +23,15 @@ import sys
 import argparse
 from typing import List, Optional, Dict
 import logging
+from pathlib import Path
 
-# Add parent directory to path to import ascl_core
-sys.path.insert(0, '/home/demitri/repositories/ASCL/alt_ascl')
-
-from ascl_core.database.connections.Trillian2DBConnection import db, Session
+try:
+    from ascl_core.database.connections.Trillian2DBConnection import db, Session
+except ModuleNotFoundError:
+    # Local-dev fallback when ascl_core is not installed.
+    repo_root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo_root / "ascl_core" / "source"))
+    from ascl_core.database.connections.Trillian2DBConnection import db, Session
 from sqlalchemy import text
 
 try:

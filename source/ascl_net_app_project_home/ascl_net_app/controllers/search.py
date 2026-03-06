@@ -1,16 +1,272 @@
 #!/usr/bin/python
 
 import flask
-from flask import request, render_template, current_app
+from flask import request, render_template, current_app, jsonify
 from sqlalchemy import or_
 import logging
 
 search_page = flask.Blueprint("search_page", __name__)
 logger = logging.getLogger(__name__)
 
+
+def _normalize_suggest_query(raw_query):
+	q = (raw_query or "").strip()
+	if q.lower().startswith("ascl:"):
+		q = q[5:].strip()
+	return q
+
+
+def _author_query_variants(search_term):
+	"""Build a few author-query variants to improve matches across name formats."""
+	import re
+
+	raw = (search_term or "").strip()
+	words = [w for w in re.split(r"[,\s]+", raw) if w]
+	if not words:
+		return []
+
+	variants = [raw, " ".join(words)]
+
+	# "Smith, John Kevin" -> "Smith J K"
+	if "," in raw and len(words) > 1:
+		surname = words[0]
+		initials = " ".join(w[0] for w in words[1:] if w)
+		if initials:
+			variants.append(f"{surname} {initials}")
+
+	# Also try reverse order if user typed "John Smith"
+	if len(words) >= 2:
+		variants.append(f"{words[-1]} {words[0]}")
+
+	# De-duplicate while preserving order
+	seen = set()
+	unique = []
+	for v in variants:
+		key = v.strip().lower()
+		if key and key not in seen:
+			seen.add(key)
+			unique.append(v.strip())
+	return unique
+
+
+def _split_author_name(author_name):
+	"""Split author name into (surname, given_tokens) in lowercase."""
+	import re
+
+	raw = (author_name or "").strip().lower().replace(".", " ")
+	raw = re.sub(r"\s+", " ", raw)
+	if not raw:
+		return "", []
+
+	if "," in raw:
+		surname_raw, given_raw = raw.split(",", 1)
+		surname_tokens = [w for w in re.split(r"[\s\-]+", surname_raw.strip()) if w]
+		given_tokens = [w for w in re.split(r"[\s\-]+", given_raw.strip()) if w]
+		surname = surname_tokens[-1] if surname_tokens else ""
+		return surname, given_tokens
+
+	parts = [w for w in re.split(r"[\s\-]+", raw) if w]
+	if not parts:
+		return "", []
+	if len(parts) == 1:
+		return parts[0], []
+	return parts[-1], parts[:-1]
+
+
+def _author_name_matches(candidate_name, search_term):
+	"""True when candidate author matches the searched person (not just surname)."""
+	query_surname, query_given = _split_author_name(search_term)
+	cand_surname, cand_given = _split_author_name(candidate_name)
+
+	if not query_surname or not cand_surname or cand_surname != query_surname:
+		return False
+	if not query_given:
+		return True
+
+	full_query_tokens = [t for t in query_given if len(t) > 1]
+	initial_query_tokens = [t for t in query_given if len(t) == 1]
+	cand_full_tokens = [t for t in cand_given if len(t) > 1]
+	cand_initials = [t[0] for t in cand_given if t]
+
+	def _token_like(a, b):
+		# Treat close prefixes as equal to allow "alex" vs "alexander".
+		if a == b:
+			return True
+		if len(a) >= 3 and b.startswith(a):
+			return True
+		if len(b) >= 3 and a.startswith(b):
+			return True
+		return False
+
+	if full_query_tokens:
+		# Anchor by first given-name token for precision.
+		if not cand_full_tokens or not _token_like(full_query_tokens[0], cand_full_tokens[0]):
+			return False
+
+	# All full query tokens must match candidate full tokens.
+	for token in full_query_tokens:
+		if not any(_token_like(token, cand) for cand in cand_full_tokens):
+			return False
+
+	# All query initials must be present in candidate initials.
+	for initial in initial_query_tokens:
+		if initial not in cand_initials:
+			return False
+
+	return True
+
+
+def _code_matches_author_query(code, search_term):
+	"""Filter a code row to true author-name matches only."""
+	names = []
+	credit = getattr(code, "credit", None)
+	if credit:
+		names.extend([a.strip() for a in credit.split(";") if a and a.strip()])
+
+	authors = getattr(code, "authors", None)
+	if authors:
+		for author in authors:
+			display_name = getattr(author, "display_name", None)
+			if display_name:
+				names.append(display_name.strip())
+
+	if not names:
+		return False
+
+	return any(_author_name_matches(name, search_term) for name in names)
+
+
+def _search_credit_mysql(search_term, limit=100):
+	"""Improved MySQL credit search: phrase + token scoring."""
+	import re
+	from sqlalchemy import case, func
+	from ascl_core.database.connections import Trillian2DBConnection as db
+	from ascl_core.database.ascldb import ASCLModelClasses as ascldb
+
+	session = db.Session()
+	query_raw = (search_term or "").strip()
+	query_lower = query_raw.lower()
+	words = [w for w in re.split(r"[,\s.]+", query_raw) if w]
+	initials = [w[0].lower() for w in words[1:] if len(w) > 1]
+	strong_words = [w for w in words if len(w) >= 2]
+
+	ASCLCode = ascldb.ASCLCode
+	use_author_table = hasattr(ascldb, "Author")
+	Author = getattr(ascldb, "Author", None)
+
+	credit_col = Author.display_name if use_author_table else ASCLCode.credit
+	conditions = [credit_col.ilike(f"%{query_raw}%")] if query_raw else []
+	for w in strong_words:
+		conditions.append(credit_col.ilike(f"%{w}%"))
+
+	# Keep broad recall, then rank by phrase and token quality.
+	base_query = session.query(ASCLCode).filter(ASCLCode.published == 1)
+	if use_author_table:
+		base_query = base_query.join(Author, Author.code_pk == ASCLCode.pk)
+	if strong_words:
+		# Require at least the first strong token to be present to reduce false positives.
+		base_query = base_query.filter(credit_col.ilike(f"%{strong_words[0]}%"))
+	if conditions:
+		base_query = base_query.filter(or_(*conditions))
+
+	exact_phrase = case((func.lower(credit_col) == query_lower, 1000), else_=0)
+	starts_with_phrase = case((func.lower(credit_col).like(f"{query_lower}%"), 500), else_=0)
+	contains_phrase = case((func.lower(credit_col).like(f"%{query_lower}%"), 300), else_=0)
+
+	token_score = 0
+	for w in words:
+		token_score = token_score + case((func.lower(credit_col).like(f"%{w.lower()}%"), 120), else_=0)
+	for init in initials:
+		token_score = token_score + case((func.lower(credit_col).like(f"%{init}%"), 20), else_=0)
+
+	return (
+		base_query
+		.order_by((exact_phrase + starts_with_phrase + contains_phrase + token_score).desc(), ASCLCode.time_added.desc())
+		.distinct()
+		.limit(limit)
+		.all()
+	)
+
+
+def _author_suggestions_mysql(query_string, limit=8):
+	"""Author name suggestions from MySQL credit strings."""
+	from ascl_core.database.connections import Trillian2DBConnection as db
+	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
+
+	session = db.Session()
+	rows = (
+		session.query(ASCLCode.credit)
+		.filter(ASCLCode.published == 1)
+		.filter(ASCLCode.credit.isnot(None))
+		.filter(ASCLCode.credit.ilike(f"%{query_string}%"))
+		.limit(300)
+		.all()
+	)
+
+	q = query_string.lower()
+	seen = set()
+	out = []
+	for (credit,) in rows:
+		if not credit:
+			continue
+		for token in [t.strip() for t in credit.split(";") if t.strip()]:
+			k = token.lower()
+			if q not in k:
+				continue
+			if k in seen:
+				continue
+			seen.add(k)
+			out.append(token)
+			if len(out) >= limit:
+				return out
+	return out
+
+
+def _search_mysql_suggestions(query_string, limit=8):
+	"""Fallback suggestions when Typesense is unavailable or empty."""
+	from ascl_core.database.connections import Trillian2DBConnection as db
+	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
+	from sqlalchemy import case, func
+
+	session = db.Session()
+	query_lower = query_string.lower()
+
+	exact_ascl = case((func.lower(ASCLCode.ascl_id) == query_lower, 1000), else_=0)
+	prefix_ascl = case((func.lower(ASCLCode.ascl_id).like(f"{query_lower}%"), 500), else_=0)
+	prefix_title = case((func.lower(ASCLCode.title).like(f"{query_lower}%"), 300), else_=0)
+	contains_title = case((func.lower(ASCLCode.title).like(f"%{query_lower}%"), 100), else_=0)
+
+	results = (
+		session.query(ASCLCode)
+		.filter(ASCLCode.published == 1)
+		.filter(
+			or_(
+				ASCLCode.ascl_id.ilike(f"%{query_string}%"),
+				ASCLCode.title.ilike(f"%{query_string}%"),
+				ASCLCode.credit.ilike(f"%{query_string}%"),
+			)
+		)
+		.order_by((exact_ascl + prefix_ascl + prefix_title + contains_title).desc(), ASCLCode.time_added.desc())
+		.limit(limit)
+		.all()
+	)
+
+	return [
+		{
+			"ascl_id": c.ascl_id,
+			"title": c.title,
+			"url": f"/{c.ascl_id}",
+		}
+		for c in results
+	]
+
 def search_mysql(query_string, published_only=True, page=1, per_page=20):
 	"""
-	Fallback MySQL LIKE search with pagination.
+	MySQL search using FULLTEXT index with relevance ranking.
+
+	Uses MATCH...AGAINST for relevance scoring, with boosts for exact
+	and prefix title matches. Falls back to LIKE search if FULLTEXT
+	index doesn't exist.
 
 	Args:
 		query_string: Search query
@@ -21,18 +277,81 @@ def search_mysql(query_string, published_only=True, page=1, per_page=20):
 	Returns:
 		tuple: (results list, total_count)
 	"""
+	from sqlalchemy import text
 	from ascl_core.database.connections import Trillian2DBConnection as db
 	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
 	session = db.Session()
 
-	# Search in title, abstract, and credit (authors)
+	offset = (page - 1) * per_page
+	published_filter = "AND published = 1" if published_only else ""
+
+	# Try FULLTEXT search first
+	try:
+		# Count query
+		count_sql = text(f"""
+			SELECT COUNT(*) as cnt
+			FROM codes
+			WHERE MATCH(title, abstract, credit) AGAINST(:query IN NATURAL LANGUAGE MODE)
+			{published_filter}
+		""")
+		total_count = session.execute(count_sql, {"query": query_string}).scalar()
+
+		# Search query with relevance ranking
+		# - Exact title match: +1000
+		# - Title starts with query: +500
+		# - Title contains query: +100
+		# - FULLTEXT relevance score
+		# - Views as popularity tiebreaker
+		search_sql = text(f"""
+			SELECT pk,
+				MATCH(title, abstract, credit) AGAINST(:query IN NATURAL LANGUAGE MODE) AS relevance,
+				CASE WHEN LOWER(title) = LOWER(:query) THEN 1000 ELSE 0 END AS exact_match,
+				CASE WHEN LOWER(title) LIKE CONCAT(LOWER(:query), '%') THEN 500 ELSE 0 END AS prefix_match,
+				CASE WHEN LOWER(title) LIKE CONCAT('%', LOWER(:query), '%') THEN 100 ELSE 0 END AS title_match
+			FROM codes
+			WHERE MATCH(title, abstract, credit) AGAINST(:query IN NATURAL LANGUAGE MODE)
+			{published_filter}
+			ORDER BY exact_match DESC, prefix_match DESC, title_match DESC, relevance DESC
+			LIMIT :limit OFFSET :offset
+		""")
+		rows = session.execute(
+			search_sql,
+			{"query": query_string, "limit": per_page, "offset": offset}
+		).fetchall()
+
+		# Fetch full code objects in ranked order
+		if rows:
+			pks = [row.pk for row in rows]
+			codes_dict = {code.pk: code for code in session.query(ASCLCode).filter(ASCLCode.pk.in_(pks)).all()}
+			results = [codes_dict[pk] for pk in pks if pk in codes_dict]
+		else:
+			results = []
+
+		return results, total_count
+
+	except Exception as e:
+		# FULLTEXT index may not exist - fall back to LIKE search
+		logger.warning(f"FULLTEXT search failed, falling back to LIKE: {e}")
+		return _search_mysql_like(session, query_string, published_only, page, per_page)
+
+
+def _search_mysql_like(session, query_string, published_only=True, page=1, per_page=20):
+	"""
+	Fallback LIKE-based search when FULLTEXT index is unavailable.
+	Uses CASE-based relevance scoring for better results than date ordering.
+	"""
+	from sqlalchemy import case, func
+	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
+
 	search_pattern = f"%{query_string}%"
+	query_lower = query_string.lower()
 
 	base_query = session.query(ASCLCode).filter(
 		or_(
-			ASCLCode.title.like(search_pattern),
-			ASCLCode.abstract.like(search_pattern),
-			ASCLCode.credit.like(search_pattern)
+			ASCLCode.ascl_id.ilike(search_pattern),
+			ASCLCode.title.ilike(search_pattern),
+			ASCLCode.abstract.ilike(search_pattern),
+			ASCLCode.credit.ilike(search_pattern)
 		)
 	)
 
@@ -42,11 +361,37 @@ def search_mysql(query_string, published_only=True, page=1, per_page=20):
 	# Get total count
 	total_count = base_query.count()
 
-	# Apply pagination
+	# Score-based ordering: title matches ranked higher
+	exact_title = case(
+		(func.lower(ASCLCode.title) == query_lower, 1000),
+		else_=0
+	)
+	prefix_title = case(
+		(func.lower(ASCLCode.title).like(f"{query_lower}%"), 500),
+		else_=0
+	)
+	contains_title = case(
+		(func.lower(ASCLCode.title).like(f"%{query_lower}%"), 100),
+		else_=0
+	)
+	contains_abstract = case(
+		(func.lower(ASCLCode.abstract).like(f"%{query_lower}%"), 10),
+		else_=0
+	)
+	prefix_ascl = case(
+		(func.lower(ASCLCode.ascl_id).like(f"{query_lower}%"), 800),
+		else_=0
+	)
+	exact_ascl = case(
+		(func.lower(ASCLCode.ascl_id) == query_lower, 1200),
+		else_=0
+	)
+
+	# Apply pagination with relevance ordering
 	offset = (page - 1) * per_page
 	results = base_query.order_by(
-		ASCLCode.time_added.desc(),
-		ASCLCode.pk.desc()
+		(exact_ascl + prefix_ascl + exact_title + prefix_title + contains_title + contains_abstract).desc(),
+		ASCLCode.time_added.desc()
 	).offset(offset).limit(per_page).all()
 
 	return results, total_count
@@ -75,7 +420,8 @@ def search():
 		'per_page': per_page,
 		'search_method': None,  # 'typesense' or 'mysql'
 		'search_time_ms': 0,
-		'typesense_available': False
+		'typesense_available': False,
+		'mysql_fallback_reason': None,  # 'unavailable' or 'no_results'
 	}
 
 	if not query_string:
@@ -87,18 +433,20 @@ def search():
 	typesense = get_typesense_client()
 	typesense_results = None
 
-	if typesense.enabled and typesense.is_healthy():
+	typesense_available = typesense.enabled and typesense.is_healthy()
+	if typesense_available:
 		logger.info(f"Using Typesense for search: '{query_string}'")
 		typesense_results = typesense.search(
 			query=query_string,
-			query_by='title,abstract,credit',
+			query_by='ascl_id,title,abstract,credit',
+			query_by_weights='10,8,2,1',
 			filter_by='published:1',
 			per_page=per_page,
 			page=page
 		)
 
 	# Use Typesense results if available
-	if typesense_results:
+	if typesense_results and typesense_results.get('found', 0) > 0:
 		templateDict['search_method'] = 'typesense'
 		templateDict['typesense_available'] = True
 		templateDict['result_count'] = typesense_results['found']
@@ -122,11 +470,19 @@ def search():
 		else:
 			templateDict['results'] = []
 
+	elif typesense_results and typesense_results.get('found', 0) == 0 and not typesense.fallback_to_mysql:
+		# Honor config: keep empty Typesense result set and do not fallback.
+		templateDict['search_method'] = 'typesense'
+		templateDict['typesense_available'] = True
+		templateDict['result_count'] = 0
+		templateDict['results'] = []
+
 	else:
 		# Fallback to MySQL
 		logger.info(f"Using MySQL fallback for search: '{query_string}'")
 		templateDict['search_method'] = 'mysql'
-		templateDict['typesense_available'] = typesense.is_healthy()
+		templateDict['typesense_available'] = typesense_available
+		templateDict['mysql_fallback_reason'] = 'no_results' if typesense_results and typesense_results.get('found', 0) == 0 else 'unavailable'
 
 		results, total_count = search_mysql(
 			query_string,
@@ -146,6 +502,135 @@ def search():
 
 	return render_template("search.html", **templateDict)
 
+
+@search_page.route("/search/suggest", methods=['GET'])
+def search_suggest():
+	"""JSON type-ahead suggestions for code search."""
+	query_string = _normalize_suggest_query(request.args.get('q', ''))
+	try:
+		limit = min(max(int(request.args.get('limit', 8)), 1), 20)
+	except ValueError:
+		limit = 8
+
+	if len(query_string) < 2:
+		return jsonify({
+			"query": query_string,
+			"suggestions": [],
+			"method": None,
+		})
+
+	from ascl_net_app.services.typesense_client import get_typesense_client
+	typesense = get_typesense_client()
+	suggestions = []
+	method = "mysql"
+
+	typesense_available = typesense.enabled and typesense.is_healthy()
+	if typesense_available:
+		results = typesense.search(
+			query=query_string,
+			query_by='title,ascl_id,credit,abstract',
+			query_by_weights='8,10,4,1',
+			filter_by='published:1',
+			sort_by='_text_match:desc,time_added:desc',
+			prefix=True,
+			per_page=limit,
+			page=1
+		)
+		if results and results.get("hits"):
+			method = "typesense"
+			for hit in results["hits"]:
+				doc = hit.get("document", {})
+				ascl_id = doc.get("ascl_id")
+				title = doc.get("title")
+				if not ascl_id or not title:
+					continue
+				# Extract highlight snippet showing why this result matched
+				snippet = ""
+				hl = hit.get("highlight", {})
+				# Prefer a non-title field so the user sees *why* it matched
+				for field in ("abstract", "credit"):
+					if field in hl and hl[field].get("snippet"):
+						snippet = hl[field]["snippet"]
+						break
+				# Fall back to highlighted title if that's where the match is
+				if not snippet and "title" in hl and hl["title"].get("snippet"):
+					snippet = hl["title"]["snippet"]
+				suggestions.append({
+					"ascl_id": ascl_id,
+					"title": title,
+					"url": f"/{ascl_id}",
+					"snippet": snippet,
+				})
+
+	if not suggestions:
+		suggestions = _search_mysql_suggestions(query_string, limit=limit)
+		method = "mysql"
+
+	return jsonify({
+		"query": query_string,
+		"suggestions": suggestions,
+		"method": method,
+		"typesense_available": typesense_available,
+	})
+
+
+@search_page.route("/search/author_suggest", methods=['GET'])
+def author_suggest():
+	"""JSON type-ahead suggestions for author credit search."""
+	query_string = request.args.get('q', '').strip()
+	try:
+		limit = min(max(int(request.args.get('limit', 8)), 1), 20)
+	except ValueError:
+		limit = 8
+
+	if len(query_string) < 2:
+		return jsonify({"query": query_string, "suggestions": [], "method": None})
+
+	from ascl_net_app.services.typesense_client import get_typesense_client
+	typesense = get_typesense_client()
+	typesense_available = typesense.enabled and typesense.is_healthy()
+	suggestions = []
+	method = "mysql"
+
+	if typesense_available:
+		ts = typesense.search(
+			query=query_string,
+			query_by='credit',
+			filter_by='published:1',
+			prefix=True,
+			num_typos=1,
+			per_page=100,
+			page=1
+		)
+		if ts and ts.get("hits"):
+			q = query_string.lower()
+			seen = set()
+			for hit in ts["hits"]:
+				credit = (hit.get("document", {}) or {}).get("credit", "") or ""
+				for token in [t.strip() for t in credit.split(";") if t.strip()]:
+					k = token.lower()
+					if q not in k or k in seen:
+						continue
+					seen.add(k)
+					suggestions.append(token)
+					if len(suggestions) >= limit:
+						break
+				if len(suggestions) >= limit:
+					break
+			if suggestions:
+				method = "typesense"
+
+	if not suggestions:
+		suggestions = _author_suggestions_mysql(query_string, limit=limit)
+		method = "mysql"
+
+	return jsonify({
+		"query": query_string,
+		"suggestions": suggestions,
+		"method": method,
+		"typesense_available": typesense_available,
+	})
+
 @search_page.route("/code/cs/<path:search_term>", methods=['GET'])
 def credit_search(search_term):
 	''' Credit search - search for codes by author name.
@@ -162,26 +647,57 @@ def credit_search(search_term):
 	templateDict = {
 		'search_term': search_term,
 		'codes': [],
-		'result_count': 0
+		'result_count': 0,
+		'search_method': None,
 	}
 
-	# Get database session
-	from ascl_core.database.connections import Trillian2DBConnection as db
-	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
-	session = db.Session()
+	# Try Typesense first for credit search.
+	from ascl_net_app.services.typesense_client import get_typesense_client
+	typesense = get_typesense_client()
+	typesense_available = typesense.enabled and typesense.is_healthy()
 
-	# Search for codes with matching credit (author name)
-	# Matches PHP: $this->db->like("credit",$search_term);
-	search_pattern = f"%{search_term}%"
+	results = []
+	if typesense_available:
+		from ascl_core.database.connections import Trillian2DBConnection as db
+		from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
 
-	results = (
-		session.query(ASCLCode)
-		.filter(ASCLCode.credit.like(search_pattern))
-		.filter(ASCLCode.published == 1)  # Only published codes
-		.order_by(ASCLCode.time_added.desc())
-		.limit(100)  # Matches PHP limit
-		.all()
-	)
+		pks = []
+		seen = set()
+		for variant in _author_query_variants(search_term):
+			ts = typesense.search(
+				query=variant,
+				query_by='credit',
+				filter_by='published:1',
+				sort_by='_text_match:desc,time_added:desc',
+				prefix=False,
+				num_typos=0,
+				per_page=100,
+				page=1
+			)
+			if not ts or not ts.get("hits"):
+				continue
+			for hit in ts["hits"]:
+				doc = hit.get("document", {})
+				pk = doc.get("pk")
+				if pk is None or pk in seen:
+					continue
+				seen.add(pk)
+				pks.append(pk)
+			if len(pks) >= 100:
+				break
+
+		if pks:
+			session = db.Session()
+			codes_dict = {code.pk: code for code in session.query(ASCLCode).filter(ASCLCode.pk.in_(pks[:100])).all()}
+			results = [codes_dict[pk] for pk in pks[:100] if pk in codes_dict]
+			templateDict['search_method'] = 'typesense'
+
+	if not results:
+		results = _search_credit_mysql(search_term, limit=100)
+		templateDict['search_method'] = 'mysql'
+
+	# Keep only true person matches (avoid surname-only false positives).
+	results = [code for code in results if _code_matches_author_query(code, search_term)]
 
 	templateDict['codes'] = results
 	templateDict['result_count'] = len(results)

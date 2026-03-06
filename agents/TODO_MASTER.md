@@ -27,7 +27,7 @@
      - This is the ONLY MySQL instance for ASCL development
 
 - **Database Name**: `ascl_db_v4` (copy of production database)
-- **Connection Config**: `alt_ascl/ascl_core/database/connections/Trillian2DBConnection.py`
+- **Connection Config**: `ascl_core/source/ascl_core/database/connections/Trillian2DBConnection.py`
 - **Approach**: Work freely on dev database copy - breaking changes OK, no production downtime concerns
 
 **Production Setup** (future):
@@ -1827,7 +1827,7 @@ When ready to switch from v3 to v4:
 ### Development Environment Setup
 - **Database Connection**: MySQL 8.0 in Docker container on **port 3307** (not standard 3306)
 - **Database**: `ascl_db_v4` (upgraded database with InnoDB, FKs, and code_pk migration)
-- **Connection Config**: `alt_ascl/ascl_core/database/connections/Trillian2DBConnection.py`
+- **Connection Config**: `ascl_core/source/ascl_core/database/connections/Trillian2DBConnection.py`
   - **Note**: Points to `ascl_db_v4` database (changed from `ascl_db` on 2025-12-01)
   - **Metadata Caching**: Disabled during active development (`cache_name=None`)
 - **Credentials**: Read from `~/.my.cnf` (MySQL) with `[client_ascl]` section
@@ -1850,7 +1850,7 @@ When ready to switch from v3 to v4:
 - **dm-dbcore module**: `/home/demitri/repositories/ASCL/dm-dbcore/`
 - **Database schema**: `/home/demitri/repositories/ASCL/ascl_php_application/ascl_db-schema-2025-10-30.sql`
 - **Database backup**: `/home/demitri/repositories/ASCL/alt_ascl/ascl_db_2025.09.30_bkup.sql.gz`
-- **Dev DB Connection**: `/home/demitri/repositories/ASCL/alt_ascl/ascl_core/database/connections/Trillian2DBConnection.py`
+- **Dev DB Connection**: `/home/demitri/repositories/ASCL/ascl_core/source/ascl_core/database/connections/Trillian2DBConnection.py`
 
 ### Important Conventions
 - **ASCL ID format**: `YYMM.NNN` (e.g., `1404.008` = April 2014, entry #008)

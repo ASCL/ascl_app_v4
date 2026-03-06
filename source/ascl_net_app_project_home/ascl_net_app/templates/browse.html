@@ -87,6 +87,9 @@
 
 			<span class="title">
 				<a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
+				{% if is_admin_logged_in %}
+				<a href="/admin/update_code/{{ code.pk }}" class="admin-edit-btn">Edit</a>
+				{% endif %}
 			</span>
 
 			{% if code.credit %}

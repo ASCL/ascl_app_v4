@@ -2,6 +2,40 @@
 
 {% block title %}{{ page_title }} - ASCL.net{% endblock %}
 
+{% block extra_css %}
+<style>
+.submit-sticky-action-bar {
+	background: linear-gradient(135deg, rgba(44, 62, 80, 0.92) 0%, rgba(52, 73, 94, 0.92) 100%);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	padding: 12px 20px;
+	margin: 12px 0 20px 0;
+	border-radius: 6px;
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+	display: flex;
+	justify-content: flex-end;
+}
+.submit-sticky-action-bar .button {
+	display: inline-block;
+	padding: 8px 16px;
+	text-decoration: none;
+	border: none;
+	border-radius: 4px;
+	background: #27ae60;
+	color: white;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 500;
+}
+.submit-sticky-action-bar .button:hover {
+	background: #219a52;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="codelist">
 	<div class="item">
@@ -20,10 +54,14 @@
 		{% endif %}
 
 		{% if not hide_form %}
-		<p>The ASCL gladly accepts submitted codes meeting our criteria. Your code will show up immediately for public viewing but will be subject to moderation. Code entries are examined by an editor for completion and suitability and may be edited; entries meeting our criteria will be assigned an ASCL ID and indexed by ADS.</p>
+			<p>The ASCL gladly accepts submitted codes meeting our criteria. Your code will show up immediately for public viewing but will be subject to moderation. Code entries are examined by an editor for completion and suitability and may be edited; entries meeting our criteria will be assigned an ASCL ID and indexed by ADS.</p>
 
-		<div class="forms">
-			<form action="/code/submit" method="post" accept-charset="utf-8">
+			<div class="submit-sticky-action-bar">
+				<button type="submit" form="submit-code-form" class="button">Submit Code</button>
+			</div>
+
+			<div class="forms">
+				<form action="/code/submit" method="post" accept-charset="utf-8" id="submit-code-form">
 
 				<p>
 					<label for="title"><strong>Title</strong></label><br>
@@ -44,14 +82,14 @@
 				</p>
 
 				<p>
-					<label for="site_list"><strong>Code Site URL(s)</strong></label><br>
-					<textarea name="site_list" id="site_list" rows="3" cols="60" required>{{ form_data.site_list or '' }}</textarea>
+					<label for="site_urls"><strong>Code Site URL or URLs</strong></label><br>
+					<textarea name="site_urls" id="site_urls" rows="3" cols="60" required>{{ form_data.site_urls or '' }}</textarea>
 					<br><small>One link per line. This should be the URL to a site from where your code can be downloaded or copied.</small>
 				</p>
 
 				<p>
-					<label for="ref_list"><strong>Reference Paper URL(s)</strong></label><br>
-					<textarea name="ref_list" id="ref_list" rows="3" cols="60">{{ form_data.ref_list or '' }}</textarea>
+					<label for="reference_urls"><strong>Reference Paper URL or URLs</strong></label><br>
+					<textarea name="reference_urls" id="reference_urls" rows="3" cols="60">{{ form_data.reference_urls or '' }}</textarea>
 					<br><small>(Not required if paper has been submitted but not yet published.) One link per line. Papers that reference your code.</small>
 				</p>
 
@@ -93,13 +131,9 @@
 				</p>
 				{% endif %}
 
-				<p>
-					<input type="submit" value="Submit Code" class="button">
-				</p>
-
-			</form>
+				</form>
+			</div>
+			{% endif %}
 		</div>
-		{% endif %}
-	</div>
 </div>
 {% endblock %}

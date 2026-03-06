@@ -1,141 +1,368 @@
 {% extends "base.html" %}
 
-{% block title %}Search - ASCL.net{% endblock %}
+{% block title %}{% if query %}Search: {{ query }} - ASCL.net{% else %}Search - ASCL.net{% endif %}{% endblock %}
+
+{% block admin_notices %}
+{% if is_admin_logged_in and search_method == 'mysql' and query %}
+<div class="admin-notice notice-warning">
+	<span class="notice-badge">ADMIN</span>
+	{% if mysql_fallback_reason == 'no_results' %}
+	<span>Typesense returned no results. Falling back to MySQL LIKE search.</span>
+	{% else %}
+	<span>Typesense search unavailable. Falling back to MySQL LIKE search (slower, less accurate).</span>
+	{% endif %}
+</div>
+{% endif %}
+{% endblock %}
 
 {% block content %}
-<h2>Search ASCL.net</h2>
+<div class="search-page">
 
-<div class="search-form">
-    <form method="GET" action="/search">
-        <input type="text"
-               name="q"
-               placeholder="Search by name, description, or author..."
-               value="{{ query }}"
-               autofocus>
-        <button type="submit">Search</button>
-    </form>
+	{% if query %}
+	<h2>Results for <span class="search-query">"{{ query }}"</span></h2>
+	{% else %}
+	<h2>Search ASCL.net</h2>
+	{% endif %}
+
+	<div class="search-box">
+		<form method="GET" action="/search" class="search-form">
+			<input type="text"
+			       name="q"
+			       placeholder="Search by name, description, or author..."
+			       value="{{ query }}"
+			       class="search-input"
+			       autofocus>
+			<button type="submit" class="search-button">Search</button>
+		</form>
+	</div>
+
+	{% if query %}
+	<div class="search-meta">
+		<span class="result-count">
+			{{ result_count }} result{% if result_count != 1 %}s{% endif %}
+			{% if result_count > 0 and per_page != 0 %}
+			<span class="result-range">(showing {{ start_result }}&ndash;{{ end_result }})</span>
+			{% endif %}
+		</span>
+		<span class="search-options">
+			{% if is_admin_logged_in and search_method == 'typesense' %}
+			<span class="admin-inline-note"><span class="notice-badge">ADMIN</span><span class="admin-inline-text">internal: {{ search_time_ms }}ms via Typesense</span></span>
+			<span class="options-separator">|</span>
+			{% endif %}
+			<span class="per-page-selector">
+				Show:
+				{% for pp in [20, 50, 100] %}
+				{% if pp == per_page %}
+				<strong>{{ pp }}</strong>
+				{% else %}
+				<a href="?q={{ query }}&page=1&per_page={{ pp }}">{{ pp }}</a>
+				{% endif %}
+				{% endfor %}
+				{% if per_page == 0 %}
+				<strong>All</strong>
+				{% else %}
+				<a href="?q={{ query }}&page=1&per_page=0">All</a>
+				{% endif %}
+			</span>
+		</span>
+	</div>
+
+	{% if results %}
+	<div class="codelist">
+		{% for code in results %}
+		<div class="item">
+			<span class="ascl_id">
+				{% if code.ascl_id == "0000.000" %}
+				[submitted]
+				{% else %}
+				[ascl:{{ code.ascl_id }}]
+				{% endif %}
+			</span>
+
+			<span class="title">
+				<a href="{% if code.ascl_id == '0000.000' %}/code/v/{{ code.pk }}{% else %}/{{ code.ascl_id }}{% endif %}">{{ code.title | safe }}</a>
+				{% if is_admin_logged_in %}
+				<a href="/admin/update_code/{{ code.pk }}" class="admin-edit-btn">Edit</a>
+				{% endif %}
+			</span>
+
+			{% if code.credit %}
+			<div class="credit">{{ code.credit | link_author_credit }}</div>
+			{% endif %}
+
+			<div class="abstract">
+				{% if code.abstract and code.abstract|length > 500 %}
+				<span class="abstract-short">
+					{% if search_method == 'typesense' and typesense_hits %}
+					{% set hit = typesense_hits[loop.index0] %}
+					{% if hit.highlights %}
+					{% for highlight in hit.highlights %}
+					{% if highlight.field == 'abstract' %}
+					{{ highlight.snippet | safe }}...
+					{% endif %}
+					{% endfor %}
+					{% else %}
+					{{ code.abstract[:500] }}...
+					{% endif %}
+					{% else %}
+					{{ code.abstract[:500] }}...
+					{% endif %}
+					<a href="#" class="expand-link" onclick="toggleAbstract(this, event)">expand</a>
+				</span>
+				<span class="abstract-full" style="display: none;">
+					{{ code.abstract }}
+					<a href="#" class="expand-link" onclick="toggleAbstract(this, event)">less</a>
+				</span>
+				{% else %}
+				{{ code.abstract if code.abstract else 'No description available.' }}
+				{% endif %}
+			</div>
+		</div>
+		{% endfor %}
+	</div>
+
+	{% if total_pages > 1 %}
+	<div class="search-pagination">
+		{% if page > 1 %}
+		<a href="?q={{ query }}&page={{ page - 1 }}&per_page={{ per_page }}" class="page-link page-prev">Previous</a>
+		{% else %}
+		<span class="page-link page-prev disabled">Previous</span>
+		{% endif %}
+
+		<span class="page-numbers">
+			{% set max_display = 10 %}
+			{% if total_pages <= max_display %}
+			{% for p in range(1, total_pages + 1) %}
+			{% if p == page %}
+			<span class="page-link current">{{ p }}</span>
+			{% else %}
+			<a href="?q={{ query }}&page={{ p }}&per_page={{ per_page }}" class="page-link">{{ p }}</a>
+			{% endif %}
+			{% endfor %}
+			{% else %}
+			{% if page > 3 %}
+			<a href="?q={{ query }}&page=1&per_page={{ per_page }}" class="page-link">1</a>
+			{% if page > 4 %}<span class="page-ellipsis">...</span>{% endif %}
+			{% endif %}
+
+			{% for p in range([1, page - 2]|max, [total_pages + 1, page + 3]|min) %}
+			{% if p == page %}
+			<span class="page-link current">{{ p }}</span>
+			{% else %}
+			<a href="?q={{ query }}&page={{ p }}&per_page={{ per_page }}" class="page-link">{{ p }}</a>
+			{% endif %}
+			{% endfor %}
+
+			{% if page < total_pages - 2 %}
+			{% if page < total_pages - 3 %}<span class="page-ellipsis">...</span>{% endif %}
+			<a href="?q={{ query }}&page={{ total_pages }}&per_page={{ per_page }}" class="page-link">{{ total_pages }}</a>
+			{% endif %}
+			{% endif %}
+		</span>
+
+		{% if page < total_pages %}
+		<a href="?q={{ query }}&page={{ page + 1 }}&per_page={{ per_page }}" class="page-link page-next">Next</a>
+		{% else %}
+		<span class="page-link page-next disabled">Next</span>
+		{% endif %}
+	</div>
+	{% endif %}
+
+	{% else %}
+	<div class="no-results">
+		<p>No codes found matching your search.</p>
+		<p>Try different keywords or <a href="/code/all">browse all codes</a>.</p>
+	</div>
+	{% endif %}
+
+	{% else %}
+	<div class="search-help">
+		<p>Enter a search term to find astrophysics source codes.</p>
+		<p class="search-help-subtext">You can search by code name, description, or author name.</p>
+	</div>
+	{% endif %}
+
 </div>
 
-{% if query %}
-    <div class="search-results-count">
-        Found {{ result_count }} result{% if result_count != 1 %}s{% endif %} for "{{ query }}"
-        {% if result_count > 0 %}
-        (showing {{ start_result }}-{{ end_result }})
-        {% endif %}
-        {% if search_method == 'typesense' %}
-        <span style="color: #27ae60; font-size: 0.9em;">({{ search_time_ms }}ms via Typesense)</span>
-        {% elif search_method == 'mysql' %}
-        <span style="color: #e67e22; font-size: 0.9em;">(MySQL fallback)</span>
-        {% endif %}
-    </div>
+<style>
+.search-page {
+	max-width: 900px;
+	margin: 0 auto;
+	padding: 0 20px;
+}
+.search-page h2 {
+	margin-bottom: 20px;
+}
+.search-query {
+	font-family: 'Consolas', 'Monaco', monospace;
+	color: #2c3e50;
+}
+.search-box {
+	margin-bottom: 25px;
+}
+.search-form {
+	display: flex;
+	gap: 10px;
+}
+.search-input {
+	flex: 1;
+	padding: 12px 16px;
+	font-size: 16px;
+	border: 2px solid #ddd;
+	border-radius: 6px;
+	transition: border-color 0.2s;
+}
+.search-input:focus {
+	outline: none;
+	border-color: #352bb3;
+}
+.search-button {
+	padding: 12px 24px;
+	font-size: 16px;
+	background: #352bb3;
+	color: white;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: background 0.2s;
+}
+.search-button:hover {
+	background: #2a2290;
+}
+.search-meta {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 10px 0;
+	margin-bottom: 15px;
+	border-bottom: 1px solid #eee;
+	font-size: 14px;
+	color: #666;
+}
+.result-count {
+	font-weight: 500;
+}
+.result-range {
+	font-weight: normal;
+	color: #888;
+}
+.search-options {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.search-timing {
+	color: #27ae60;
+	font-size: 12px;
+}
+.options-separator {
+	color: #ccc;
+}
+.per-page-selector {
+	font-size: 13px;
+}
+.per-page-selector a {
+	color: #352bb3;
+	text-decoration: none;
+	margin: 0 3px;
+}
+.per-page-selector a:hover {
+	text-decoration: underline;
+}
+.per-page-selector strong {
+	margin: 0 3px;
+}
+.search-page .codelist {
+	margin-bottom: 30px;
+}
+.search-pagination {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 5px;
+	padding: 20px 0;
+	flex-wrap: wrap;
+}
+.page-numbers {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+}
+.page-link {
+	display: inline-block;
+	padding: 8px 12px;
+	font-size: 14px;
+	color: #352bb3;
+	text-decoration: none;
+	border-radius: 4px;
+	transition: background 0.2s;
+}
+.page-link:hover:not(.disabled):not(.current) {
+	background: #f0f0f0;
+}
+.page-link.current {
+	background: #352bb3;
+	color: white;
+	font-weight: 600;
+}
+.page-link.disabled {
+	color: #bbb;
+	cursor: default;
+}
+.page-prev, .page-next {
+	font-weight: 500;
+}
+.page-ellipsis {
+	padding: 8px 4px;
+	color: #888;
+}
+.no-results {
+	text-align: center;
+	padding: 40px 20px;
+	color: #666;
+}
+.no-results p {
+	margin: 10px 0;
+}
+.no-results a {
+	color: #352bb3;
+}
+.search-help {
+	text-align: center;
+	padding: 40px 20px;
+	color: #666;
+}
+.search-help p {
+	margin: 8px 0;
+}
+.search-help-subtext {
+	font-size: 14px;
+	color: #888;
+}
+.expand-link {
+	color: #352bb3;
+	font-size: 13px;
+	margin-left: 4px;
+	text-decoration: none;
+}
+.expand-link:hover {
+	text-decoration: underline;
+}
+</style>
+<script>
+function toggleAbstract(link, event) {
+	event.preventDefault();
+	var container = link.closest('.result-abstract');
+	var shortText = container.querySelector('.abstract-short');
+	var fullText = container.querySelector('.abstract-full');
 
-    {% if total_pages > 1 %}
-    <div class="ascl_pagination_wrap">
-        <div class="ascl_pagination">
-            {% if page > 1 %}
-            <a href="?q={{ query }}&page={{ page - 1 }}&per_page={{ per_page }}">Previous</a>
-            {% else %}
-            <span class="disabled">Previous</span>
-            {% endif %}
-
-            {% set max_display = 10 %}
-            {% if total_pages <= max_display %}
-                {% for p in range(1, total_pages + 1) %}
-                    {% if p == page %}
-                    <strong>{{ p }}</strong>
-                    {% else %}
-                    <a href="?q={{ query }}&page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
-                    {% endif %}
-                {% endfor %}
-            {% else %}
-                {# Show first, current area, and last pages #}
-                {% if page > 3 %}
-                <a href="?q={{ query }}&page=1&per_page={{ per_page }}">1</a>
-                {% if page > 4 %}<span>...</span>{% endif %}
-                {% endif %}
-
-                {% for p in range([1, page - 2]|max, [total_pages + 1, page + 3]|min) %}
-                    {% if p == page %}
-                    <strong>{{ p }}</strong>
-                    {% else %}
-                    <a href="?q={{ query }}&page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
-                    {% endif %}
-                {% endfor %}
-
-                {% if page < total_pages - 2 %}
-                {% if page < total_pages - 3 %}<span>...</span>{% endif %}
-                <a href="?q={{ query }}&page={{ total_pages }}&per_page={{ per_page }}">{{ total_pages }}</a>
-                {% endif %}
-            {% endif %}
-
-            {% if page < total_pages %}
-            <a href="?q={{ query }}&page={{ page + 1 }}&per_page={{ per_page }}">Next</a>
-            {% else %}
-            <span class="disabled">Next</span>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
-
-    {% if results %}
-        <div class="codelist">
-            {% for code in results %}
-            <div class="item">
-                <span class="ascl_id">
-                    {% if code.ascl_id == "0000.000" %}
-                        [submitted]
-                    {% else %}
-                        [ascl:{{ code.ascl_id }}]
-                    {% endif %}
-                </span>
-
-                <span class="title">
-                    {% if code.ascl_id == "0000.000" %}
-                        <a href="/code/v/{{ code.pk }}">{{ code.title | safe }}</a>
-                    {% else %}
-                        <a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
-                    {% endif %}
-                </span>
-
-                {% if code.credit %}
-                <div class="credit">{{ code.credit | link_author_credit }}</div>
-                {% endif %}
-
-                <div class="abstract">
-                    {% if search_method == 'typesense' and typesense_hits %}
-                        {# Show highlighted snippet if available #}
-                        {% set hit = typesense_hits[loop.index0] %}
-                        {% if hit.highlights %}
-                            {% for highlight in hit.highlights %}
-                                {% if highlight.field == 'abstract' %}
-                                    {{ highlight.snippet | safe }}...
-                                {% endif %}
-                            {% endfor %}
-                        {% else %}
-                            {{ code.abstract[:300] if code.abstract else 'No description available.' }}
-                        {% endif %}
-                    {% else %}
-                        {{ code.abstract[:300] if code.abstract else 'No description available.' }}
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    {% else %}
-        <p style="padding: 2rem; text-align: center; color: #7f8c8d;">
-            No codes found matching your search. Try different keywords or <a href="/code/all">browse all codes</a>.
-        </p>
-    {% endif %}
-{% else %}
-    <div style="padding: 2rem; text-align: center; color: #7f8c8d;">
-        <p>Enter a search term to find astrophysics source codes.</p>
-        <p style="margin-top: 1rem;">You can search by:</p>
-        <ul style="list-style: none; margin-top: 0.5rem;">
-            <li>Code name</li>
-            <li>Description or abstract</li>
-            <li>Author name</li>
-        </ul>
-    </div>
-{% endif %}
-
+	if (shortText.style.display === 'none') {
+		shortText.style.display = 'inline';
+		fullText.style.display = 'none';
+	} else {
+		shortText.style.display = 'none';
+		fullText.style.display = 'inline';
+	}
+}
+</script>
 {% endblock %}

@@ -403,7 +403,7 @@ for hit in results['hits']:
 
 #### 2.1: Create Typesense Client Singleton
 
-**File**: `alt_ascl/ascl_core/search/TypesenseClient.py`
+**File**: `ascl_core/source/ascl_core/search/TypesenseClient.py`
 
 ```python
 """Typesense client singleton for ASCL search."""
@@ -799,7 +799,7 @@ const TYPESENSE_CONFIG = {
 
 #### 4.1: Create Sync Service
 
-**File**: `alt_ascl/ascl_core/search/TypesenseSync.py`
+**File**: `ascl_core/source/ascl_core/search/TypesenseSync.py`
 
 ```python
 """Sync MySQL changes to Typesense in real-time."""

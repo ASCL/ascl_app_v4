@@ -116,10 +116,17 @@ File: `ascl_net_app/configuration_files/production.cfg`
 
 Key settings:
 - Database: ascl_db_v4
-- Secret Key: Auto-generated secure key
 - Debug: Disabled
 - SQL Query Logging: Disabled
 - Session cookies: HTTP-only, SameSite=Lax
+
+### Secrets Configuration
+
+File: `/etc/ascl/secrets.cfg` (not in repo)
+
+Secrets (`SECRET_KEY`, `ADS_API_TOKEN`, `TYPESENSE_API_KEY`) are loaded from an external file that is not committed to the repository. See `ascl_net_app/configuration_files/secrets.cfg.example` for the template.
+
+The app refuses to start in production if required secrets are missing. Override the default path with `ASCL_SECRETS_FILE` env var.
 
 ### Startup Script
 
@@ -307,7 +314,8 @@ When you're ready to migrate to the production cPanel/Apache server:
 
 ### Current Security Measures
 
-- ✓ Secret key is auto-generated and stored in `production.cfg`
+- ✓ Secrets externalized to `/etc/ascl/secrets.cfg` (not in repo)
+- ✓ App validates required secrets at startup (refuses to start if missing)
 - ✓ Session cookies are HTTP-only (prevents XSS)
 - ✓ Database credentials stored in `~/.my.cnf` (not in code)
 - ✓ Admin authentication uses bcrypt password hashing

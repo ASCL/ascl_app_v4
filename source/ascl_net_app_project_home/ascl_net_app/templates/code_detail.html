@@ -4,18 +4,21 @@
 
 {% block content %}
 <h1>ASCL Code Record</h1>
-<div class="codelist">
+<div class="codelist code-record-detail">
 
 
 	<div class="item">
 
 
-		<span class="ascl_id">
-			[ascl:{{ code.ascl_id }}]
-		</span>
+			<span class="ascl_id">
+				[<a href="/{{ code.ascl_id }}">ascl:{{ code.ascl_id }}</a>]
+			</span>
 
 		<span class="title">
 			{{ code.title | safe }}
+			{% if is_admin_logged_in %}
+			<a href="/admin/update_code/{{ code.pk }}" class="admin-edit-btn">Edit</a>
+			{% endif %}
 		</span>
 
 		{% if code.credit %}
@@ -26,39 +29,65 @@
 		<div class="abstract">{{ code.abstract | link_ascl_ids }}</div>
 		{% endif %}
 
-		{% if site_links or code.site_url or code.code_site or described_in_links or used_in_links %}
+		{% if site_links or code.site_url or code.code_site or described_in_links or used_in_links or emac_links %}
 		<dl class="sites">
 			{% if site_links or code.site_url or code.code_site %}
 			<dt>Code site:</dt>
 			<dd>
-				{% if site_links %}
-					{% for link in site_links %}
-						<a href="{{ link }}">{{ link }}</a>{% if not loop.last %}<br>{% endif %}
-					{% endfor %}
-				{% else %}
-					{% if code.site_url %}<a href="{{ code.site_url }}">{{ code.site_url }}</a>{% endif %}
-					{% if code.code_site %}<a href="{{ code.code_site }}">{{ code.code_site }}</a>{% endif %}
+					{% if site_links %}
+						{% for link in site_links %}
+							<a href="{{ link }}">{{ link }}</a>
+						{% endfor %}
+					{% else %}
+						{% if code.site_url %}<a href="{{ code.site_url }}">{{ code.site_url }}</a>{% endif %}
+						{% if code.code_site %}<a href="{{ code.code_site }}">{{ code.code_site }}</a>{% endif %}
 				{% endif %}
 			</dd>
 			{% endif %}
 
-			{% if used_in_links %}
-			<dt>Used in:</dt>
-			<dd>
-				{% for link in used_in_links %}
-					<a href="{{ link }}">{{ link }}</a>{% if not loop.last %}<br>{% endif %}
-				{% endfor %}
-			</dd>
-			{% endif %}
+				{% if used_in_links %}
+				<dt>Used in:</dt>
+				<dd>
+					{% for link in used_in_links %}
+						<a href="{{ link }}">{{ link }}</a>
+					{% endfor %}
+				</dd>
+				{% endif %}
 
-			{% if described_in_links %}
-			<dt>Described in:</dt>
+				{% if described_in_links %}
+				<dt>Described in:</dt>
+				<dd>
+					{% for link in described_in_links %}
+						<a href="{{ link }}">{{ link }}</a>
+					{% endfor %}
+				</dd>
+				{% endif %}
+
+				{% if emac_links %}
+				<dt>EMAC link:</dt>
+				<dd>
+					{% for link in emac_links %}
+						<a href="{{ link }}">{{ link }}</a>
+					{% endfor %}
+				</dd>
+				{% endif %}
+			<div class="clear"></div>
+		</dl>
+		{% endif %}
+
+		{% if is_admin_logged_in and untyped_links %}
+		<dl class="sites untyped-links">
+			<dt>Untyped (hidden):</dt>
 			<dd>
-				{% for link in described_in_links %}
-					<a href="{{ link }}">{{ link }}</a>{% if not loop.last %}<br>{% endif %}
+				{% for link in untyped_links %}
+					<span class="untyped-link-item">
+						<a href="{{ link.url }}">{{ link.url }}</a>
+						<form method="POST" action="/delete_link/{{ link.pk }}" class="inline-delete" onsubmit="return confirm('Delete this untyped link?')">
+							<button type="submit" class="delete-link-btn" title="Delete link">Delete</button>
+						</form>
+					</span>
 				{% endfor %}
 			</dd>
-			{% endif %}
 			<div class="clear"></div>
 		</dl>
 		{% endif %}
@@ -118,4 +147,60 @@
 
 	</div>
 </div>
+
+<style>
+/* Match production classic record styling */
+.code-record-detail .title {
+	color: #352bb3;
+}
+.code-record-detail .abstract {
+	margin-top: 10px;
+	margin-bottom: 14px;
+}
+.code-record-detail dl.sites dt {
+	color: #352bb3;
+}
+.code-record-detail dl.sites {
+	margin-bottom: 14px;
+}
+.code-record-detail dl.untyped-links {
+	border-left: 3px solid #ccc;
+	padding-left: 8px;
+}
+.code-record-detail dl.untyped-links dt {
+	color: #999;
+	font-style: italic;
+}
+.code-record-detail dl.untyped-links dd a[href] {
+	color: #aaa;
+}
+.untyped-link-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+.inline-delete {
+	display: inline;
+	margin: 0;
+	padding: 0;
+}
+.delete-link-btn {
+	display: inline-block;
+	background: #c0392b;
+	color: #fff;
+	font-size: 11px;
+	padding: 2px 8px;
+	border: none;
+	border-radius: 3px;
+	text-decoration: none;
+	margin-left: 8px;
+	vertical-align: middle;
+	font-family: 'Merriweather Sans', sans-serif;
+	cursor: pointer;
+}
+.delete-link-btn:hover {
+	background: #a93226;
+}
+</style>
 {% endblock %}

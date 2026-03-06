@@ -30,7 +30,7 @@ python run_ascl_net_app.py --debug
 - `~/repositories/ASCL/dm-dbcore` - Core database connection module (actual DB layer)
 - `~/repositories/ASCL/ascl_core` - Wraps dm-dbcore, provides ASCL-specific models
 - `ascl_net_app` - Flask app, wraps ascl_core
-- `~/repositories/ASCL/alt_ascl/ascl_core` - OLD code, to be deleted
+- `~/repositories/ASCL/ascl_core/source/ascl_core` - OLD code, to be deleted
 
 **Solution**: Added configuration for `ascl_core.*` and `dm_dbcore.*` loggers in `logging_config.py` (lines 114-130).
 

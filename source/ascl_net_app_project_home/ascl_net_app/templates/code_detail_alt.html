@@ -6,7 +6,7 @@
 <div class="modern-detail-container">
 	<!-- Hero Section -->
 	<div class="hero-section">
-		<div class="ascl-badge">[ascl:{{ code.ascl_id }}]</div>
+		<div class="ascl-badge">[<a href="/{{ code.ascl_id }}">ascl:{{ code.ascl_id }}</a>]</div>
 		<h1 class="code-title">{{ code.title | safe }}</h1>
 		{% if code.credit %}
 		<div class="code-authors">{{ code.credit | link_author_credit }}</div>
@@ -122,6 +122,27 @@
 				</div>
 				{% endif %}
 
+
+				{% if emac_links %}
+				<div class="link-group">
+					<h3 class="link-group-title">
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+							<path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm7.5-6.923c-.67.204-1.335.82-1.887 1.855A7.97 7.97 0 0 0 5.145 4H7.5V1.077zM4.09 4a9.267 9.267 0 0 1 .64-1.539 6.7 6.7 0 0 1 .597-.933A7.025 7.025 0 0 0 2.255 4H4.09zm-.582 3.5c.03-.877.138-1.718.312-2.5H1.674a6.958 6.958 0 0 0-.656 2.5h2.49zM4.847 5a12.5 12.5 0 0 0-.338 2.5H7.5V5H4.847zM8.5 5v2.5h2.99a12.495 12.495 0 0 0-.337-2.5H8.5z"/>
+						</svg>
+						EMAC
+					</h3>
+					<div class="link-list">
+						{% for link in emac_links %}
+						<a href="{{ link }}" class="resource-link" target="_blank" rel="noopener">
+							<span class="link-url">{{ link }}</span>
+							<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+								<path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5L9.5 0z"/>
+							</svg>
+						</a>
+						{% endfor %}
+					</div>
+				</div>
+				{% endif %}
 				{% if ref_links %}
 				<div class="link-group">
 					<h3 class="link-group-title">
@@ -139,6 +160,29 @@
 								<path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5L9.5 0z"/>
 							</svg>
 						</a>
+						{% endfor %}
+					</div>
+				</div>
+				{% endif %}
+
+				{% if is_admin_logged_in and untyped_links %}
+				<div class="link-group untyped-link-group">
+					<h3 class="link-group-title">
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+							<path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+						</svg>
+						Untyped (hidden from public)
+					</h3>
+					<div class="link-list">
+						{% for link in untyped_links %}
+						<div class="untyped-link-row">
+							<a href="{{ link.url }}" class="resource-link untyped-link" target="_blank" rel="noopener">
+								<span class="link-url">{{ link.url }}</span>
+							</a>
+							<form method="POST" action="/delete_link/{{ link.pk }}" class="inline-delete" onsubmit="return confirm('Delete this untyped link?')">
+								<button type="submit" class="delete-link-btn" title="Delete link">Delete</button>
+							</form>
+						</div>
 						{% endfor %}
 					</div>
 				</div>
@@ -364,6 +408,48 @@
 	background: #f3f4f6;
 	border-color: #352bb3;
 	transform: translateX(4px);
+}
+
+.untyped-link-group {
+	border-left: 3px solid #ccc;
+	padding-left: 12px;
+}
+.untyped-link-group .link-group-title {
+	color: #999;
+	font-style: italic;
+}
+.untyped-link-group .link-group-title svg {
+	color: #999;
+}
+.untyped-link {
+	border-style: dashed;
+	flex: 1;
+	opacity: 0.45;
+}
+.untyped-link-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.untyped-link-group .inline-delete {
+	display: inline;
+	margin: 0;
+	padding: 0;
+}
+.untyped-link-group .delete-link-btn {
+	display: inline-block;
+	background: #c0392b;
+	color: #fff;
+	font-size: 11px;
+	padding: 2px 8px;
+	border: none;
+	border-radius: 3px;
+	font-family: 'Merriweather Sans', sans-serif;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+.untyped-link-group .delete-link-btn:hover {
+	background: #a93226;
 }
 
 .link-url {

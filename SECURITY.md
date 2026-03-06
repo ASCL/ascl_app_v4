@@ -21,6 +21,27 @@ port=3307
 - Set permissions: `chmod 600 ~/.my.cnf`
 - Do NOT commit `.my.cnf` to version control
 
+### Application Secrets (`secrets.cfg`)
+
+Production secrets are stored in `/etc/ascl/secrets.cfg`, which is **not committed to the repository**. This file is loaded by Flask after the main config files and contains:
+
+- `SECRET_KEY` - Flask session signing key
+- `ADS_API_TOKEN` - NASA ADS API token
+- `TYPESENSE_API_KEY` - Typesense search API key
+
+**Setup:**
+```bash
+sudo mkdir -p /etc/ascl
+sudo cp source/ascl_net_app_project_home/ascl_net_app/configuration_files/secrets.cfg.example /etc/ascl/secrets.cfg
+sudo nano /etc/ascl/secrets.cfg   # Fill in actual values
+sudo chown root:www-data /etc/ascl/secrets.cfg
+sudo chmod 640 /etc/ascl/secrets.cfg
+```
+
+The app validates these secrets at startup and **refuses to start in production** if any are missing. Override the path with the `ASCL_SECRETS_FILE` environment variable.
+
+A `secrets.cfg.example` template is committed to the repo for reference.
+
 ### Application Configuration
 
 In `default.cfg` or `production.cfg`:
@@ -31,7 +52,7 @@ DB_PASSWORD = ''  # Empty string uses ~/.my.cnf
 
 ### Environment Variables
 
-For production deployments, use environment variables:
+For production deployments, database credentials can use environment variables:
 
 ```bash
 export ASCLDB_USER=ascl_user
@@ -69,15 +90,17 @@ db = DatabaseConnection(database_connection_string=connection_string)
 
 ## Files to Keep Secure
 
-Add to `.gitignore`:
+The following are already in `.gitignore`:
 ```
 .env
 .env.*
 *.key
 *.pem
 *_password*
-config/production.cfg  # If it contains secrets
+secrets.cfg          # Actual secrets file (secrets.cfg.example IS committed)
 ```
+
+**Important**: `production.cfg` no longer contains secrets. All secrets are in `/etc/ascl/secrets.cfg`.
 
 ## Docker Compose
 
@@ -99,10 +122,13 @@ environment:
 
 ## Production Checklist
 
-- [ ] Remove all hardcoded passwords from config files
-- [ ] Use environment variables or credential files
+- [x] Remove all hardcoded secrets from config files (moved to `/etc/ascl/secrets.cfg`)
+- [x] App validates required secrets at startup (refuses to start if missing)
+- [x] Redeploy script checks for secrets file before deploying
+- [x] `secrets.cfg` excluded from repo via `.gitignore`
+- [x] `secrets.cfg.example` template committed for reference
+- [ ] Use environment variables or credential files for database
 - [ ] Set `chmod 600` on credential files
-- [ ] Add credential files to `.gitignore`
 - [ ] Use separate credentials for dev/staging/production
 - [ ] Rotate passwords regularly
 - [ ] Enable SSL/TLS for database connections
@@ -112,4 +138,4 @@ environment:
 
 ---
 
-*Last Updated: 2025-10-01*
+*Last Updated: 2026-02-20*

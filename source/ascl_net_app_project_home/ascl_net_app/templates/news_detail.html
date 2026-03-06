@@ -3,14 +3,60 @@
 {% block title %}{{ post.title }}{% endblock %}
 
 {% block content %}
-<div class="codelist">
-	<div class="item">
-		<h2>{{ post.title }}</h2>
-		<div class="news-date">{{ post.date.strftime("%Y-%m-%d") if post.date else "" }}</div>
-		<div class="news-content">
-			{{ post.content|safe }}
+<div class="codelist news-layout">
+	<div class="news-main">
+		<div class="item">
+			<h2>{{ post.title }}</h2>
+			<div class="news-meta">{{ post.date.strftime("%B %-d, %Y") if post.date else "" }}{% if post.author %} &mdash; {{ post.author }}{% endif %}</div>
+			<div class="news-content">
+				{{ post.content|safe }}
+			</div>
 		</div>
-		<p><a href="/news">Back to news</a></p>
 	</div>
+
+	<aside class="news-sidebar">
+		<div class="news-side-block">
+			<h3>Search</h3>
+			<form action="/news" method="get" class="news-search">
+				<input type="text" name="q" value="" placeholder="Search news">
+				<button type="submit">Search</button>
+			</form>
+		</div>
+
+		<div class="news-side-block">
+			<h3>Recent Posts</h3>
+			<ul class="news-side-list">
+				{% for item in sidebar.recent_posts %}
+					<li class="{% if item.slug == post.slug %}current{% endif %}">
+						<a href="/news/{{ item.slug }}">{{ item.title }}</a>
+					</li>
+				{% endfor %}
+			</ul>
+		</div>
+
+		<div class="news-side-block">
+			<h3>Categories</h3>
+			<ul class="news-side-list">
+				{% for item in sidebar.categories %}
+					<li>
+						<a href="{{ url_for('news_page.news_index', category=item.slug) }}">{{ item.name }}</a>
+						<span class="news-count">({{ item.post_count }})</span>
+					</li>
+				{% endfor %}
+			</ul>
+		</div>
+
+		<div class="news-side-block">
+			<h3>Archives</h3>
+			<ul class="news-side-list">
+				{% for item in sidebar.archives %}
+					<li>
+						<a href="{{ url_for('news_page.news_index', archive=item.archive_key) }}">{{ item.archive_label }}</a>
+						<span class="news-count">({{ item.post_count }})</span>
+					</li>
+				{% endfor %}
+			</ul>
+		</div>
+	</aside>
 </div>
 {% endblock %}

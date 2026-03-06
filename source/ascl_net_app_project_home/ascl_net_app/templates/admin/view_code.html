@@ -1,23 +1,9 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 
 {% block title %}View Code: {{ code.title }}{% endblock %}
 
-{% block content %}
+{% block admin_content %}
 <h2>{{ code.title }}</h2>
-
-{% with messages = get_flashed_messages(with_categories=true) %}
-	{% if messages %}
-		<ul class="flash-messages">
-		{% for category, message in messages %}
-			<li class="{{ category }}">{{ message|safe }}</li>
-		{% endfor %}
-		</ul>
-	{% endif %}
-{% endwith %}
-
-{% if current_user %}
-	<p>Signed in as <strong>{{ current_user.username }}</strong>. <a href="{{ url_for('admin_page.admin_logout') }}">Logout</a></p>
-{% endif %}
 
 <div class="admin-actions">
 	<a href="{{ url_for('admin_page.update_code', pk=code.pk) }}" class="button primary">Edit</a>
@@ -54,19 +40,19 @@
 		</tr>
 		<tr>
 			<th>Site URLs</th>
-			<td>{{ code.site_list or 'None' }}</td>
+			<td><pre>{{ site_urls or 'None' }}</pre></td>
 		</tr>
 		<tr>
 			<th>Reference URLs</th>
-			<td>{{ code.ref_list or 'None' }}</td>
+			<td><pre>{{ reference_urls or 'None' }}</pre></td>
 		</tr>
 		<tr>
 			<th>Described In</th>
-			<td>{{ code.described_in or 'None' }}</td>
+			<td><pre>{{ described_in_urls or 'None' }}</pre></td>
 		</tr>
 		<tr>
 			<th>Used In</th>
-			<td>{{ code.used_in or 'None' }}</td>
+			<td><pre>{{ used_in_urls or 'None' }}</pre></td>
 		</tr>
 		<tr>
 			<th>Citation Method</th>
@@ -74,7 +60,7 @@
 		</tr>
 		<tr>
 			<th>See Also</th>
-			<td>{{ code.see_also or 'None' }}</td>
+			<td>{{ see_also_str or 'None' }}</td>
 		</tr>
 		<tr>
 			<th>Aliases</th>
@@ -98,7 +84,7 @@
 		</tr>
 		<tr>
 			<th>Notes</th>
-			<td>{{ code.notes or 'None' }}</td>
+			<td>{% if code.notes %}{{ code.notes|format_legacy_notes }}{% else %}None{% endif %}</td>
 		</tr>
 		<tr class="{% if code.published == 1 %}status-published{% else %}status-unpublished{% endif %}">
 			<th>Published</th>
@@ -107,10 +93,6 @@
 		<tr class="{% if code.archived == 1 %}status-archived{% endif %}">
 			<th>Archived</th>
 			<td>{% if code.archived == 1 %}Yes{% else %}No{% endif %}</td>
-		</tr>
-		<tr>
-			<th>Views</th>
-			<td>{{ code.views or 0 }}</td>
 		</tr>
 		<tr>
 			<th>Time Added</th>
@@ -199,6 +181,63 @@
 .status-archived td {
 	color: #c0392b;
 	font-weight: bold;
+}
+/* Legacy notes table styling */
+.legacy-notes-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+	margin-top: 5px;
+}
+.legacy-notes-table th {
+	background: #eee;
+	padding: 6px 8px;
+	text-align: left;
+	border: 1px solid #ddd;
+	font-weight: 600;
+	white-space: nowrap;
+}
+.legacy-notes-table td {
+	padding: 6px 8px;
+	border: 1px solid #ddd;
+	vertical-align: top;
+}
+.legacy-notes-table .note-date {
+	white-space: nowrap;
+	color: #666;
+	width: 90px;
+}
+.legacy-notes-table .note-initials {
+	white-space: nowrap;
+	font-weight: 600;
+	color: #2980b9;
+	width: 40px;
+	text-transform: uppercase;
+}
+.legacy-notes-table .note-content {
+	word-break: break-word;
+}
+.legacy-notes-table tr:nth-child(even) {
+	background: #fafafa;
+}
+.legacy-notes-table tr:hover {
+	background: #f0f0f0;
+}
+.legacy-notes-raw {
+	white-space: pre-wrap;
+	margin: 0;
+	font-family: inherit;
+	font-size: 13px;
+}
+.legacy-notes-unparsed {
+	margin-top: 10px;
+	padding-top: 8px;
+	border-top: 1px dashed #ccc;
+}
+.legacy-notes-unparsed pre {
+	margin: 5px 0 0 0;
+	white-space: pre-wrap;
+	font-size: 13px;
 }
 </style>
 {% endblock %}

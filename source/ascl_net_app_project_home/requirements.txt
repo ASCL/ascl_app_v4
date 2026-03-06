@@ -24,6 +24,8 @@ bcrypt>=4.0.0  # Secure password hashing
 
 # Data handling
 phpserialize>=1.3  # Parse PHP serialized data (legacy field format)
+nameparser>=1.1.0  # Parse and normalize author names
+requests>=2.31.0  # Typesense HTTP client calls
 
 # Optional: Performance improvements
 # cdecimal  # Obsolete: Built into Python 3 as 'decimal' module

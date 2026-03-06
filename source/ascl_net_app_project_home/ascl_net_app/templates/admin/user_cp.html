@@ -1,0 +1,79 @@
+{% extends "admin/base.html" %}
+
+{% block title %}User Control Panel{% endblock %}
+
+{% block admin_content %}
+<h2>User Control Panel</h2>
+
+<div class="user-cp-section">
+	<h3>Update User Info</h3>
+	<form action="{{ url_for('admin_page.update_user') }}" method="post">
+		<label for="real_name">Real Name</label>
+		<input type="text" name="real_name" id="real_name" value="{{ current_user.real_name }}" maxlength="30" required />
+		<input type="submit" value="Update" class="btn btn-primary" />
+	</form>
+</div>
+
+<div class="user-cp-section">
+	<h3>Change Password</h3>
+	<form action="{{ url_for('admin_page.update_password') }}" method="post">
+		<label for="password">Current Password</label>
+		<input type="password" name="password" id="password" maxlength="30" required />
+		<label for="new_password">New Password</label>
+		<input type="password" name="new_password" id="new_password" maxlength="30" required />
+		<label for="new_password_confirm">Confirm New Password</label>
+		<input type="password" name="new_password_confirm" id="new_password_confirm" maxlength="30" required />
+		<input type="submit" value="Change Password" class="btn btn-primary" />
+	</form>
+</div>
+
+<style>
+.user-cp-section {
+	margin-bottom: 2rem;
+	max-width: 400px;
+}
+.user-cp-section h3 {
+	margin-bottom: 0.75rem;
+	font-size: 1.1rem;
+	border-bottom: 1px solid #ddd;
+	padding-bottom: 0.5rem;
+}
+.user-cp-section form {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.user-cp-section label {
+	font-weight: 600;
+	font-size: 0.9rem;
+	color: #333;
+}
+.user-cp-section input[type="text"],
+.user-cp-section input[type="password"] {
+	padding: 0.5rem 0.75rem;
+	font-size: 0.9rem;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+}
+.user-cp-section input[type="text"]:focus,
+.user-cp-section input[type="password"]:focus {
+	outline: none;
+	border-color: #2c3e50;
+	box-shadow: 0 0 0 2px rgba(44, 62, 80, 0.1);
+}
+.user-cp-section .btn {
+	margin-top: 0.5rem;
+	align-self: flex-start;
+	padding: 0.4rem 1rem;
+	font-size: 0.9rem;
+	cursor: pointer;
+	border: 1px solid #2c3e50;
+	border-radius: 4px;
+	background: #2c3e50;
+	color: white;
+}
+.user-cp-section .btn:hover {
+	opacity: 0.9;
+}
+</style>
+{% endblock %}

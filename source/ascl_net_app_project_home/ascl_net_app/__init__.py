@@ -114,6 +114,23 @@ def create_app(debug=False): #, conf=dict()):
 		# Only warn in production mode if no config file found
 		print(yellow_text("Warning: No server configuration file found."))
 
+	# Load secrets from external file (not in repo).
+	# Default path: /etc/ascl/secrets.cfg
+	# Override with ASCL_SECRETS_FILE env var.
+	# In debug mode, also check configuration_files/secrets.cfg as a fallback.
+	secrets_file = os.environ.get('ASCL_SECRETS_FILE', '/etc/ascl/secrets.cfg')
+	if os.path.exists(secrets_file):
+		app.config.from_pyfile(secrets_file)
+	elif app.debug:
+		local_secrets = _app_setup_utils.getConfigFile("secrets.cfg")
+		if os.path.exists(local_secrets):
+			app.config.from_pyfile(local_secrets)
+			print_info(f"Loaded local secrets from {local_secrets}")
+		else:
+			print_warning("No secrets file found (search, ADS features may be limited)")
+	else:
+		print(yellow_text("WARNING: Secrets file not found: " + secrets_file))
+
 	# Override database credentials from environment variables if set
 	if os.environ.get('ASCLDB_USER'):
 		app.config['DB_USER'] = os.environ.get('ASCLDB_USER')
@@ -124,6 +141,19 @@ def create_app(debug=False): #, conf=dict()):
 		app.config['DB_PASSWORD'] = os.environ.get('ASCLDB_PASSWORD')
 		if app.debug:
 			print_info("Using database password from environment variable")
+
+	# Optional Typesense overrides from environment (useful for prod deploys)
+	if os.environ.get('TYPESENSE_URL'):
+		app.config['TYPESENSE_URL'] = os.environ.get('TYPESENSE_URL')
+	if os.environ.get('TYPESENSE_API_KEY'):
+		app.config['TYPESENSE_API_KEY'] = os.environ.get('TYPESENSE_API_KEY')
+
+	# Validate required secrets in production
+	if not (app.debug or app.testing):
+		missing = [k for k in ['SECRET_KEY', 'ADS_API_TOKEN', 'TYPESENSE_API_KEY']
+				   if not app.config.get(k) or str(app.config[k]).startswith('dev-')]
+		if missing:
+			raise RuntimeError(f"Missing required secrets in production: {', '.join(missing)}")
 
 	# -----------------------------
 	# Perform app setup below here.
@@ -139,6 +169,43 @@ def create_app(debug=False): #, conf=dict()):
 	# Set up logging for the application and ascl_core module
 	from .utilities.logging_config import setup_logging
 	setup_logging(app)
+
+	# Log Typesense connectivity status once at startup.
+	try:
+		if app.config.get("USING_TYPESENSE", False):
+			from .services.typesense_client import TypesenseClient
+			typesense = TypesenseClient.get_instance()
+			typesense.configure(app)
+			if typesense.is_healthy(force_check=True):
+				status_code, payload = typesense.get_collection_status()
+				if status_code == 200:
+					app.logger.info(
+						f"Typesense connected/authenticated: {typesense.base_url}/collections/{typesense.collection}"
+					)
+				elif status_code == 404:
+					app.logger.warning(
+						f"📭 Typesense connected/authenticated but collection '{typesense.collection}' was not found at "
+						f"{typesense.base_url}. Create it before enabling Typesense search."
+					)
+				elif status_code in (401, 403):
+					app.logger.warning(
+						f"Typesense reachable but API key rejected for collection access at {typesense.base_url} "
+						f"(collection={typesense.collection}, status={status_code})"
+					)
+				else:
+					app.logger.warning(
+						f"Typesense reachable but collection check failed at startup "
+						f"(status={status_code}, collection={typesense.collection}, base_url={typesense.base_url}, detail={payload})"
+					)
+			else:
+				app.logger.warning(
+					f"Typesense unavailable at startup: {typesense.base_url} "
+					f"(fallback_to_mysql={typesense.fallback_to_mysql})"
+				)
+		else:
+			app.logger.info("Typesense disabled at startup (USING_TYPESENSE=False)")
+	except Exception as e:
+		app.logger.warning(f"Typesense startup check failed: {e}")
 
 	# Change the implementation of "decimal" to a C-based version (much! faster)
 	try:
@@ -168,11 +235,57 @@ def create_app(debug=False): #, conf=dict()):
 		def shutdown_session(exception=None):
 			"""
 			Remove database sessions at the end of each request or when the app shuts down.
-			Trillian2DBConnection uses a scoped_session which needs cleanup per request.
+			Both `Trillian2Connection` (singleton object) and `Trillian2DBConnection`
+			(module-level) expose scoped sessions in current code, so clean up both.
 			Ref: http://flask.pocoo.org/docs/patterns/sqlalchemy/
 			"""
-			from ascl_core.database.connections import Trillian2DBConnection as db
-			db.Session.remove()
+			# Most controllers use this session handle.
+			from ascl_core.database.connections import Trillian2Connection as conn
+			# A few modules still import/use the module-level session.
+			from ascl_core.database.connections import Trillian2DBConnection as db_module
+
+			if exception is not None:
+				# Ensure failed requests don't leave transactions in invalid state.
+				try:
+					conn.Session.rollback()
+				except Exception:
+					pass
+				try:
+					db_module.Session.rollback()
+				except Exception:
+					pass
+
+			try:
+				conn.Session.remove()
+			except Exception:
+				pass
+			try:
+				db_module.Session.remove()
+			except Exception:
+				pass
+
+		@app.before_request
+		def ensure_clean_scoped_sessions():
+			"""
+			Start each request with a fresh scoped session to avoid carrying over
+			invalid transaction state between requests.
+			"""
+			from ascl_core.database.connections import Trillian2Connection as conn
+			from ascl_core.database.connections import Trillian2DBConnection as db_module
+			try:
+				conn.Session.remove()
+			except Exception:
+				pass
+			try:
+				db_module.Session.remove()
+			except Exception:
+				pass
+
+	# Custom error pages
+	@app.errorhandler(404)
+	def page_not_found(e):
+		from flask import render_template
+		return render_template("404.html"), 404
 
 	# Register all paths (URLs) available.
 	register_blueprints(app=app)
@@ -180,6 +293,16 @@ def create_app(debug=False): #, conf=dict()):
 	# Register all Jinja filters in the file.
 	app.register_blueprint(jinja_filters.blueprint)
 
+	# Context processor to inject admin user info into all templates
+	@app.context_processor
+	def inject_admin_user():
+		"""Make admin session info available to all templates."""
+		from flask import session
+		is_admin = 'user_id' in session
+		admin_username = session.get('username') if is_admin else None
+		return {
+			'is_admin_logged_in': is_admin,
+			'admin_username': admin_username
+		}
+
 	return app
-
-

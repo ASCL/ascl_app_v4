@@ -5,14 +5,23 @@
 {% block content %}
 <h1>Searching for codes credited to '{{ search_term }}'</h1>
 
-<p><strong style="color: red;"><span style="font-size: 19px;">&#10149;</span> Tip!</strong> Refine or expand your search. Authors are sometimes listed as 'Smith, J. K.' instead of 'Smith, John' so it is useful to search for last names only. Note this is currently a simple phrase search.</p>
-
-<form action="/code/cs_submit" method="post">
-	<input type="text" name="search" value="{{ search_term }}" />
-	<input type="submit" value="Search" />
+<form action="/code/cs_submit" method="post" class="credit-search-form">
+	<div class="credit-search-row">
+		<input type="text" name="search" value="{{ search_term }}" class="credit-search-input" placeholder="Search author name (e.g., Pietrow, Alexander G. M.)" />
+		<input type="submit" value="Author Search" class="credit-search-btn" />
+	</div>
+	<div class="credit-search-tip"><strong>Tip:</strong> Author search checks name variants (e.g., <em>Smith, John</em>, <em>Smith J</em>). Last names are still best when results are broad.</div>
 </form>
 
-<p>Found <strong>{{ result_count }}</strong> code(s){% if result_count == 100 %} (limited to 100 results){% endif %}</p>
+<p>Found <strong>{{ result_count }}</strong> code{% if result_count != 1 %}s{% endif %}.{% if result_count == 100 %} (Limited to 100 results.){% endif %}</p>
+{% if is_admin_logged_in and search_method %}
+<p style="margin-top: -6px;">
+	<span class="admin-inline-note">
+		<span class="notice-badge">ADMIN</span>
+		<span class="admin-inline-text">internal: search backend = {{ search_method }}</span>
+	</span>
+</p>
+{% endif %}
 
 <div class="codelist">
 	{% if codes %}
@@ -33,6 +42,9 @@
 				{% else %}
 					<a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
 				{% endif %}
+				{% if is_admin_logged_in %}
+				<a href="/admin/update_code/{{ code.pk }}" class="admin-edit-btn">Edit</a>
+				{% endif %}
 			</span>
 
 			{% if code.credit %}
@@ -40,7 +52,7 @@
 			{% endif %}
 
 			<div class="abstract">
-				{{ code.abstract if code.abstract else 'No description available.' }}
+				{{ (code.abstract if code.abstract else 'No description available.') | link_ascl_ids }}
 			</div>
 		</div>
 		{% endfor %}

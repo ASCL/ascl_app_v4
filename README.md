@@ -427,6 +427,37 @@ sudo tail -f /var/log/nginx/ascl_net_app_error.log
 
 ## Development
 
+### Style Guide
+
+#### Database Naming Conventions
+
+| Convention | Rule | Example |
+|------------|------|---------|
+| **Primary Keys** | Always named `pk` | `code.pk`, `keyword.pk` |
+| **Foreign Keys** | `{referenced_table}_pk` (singular) | `code_pk`, `keyword_pk` |
+| **Table Names** | Singular to align with SQLAlchemy classes | `code`, `keyword`, `link` |
+| **Junction Tables** | `{table1}_to_{table2}` (both singular) | `code_to_keyword` |
+
+**Examples:**
+```sql
+-- Primary key
+ALTER TABLE keyword CHANGE id pk INT AUTO_INCREMENT;
+
+-- Foreign key references
+code_to_keyword.code_pk → code.pk
+code_to_keyword.keyword_pk → keyword.pk
+
+-- Table naming
+codes → code (singular)
+keywords → keyword (singular)
+code_keywords → code_to_keyword (junction table)
+```
+
+**SQLAlchemy Class Naming:**
+- Class names are singular PascalCase: `ASCLCode`, `Keyword`, `Link`
+- Junction table classes: `ASCLCodeToKeyword` (matches table `code_to_keyword`)
+- Table names should match (singular): `code`, `keyword`, `link`
+
 ### Adding New Routes
 
 1. Create controller in `ascl_net_app/controllers/`:

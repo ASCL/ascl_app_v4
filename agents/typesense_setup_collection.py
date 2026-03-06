@@ -9,12 +9,11 @@ Usage:
 
 import requests
 import json
+import os
 
 # Typesense configuration
-TYPESENSE_HOST = 'localhost'
-TYPESENSE_PORT = 8108
-TYPESENSE_API_KEY = 'oWBN1v9zT9C3ZM48gblWobm4ibxcrFcn11hGpb3HiPzT9UOL'
-TYPESENSE_URL = f'http://{TYPESENSE_HOST}:{TYPESENSE_PORT}'
+TYPESENSE_URL = os.environ.get('TYPESENSE_URL', 'http://127.0.0.1:8108').rstrip('/')
+TYPESENSE_API_KEY = os.environ.get('TYPESENSE_API_KEY', '')
 
 # Headers for API requests
 HEADERS = {
@@ -156,6 +155,10 @@ def main():
     print("ASCL Typesense Collection Setup")
     print("=" * 60)
     print()
+
+    if not TYPESENSE_API_KEY:
+        print("❌ TYPESENSE_API_KEY is not set. Export it and rerun.")
+        return False
 
     # Step 1: Check Typesense health
     if not check_typesense_health():

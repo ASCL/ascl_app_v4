@@ -113,7 +113,7 @@ sudo mkdir -p /etc/typesense
 openssl rand -base64 32
 
 # Example output (use your own!):
-# oWBN1v9zT9C3ZM48gblWobm4ibxcrFcn11hGpb3HiPzT9UOL
+# <your-generated-key-here>
 ```
 
 **Step 4: Create Configuration File**

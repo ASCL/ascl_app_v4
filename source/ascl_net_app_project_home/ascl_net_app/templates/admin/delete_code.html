@@ -1,23 +1,9 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 
 {% block title %}Delete Code: {{ code.title }}{% endblock %}
 
-{% block content %}
+{% block admin_content %}
 <h2>Confirm Delete</h2>
-
-{% with messages = get_flashed_messages(with_categories=true) %}
-	{% if messages %}
-		<ul class="flash-messages">
-		{% for category, message in messages %}
-			<li class="{{ category }}">{{ message|safe }}</li>
-		{% endfor %}
-		</ul>
-	{% endif %}
-{% endwith %}
-
-{% if current_user %}
-	<p>Signed in as <strong>{{ current_user.username }}</strong>. <a href="{{ url_for('admin_page.admin_logout') }}">Logout</a></p>
-{% endif %}
 
 <div class="delete-warning">
 	<p><strong>Warning:</strong> You are about to permanently delete the following code:</p>

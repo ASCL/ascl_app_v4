@@ -3,7 +3,7 @@
 {% block title %}{{ page_title or "About - ASCL.net" }}{% endblock %}
 
 {% block content %}
-<div class="codelist">
+<div class="codelist about-page">
 	<div class="item">
 		<h1>{{ page_title or "About ASCL.net" }}</h1>
 
@@ -13,7 +13,7 @@
 					{% if page.ID == current_page %}
 						<strong>{{ page.post_title }}</strong>
 					{% else %}
-						<a href="/getwp/{{ page.ID }}">{{ page.post_title }}</a>
+						<a href="{{ page_routes[page.ID] if page_routes and page.ID in page_routes else '/getwp/' ~ page.ID }}">{{ page.post_title }}</a>
 					{% endif %}
 					{% if not loop.last %}&nbsp;&bull;&nbsp;{% endif %}
 				{% endfor %}
@@ -29,4 +29,15 @@
 		{% endif %}
 	</div>
 </div>
+
+<style>
+.about-page {
+	max-width: 800px;
+}
+.about-page #subpages {
+	max-width: none;
+	font-size: 13px;
+	white-space: nowrap;
+}
+</style>
 {% endblock %}

@@ -3,6 +3,7 @@
 import flask
 from flask import render_template, request, redirect, session
 from datetime import datetime
+from sqlalchemy import text
 
 submit_code_page = flask.Blueprint("submit_code_page", __name__)
 
@@ -10,24 +11,64 @@ submit_code_page = flask.Blueprint("submit_code_page", __name__)
 CHALLENGE_ANSWER = "physicsisphun"
 
 
-def _prep_list_for_db(text):
-	"""Convert newline-separated URLs to PHP-serialized format for database storage.
+def _add_links_for_code(db_session, code_pk, link_type_short_name, urls_text):
+	"""Add links for a newly created code."""
+	if not urls_text or not urls_text.strip():
+		return
 
-	Matches PHP function: prep_list_for_db()
-	"""
-	if not text:
-		return None
+	# Get or create link_type_pk
+	result = db_session.execute(text(
+		"SELECT pk FROM link_type WHERE short_name = :short_name"
+	), {"short_name": link_type_short_name}).first()
 
-	lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
-	if not lines:
-		return None
+	if result:
+		link_type_pk = result.pk
+	else:
+		# Create new link type
+		db_session.execute(text("""
+			INSERT INTO link_type (short_name, name)
+			VALUES (:short_name, :name)
+		"""), {
+			"short_name": link_type_short_name,
+			"name": link_type_short_name.replace('-', ' ').title()
+		})
+		result = db_session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+		link_type_pk = result
 
-	# PHP serialize format: a:N:{i:0;s:LEN:"value";...}
-	parts = []
-	for i, line in enumerate(lines):
-		parts.append(f'i:{i};s:{len(line)}:"{line}";')
+	# Insert links
+	urls = [url.strip() for url in urls_text.strip().split("\n") if url.strip()]
+	for order, url in enumerate(urls):
+		db_session.execute(text("""
+			INSERT INTO link (code_pk, url, link_type_pk, display_order)
+			VALUES (:code_pk, :url, :link_type_pk, :display_order)
+		"""), {
+			"code_pk": code_pk,
+			"url": url,
+			"link_type_pk": link_type_pk,
+			"display_order": order
+		})
 
-	return f'a:{len(lines)}:{{{" ".join(parts).replace("; ", ";")}}}'
+
+def _add_authors_for_code(db_session, code_pk, credit_text):
+	"""Insert author rows from semicolon-delimited credit text."""
+	if not credit_text or not credit_text.strip():
+		return
+
+	authors = [token.strip() for token in credit_text.split(";") if token.strip()]
+	if not authors:
+		return
+
+	for order, author in enumerate(authors):
+		db_session.execute(text("""
+			INSERT INTO author (code_pk, raw_name, display_name, raw_credit_text, display_order)
+			VALUES (:code_pk, :raw_name, :display_name, :raw_credit_text, :display_order)
+		"""), {
+			"code_pk": code_pk,
+			"raw_name": author,
+			"display_name": author,
+			"raw_credit_text": credit_text.strip(),
+			"display_order": order
+		})
 
 
 @submit_code_page.route("/code/submit", methods=['GET', 'POST'])
@@ -54,8 +95,8 @@ def submit_code():
 			'title': request.form.get('title', '').strip(),
 			'credit': request.form.get('credit', '').strip(),
 			'abstract': request.form.get('abstract', '').strip(),
-			'site_list': request.form.get('site_list', '').strip(),
-			'ref_list': request.form.get('ref_list', '').strip(),
+			'site_urls': request.form.get('site_urls', '').strip(),
+			'reference_urls': request.form.get('reference_urls', '').strip(),
 			'citation_method': request.form.get('citation_method', '').strip(),
 			'name': request.form.get('name', '').strip(),
 			'email': request.form.get('email', '').strip(),
@@ -73,7 +114,7 @@ def submit_code():
 			errors.append("Credit (author names) is required.")
 		if not form_data['abstract']:
 			errors.append("Abstract is required.")
-		if not form_data['site_list']:
+		if not form_data['site_urls']:
 			errors.append("At least one code site URL is required.")
 		if not form_data['name']:
 			errors.append("Your name is required.")
@@ -104,20 +145,29 @@ def submit_code():
 				new_code.title = form_data['title']
 				new_code.credit = form_data['credit']
 				new_code.abstract = form_data['abstract']
-				new_code.site_list = _prep_list_for_db(form_data['site_list'])
-				new_code.ref_list = _prep_list_for_db(form_data['ref_list'])
 				new_code.citation_method = form_data['citation_method'] if form_data['citation_method'] else None
 				new_code.email = form_data['email']
 				new_code.notes = notes
 				new_code.time_added = datetime.now()
+				new_code.time_updated = datetime.now()
 				new_code.ascl_id = '0000.000'  # User-submitted codes get placeholder ID
 				new_code.published = 0  # Not published until reviewed
-				new_code.views = 0
 
 				db_session.add(new_code)
-				db_session.commit()
+				db_session.flush()  # Get the PK
 
 				code_pk = new_code.pk
+
+				# Add links to link table
+				_add_links_for_code(db_session, code_pk, 'code-site', form_data['site_urls'])
+				_add_links_for_code(db_session, code_pk, 'reference', form_data['reference_urls'])
+				try:
+					_add_authors_for_code(db_session, code_pk, form_data['credit'])
+				except Exception:
+					# Author table may not exist yet if migration has not run.
+					pass
+
+				db_session.commit()
 
 				# Store in session so user can edit their submission
 				if 'editable_codes' not in session:

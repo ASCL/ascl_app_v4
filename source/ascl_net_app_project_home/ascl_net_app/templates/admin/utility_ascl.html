@@ -1,15 +1,15 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 
 {% block title %}Full ASCL Table{% endblock %}
 
-{% block content %}
+{% block admin_content %}
 <h2>Full ASCL Table</h2>
 
 <p>
 	Filter:
-	<a href="{{ url_for('admin_page.utility_ascl') }}">All</a> |
-	<a href="{{ url_for('admin_page.utility_ascl', filter='published') }}">Published</a> |
-	<a href="{{ url_for('admin_page.utility_ascl', filter='unpublished') }}">Unpublished</a>
+	<a href="{{ url_for('admin_page.utility_full_table') }}">All</a> |
+	<a href="{{ url_for('admin_page.utility_full_table', filter='published') }}">Published</a> |
+	<a href="{{ url_for('admin_page.utility_full_table', filter='unpublished') }}">Unpublished</a>
 </p>
 
 <p>Total: {{ codes|length }} codes</p>

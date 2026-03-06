@@ -8,9 +8,23 @@ Provides a Flask-integrated client for Typesense search with:
 - Convenient search methods
 """
 
-import requests
 import logging
+import time
+from urllib.parse import urlparse
 from flask import current_app
+
+try:
+    import requests
+    RequestsTimeout = requests.exceptions.Timeout
+    RequestsConnectionError = requests.exceptions.ConnectionError
+except Exception:  # pragma: no cover - environment-dependent
+    requests = None
+
+    class _RequestsUnavailable(Exception):
+        pass
+
+    RequestsTimeout = _RequestsUnavailable
+    RequestsConnectionError = _RequestsUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +55,9 @@ class TypesenseClient:
         self.base_url = None
         self.fallback_to_mysql = True
         self._healthy = None  # None = unknown, True = healthy, False = unhealthy
+        self._last_health_check = 0.0
+        self._health_check_interval_s = 10
+        self._requests_missing_logged = False
 
         TypesenseClient._initialized = True
 
@@ -68,8 +85,24 @@ class TypesenseClient:
         self.api_key = app.config.get('TYPESENSE_API_KEY', '')
         self.collection = app.config.get('TYPESENSE_COLLECTION', 'codes')
         self.fallback_to_mysql = app.config.get('TYPESENSE_FALLBACK_TO_MYSQL', True)
+        self._health_check_interval_s = app.config.get('TYPESENSE_HEALTHCHECK_INTERVAL_SECONDS', 10)
+        typesense_url = app.config.get('TYPESENSE_URL')
+        if typesense_url:
+            parsed = urlparse(typesense_url)
+            self.protocol = parsed.scheme or self.protocol
+            self.host = parsed.hostname or self.host
+            self.port = parsed.port or self.port
+            self.base_url = typesense_url.rstrip('/')
+        else:
+            self.base_url = f'{self.protocol}://{self.host}:{self.port}'
 
-        self.base_url = f'{self.protocol}://{self.host}:{self.port}'
+        if requests is None and self.enabled:
+            if not self._requests_missing_logged:
+                logger.warning("Typesense disabled: optional dependency 'requests' is not installed.")
+                self._requests_missing_logged = True
+            self.enabled = False
+            self._healthy = False
+            return
 
         # Test connection on configure
         if self.enabled:
@@ -92,6 +125,12 @@ class TypesenseClient:
         """
         if not self.enabled:
             self._healthy = False
+            self._last_health_check = time.monotonic()
+            return False
+
+        if requests is None:
+            self._healthy = False
+            self._last_health_check = time.monotonic()
             return False
 
         try:
@@ -102,33 +141,48 @@ class TypesenseClient:
 
             if response.status_code == 200 and response.json().get('ok'):
                 self._healthy = True
+                self._last_health_check = time.monotonic()
                 return True
             else:
                 self._healthy = False
+                self._last_health_check = time.monotonic()
                 logger.warning(f"Typesense health check failed: {response.text}")
                 return False
 
-        except requests.exceptions.Timeout:
+        except RequestsTimeout:
             self._healthy = False
+            self._last_health_check = time.monotonic()
             logger.warning(f"Typesense health check timed out: {self.base_url}")
             return False
-        except requests.exceptions.ConnectionError:
+        except RequestsConnectionError:
             self._healthy = False
+            self._last_health_check = time.monotonic()
             logger.warning(f"Cannot connect to Typesense at {self.base_url}")
             return False
         except Exception as e:
             self._healthy = False
+            self._last_health_check = time.monotonic()
             logger.error(f"Typesense health check error: {e}")
             return False
 
-    def is_healthy(self):
+    def is_healthy(self, force_check=False):
         """
         Check if Typesense is currently healthy.
 
         Returns:
             bool: True if healthy, False otherwise
         """
-        if self._healthy is None:
+        if not self.enabled:
+            return False
+
+        now = time.monotonic()
+        should_refresh = (
+            force_check
+            or self._healthy is None
+            or (not self._healthy)  # retry quickly when currently marked unhealthy
+            or (now - self._last_health_check) >= self._health_check_interval_s
+        )
+        if should_refresh:
             return self.check_health()
         return self._healthy
 
@@ -165,6 +219,8 @@ class TypesenseClient:
         if not self.enabled:
             logger.debug("Typesense disabled, search not performed")
             return None
+        if requests is None:
+            return None
 
         # Check health before searching
         if not self.is_healthy():
@@ -190,6 +246,10 @@ class TypesenseClient:
             search_params['max_facet_values'] = params['max_facet_values']
         if 'highlight_full_fields' in params:
             search_params['highlight_full_fields'] = params['highlight_full_fields']
+        # Pass through any additional Typesense params (e.g., num_typos, prefix)
+        for key, value in params.items():
+            if key not in search_params and value is not None:
+                search_params[key] = value
 
         # Perform search
         try:
@@ -209,11 +269,11 @@ class TypesenseClient:
                 self._healthy = False
                 return None
 
-        except requests.exceptions.Timeout:
+        except RequestsTimeout:
             logger.error(f"Typesense search timed out for query: '{query}'")
             self._healthy = False
             return None
-        except requests.exceptions.ConnectionError:
+        except RequestsConnectionError:
             logger.error(f"Cannot connect to Typesense for search: '{query}'")
             self._healthy = False
             return None
@@ -242,11 +302,42 @@ class TypesenseClient:
             if response.status_code == 200:
                 return response.json()
             else:
+                logger.warning(
+                    f"Typesense stats request failed: {response.status_code} - {response.text}"
+                )
                 return None
 
         except Exception as e:
             logger.error(f"Error getting Typesense stats: {e}")
             return None
+
+    def get_collection_status(self):
+        """
+        Check collection access and return detailed status.
+
+        Returns:
+            tuple: (status_code, payload_or_text)
+                status_code: HTTP status code, or None on request error
+                payload_or_text: parsed JSON dict when possible, else raw response text / error message
+        """
+        if not self.enabled or not self.is_healthy():
+            return (None, "Typesense disabled or unhealthy")
+
+        try:
+            response = requests.get(
+                f'{self.base_url}/collections/{self.collection}',
+                headers={'X-TYPESENSE-API-KEY': self.api_key},
+                timeout=2
+            )
+
+            try:
+                payload = response.json()
+            except Exception:
+                payload = response.text
+
+            return (response.status_code, payload)
+        except Exception as e:
+            return (None, str(e))
 
 
 # Global convenience function

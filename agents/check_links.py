@@ -29,11 +29,15 @@ from typing import Optional, List, Tuple
 from urllib.parse import urlparse
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
-# Add parent directory to path to import ascl_core
-sys.path.insert(0, '/home/demitri/repositories/ASCL/alt_ascl')
-
-from ascl_core.database.connections.Trillian2DBConnection import db, Session
+try:
+    from ascl_core.database.connections.Trillian2DBConnection import db, Session
+except ModuleNotFoundError:
+    # Local-dev fallback when ascl_core is not installed.
+    repo_root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo_root / "ascl_core" / "source"))
+    from ascl_core.database.connections.Trillian2DBConnection import db, Session
 from sqlalchemy import text
 
 # Configure logging
@@ -84,7 +88,7 @@ class LinkChecker:
             List of tuples: (link_id, url, code_pk, link_type_pk)
         """
         query = """
-            SELECT l.id, l.url, l.code_pk, l.link_type_pk, l.is_working, l.last_working
+            SELECT l.pk, l.url, l.code_pk, l.link_type_pk, l.is_working, l.last_working
             FROM link l
         """
 
@@ -180,7 +184,7 @@ class LinkChecker:
                     SET is_working = :is_working,
                         last_working = :last_working,
                         message = :message
-                    WHERE id = :link_id
+                    WHERE pk = :link_id
                 """)
                 self.session.execute(query, {
                     'is_working': 1,
@@ -194,7 +198,7 @@ class LinkChecker:
                     UPDATE link
                     SET is_working = :is_working,
                         message = :message
-                    WHERE id = :link_id
+                    WHERE pk = :link_id
                 """)
                 self.session.execute(query, {
                     'is_working': 0,
