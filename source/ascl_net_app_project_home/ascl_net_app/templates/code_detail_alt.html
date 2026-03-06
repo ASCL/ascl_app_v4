@@ -3,6 +3,9 @@
 {% block title %}{{ code.title | safe }}{% endblock %}
 
 {% block content %}
+{% if is_admin_logged_in and not code.published %}
+<div class="admin-info-banner">This code is <strong>unpublished</strong> and only visible to admins.</div>
+{% endif %}
 <div class="modern-detail-container">
 	<!-- Hero Section -->
 	<div class="hero-section">

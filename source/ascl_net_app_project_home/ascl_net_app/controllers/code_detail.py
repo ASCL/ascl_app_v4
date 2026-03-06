@@ -133,6 +133,11 @@ def code_detail(ascl_id):
 	if not code:
 		abort(404)
 
+	# Non-admin visitors cannot view unpublished codes (matches PHP production)
+	from flask import session as flask_session
+	if not flask_session.get("user_id") and not code.published:
+		abort(404)
+
 	# Get related links from link table
 	link_query = text("""
 		SELECT l.pk AS lpk, l.url, lt.short_name

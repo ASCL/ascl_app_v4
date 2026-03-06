@@ -628,6 +628,17 @@ a.forumtitle, a.topictitle { font-weight: normal !important; }
 	text-decoration: underline;
 }
 
+/* Admin info banner - inline warning for unpublished codes etc. */
+.admin-info-banner {
+	background: #fef3cd;
+	border: 1px solid #ffc107;
+	color: #856404;
+	padding: 8px 14px;
+	border-radius: 4px;
+	margin-bottom: 12px;
+	font-size: 13px;
+}
+
 /* Admin edit button - shown next to code titles */
 .admin-edit-btn {
 	display: inline-block;

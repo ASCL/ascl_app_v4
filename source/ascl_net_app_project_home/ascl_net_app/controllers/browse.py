@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import flask
-from flask import request, render_template
+from flask import request, render_template, redirect
 
 browse_page = flask.Blueprint("browse_page", __name__)
 
@@ -21,8 +21,8 @@ def browse():
 	# Get database session
 	session = db.Session()
 
-	# Build query
-	query = session.query(ascldb.ASCLCode)
+	# Build query — only show published codes (matches production)
+	query = session.query(ascldb.ASCLCode).filter(ascldb.ASCLCode.published == 1)
 
 	# Apply sorting
 	if sort_by == 'date':
@@ -62,3 +62,16 @@ def browse():
 	}
 
 	return render_template("browse.html", **templateDict)
+
+
+@browse_page.route("/code/random", methods=['GET'])
+def random_code():
+	''' Redirect to a random published code. '''
+	from ascl_core.database.connections import Trillian2Connection as db
+	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
+
+	session = db.Session()
+	code = ascldb.ASCLCode.random_code(session)
+	if code:
+		return redirect(f"/{code.ascl_id}")
+	return redirect("/browse")

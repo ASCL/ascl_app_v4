@@ -5,9 +5,8 @@
 {% block content %}
 <h1>Browsing Codes</h1>
 
-<div class="ascl_pagination_wrap">
-<p>Results {{ start_result }}-{{ end_result }} of {{ total_codes }}</p>
-
+{# --- Reusable pagination macro --- #}
+{% macro pagination_bar() %}
 <div class="ascl_pagination">
 {% if page > 1 %}
 <a href="?page={{ page - 1 }}&per_page={{ per_page }}&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">Previous</a>
@@ -29,7 +28,14 @@
 {% else %}
 <div>Next</div>
 {% endif %}
-</div></div>
+</div>
+{% endmacro %}
+
+<div class="browse-controls" id="browse-controls">
+<div class="ascl_pagination_wrap">
+<p>Results {{ start_result }}-{{ end_result }} of {{ total_codes | number_format }}</p>
+{{ pagination_bar() }}
+</div>
 
 <div class="switches">
 	<div class="col">
@@ -69,20 +75,27 @@
 		{% if per_page == 250 %}<strong>250</strong>{% else %}<a href="?page=1&per_page=250&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">250</a>{% endif %}
 		{% if per_page == -1 %}<strong>All</strong>{% else %}<a href="?page=1&per_page=-1&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">All</a>{% endif %}
 	</div>
+	<div class="col">
+		<div>&nbsp;</div>
+		<a href="/code/random" class="random-code-btn">Random</a>
+	</div>
 </div>
 
 <div class="clear"></div>
+</div>
 
 <div class="codelist{% if view_mode == 'compact' %} compact{% endif %}">
-
 
 	{% if codes %}
 		{% for code in codes %}
 		<div class="item">
 
-
 			<span class="ascl_id">
+				{% if code.ascl_id == '0000.000' %}
+				[submitted]
+				{% else %}
 				[ascl:{{ code.ascl_id }}]
+				{% endif %}
 			</span>
 
 			<span class="title">
@@ -107,4 +120,52 @@
 		<p>No codes found.</p>
 	{% endif %}
 </div>
+
+{# Bottom pagination #}
+{% if total_pages > 1 %}
+<div class="ascl_pagination_wrap" style="float: none; width: 100%;">
+{{ pagination_bar() }}
+</div>
+{% endif %}
+
+<div class="clear"></div>
+
+<style>
+.browse-controls {
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	background: #fff;
+	padding: 6px 0 2px;
+	border-bottom: 1px solid transparent;
+	transition: border-color 0.2s, box-shadow 0.2s;
+}
+.browse-controls.stuck {
+	border-bottom-color: #ddd;
+	box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+.random-code-btn {
+	background-color: #59549c !important;
+	color: #fff !important;
+	border-color: #2c2773 !important;
+	text-align: center;
+}
+.random-code-btn:hover {
+	background-color: #6e68b3 !important;
+}
+</style>
+<script>
+(function() {
+	var el = document.getElementById('browse-controls');
+	if (!el || !window.IntersectionObserver) return;
+	// Sentinel element placed just before the sticky element
+	var sentinel = document.createElement('div');
+	sentinel.style.height = '1px';
+	el.parentNode.insertBefore(sentinel, el);
+	var observer = new IntersectionObserver(function(entries) {
+		el.classList.toggle('stuck', !entries[0].isIntersecting);
+	}, { threshold: 0 });
+	observer.observe(sentinel);
+})();
+</script>
 {% endblock %}
