@@ -140,10 +140,10 @@ def _search_credit_mysql(search_term, limit=100):
 	"""Improved MySQL credit search: phrase + token scoring."""
 	import re
 	from sqlalchemy import case, func
-	from ascl_core.database.connections import Trillian2DBConnection as db
+	from ascl_net_app.model.database import Database
 	from ascl_core.database.ascldb import ASCLModelClasses as ascldb
 
-	session = db.Session()
+	session = Database().Session()
 	query_raw = (search_term or "").strip()
 	query_lower = query_raw.lower()
 	words = [w for w in re.split(r"[,\s.]+", query_raw) if w]
@@ -190,10 +190,10 @@ def _search_credit_mysql(search_term, limit=100):
 
 def _author_suggestions_mysql(query_string, limit=8):
 	"""Author name suggestions from MySQL credit strings."""
-	from ascl_core.database.connections import Trillian2DBConnection as db
+	from ascl_net_app.model.database import Database
 	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
 
-	session = db.Session()
+	session = Database().Session()
 	rows = (
 		session.query(ASCLCode.credit)
 		.filter(ASCLCode.published == 1)
@@ -224,11 +224,11 @@ def _author_suggestions_mysql(query_string, limit=8):
 
 def _search_mysql_suggestions(query_string, limit=8):
 	"""Fallback suggestions when Typesense is unavailable or empty."""
-	from ascl_core.database.connections import Trillian2DBConnection as db
+	from ascl_net_app.model.database import Database
 	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
 	from sqlalchemy import case, func
 
-	session = db.Session()
+	session = Database().Session()
 	query_lower = query_string.lower()
 
 	exact_ascl = case((func.lower(ASCLCode.ascl_id) == query_lower, 1000), else_=0)
@@ -278,9 +278,9 @@ def search_mysql(query_string, published_only=True, page=1, per_page=20):
 		tuple: (results list, total_count)
 	"""
 	from sqlalchemy import text
-	from ascl_core.database.connections import Trillian2DBConnection as db
+	from ascl_net_app.model.database import Database
 	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
-	session = db.Session()
+	session = Database().Session()
 
 	offset = (page - 1) * per_page
 	published_filter = "AND published = 1" if published_only else ""
@@ -454,9 +454,9 @@ def search():
 
 		# Convert Typesense hits to code objects
 		# For now, we'll need to fetch from database by pk
-		from ascl_core.database.connections import Trillian2DBConnection as db
+		from ascl_net_app.model.database import Database
 		from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
-		session = db.Session()
+		session = Database().Session()
 
 		# Extract PKs from Typesense results
 		pks = [hit['document']['pk'] for hit in typesense_results['hits']]
@@ -658,7 +658,7 @@ def credit_search(search_term):
 
 	results = []
 	if typesense_available:
-		from ascl_core.database.connections import Trillian2DBConnection as db
+		from ascl_net_app.model.database import Database
 		from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
 
 		pks = []
@@ -687,7 +687,7 @@ def credit_search(search_term):
 				break
 
 		if pks:
-			session = db.Session()
+			session = Database().Session()
 			codes_dict = {code.pk: code for code in session.query(ASCLCode).filter(ASCLCode.pk.in_(pks[:100])).all()}
 			results = [codes_dict[pk] for pk in pks[:100] if pk in codes_dict]
 			templateDict['search_method'] = 'typesense'

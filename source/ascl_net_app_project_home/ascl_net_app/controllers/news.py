@@ -7,8 +7,8 @@ from flask import Blueprint, render_template, abort, request, redirect, Response
 from markupsafe import Markup
 from sqlalchemy import text
 
-from ascl_core.database.connections import Trillian2DBConnection as db
-from ascl_net_app.utilities.wordpress import wpautop, strip_tags
+from ascl_net_app.model.database import Database
+from ascl_net_app.utilities.wordpress import wpautop, strip_tags, fetch_comments, insert_comment
 
 news_page = Blueprint("news_page", __name__)
 _WP_POSTS_TABLE = "ascl_wordpress.0hjpDo4yM_posts"
@@ -96,7 +96,7 @@ def _fetch_posts(limit: int, offset: int = 0, search_query: str = "", category_s
 		"""
 	)
 	params.update({"limit": limit, "offset": offset})
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		rows = conn.execute(sql, params).mappings().all()
 	return rows
 
@@ -113,7 +113,7 @@ def _count_posts(search_query: str = "", category_slug: str = "", archive_month:
 		WHERE {where_sql}
 		"""
 	)
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		row = conn.execute(sql, params).first()
 	return row[0] if row else 0
 
@@ -129,7 +129,7 @@ def _fetch_post_by_slug(slug: str):
 		LIMIT 1
 		"""
 	)
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		row = conn.execute(sql, {"slug": slug}).mappings().first()
 	return row
 
@@ -150,7 +150,7 @@ def _fetch_categories_for_posts(post_ids):
 		"""
 	)
 	params = {f"id_{i}": pid for i, pid in enumerate(post_ids)}
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		rows = conn.execute(sql, params).mappings().all()
 	grouped = {}
 	for row in rows:
@@ -159,44 +159,6 @@ def _fetch_categories_for_posts(post_ids):
 			grouped[pid] = []
 		grouped[pid].append({"name": row["name"], "slug": row["slug"]})
 	return grouped
-
-
-_WP_COMMENTS_TABLE = _WP_POSTS_TABLE.replace("_posts", "_comments")
-
-
-def _fetch_comments_for_post(post_id):
-	"""Fetch approved comments for a post, returning a threaded tree."""
-	sql = text(
-		f"""
-		SELECT comment_ID, comment_author, comment_author_url, comment_date,
-			comment_content, comment_parent
-		FROM {_WP_COMMENTS_TABLE}
-		WHERE comment_post_ID = :post_id AND comment_approved = '1' AND comment_type IN ('comment', '')
-		ORDER BY comment_date ASC
-		"""
-	)
-	with db.engine.connect() as conn:
-		rows = conn.execute(sql, {"post_id": post_id}).mappings().all()
-
-	# Build threaded tree
-	by_id = {}
-	roots = []
-	for row in rows:
-		node = {
-			"id": row["comment_ID"],
-			"author": row["comment_author"] or "Anonymous",
-			"author_url": row["comment_author_url"] or "",
-			"date": row["comment_date"],
-			"content": Markup(wpautop(row["comment_content"] or "")),
-			"children": [],
-		}
-		by_id[node["id"]] = node
-		parent_id = row["comment_parent"]
-		if parent_id and parent_id in by_id:
-			by_id[parent_id]["children"].append(node)
-		else:
-			roots.append(node)
-	return roots
 
 
 def _fetch_recent_posts(limit: int = 8):
@@ -209,7 +171,7 @@ def _fetch_recent_posts(limit: int = 8):
 		LIMIT :limit
 		"""
 	)
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		return conn.execute(sql, {"limit": limit}).mappings().all()
 
 
@@ -230,7 +192,7 @@ def _fetch_categories(limit: int = 20):
 		LIMIT :limit
 		"""
 	)
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		return conn.execute(sql, {"limit": limit}).mappings().all()
 
 
@@ -248,7 +210,7 @@ def _fetch_archives(limit: int = 24):
 		LIMIT :limit
 		"""
 	)
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		return conn.execute(sql, {"limit": limit}).mappings().all()
 
 
@@ -272,7 +234,7 @@ def _fetch_archive_posts_by_month(limit: int = 24):
 		ORDER BY post_date DESC
 		"""
 	)
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		rows = conn.execute(sql, {"limit": limit}).mappings().all()
 	grouped = {}
 	for row in rows:
@@ -406,7 +368,7 @@ def news_detail(slug):
 
 	content_html = Markup(wpautop(row["post_content"] or ""))
 	categories_map = _fetch_categories_for_posts([row["ID"]])
-	comments = _fetch_comments_for_post(row["ID"])
+	comments = fetch_comments(row["ID"])
 
 	post = {
 		"title": row["post_title"],
@@ -436,32 +398,15 @@ def post_comment(slug):
 	if not comment_text or not author_name or not author_email:
 		return redirect(f"/news/{slug}?comment_error=Name%2C+email%2C+and+comment+are+required.#respond")
 
-	# Sanitize: strip HTML tags from comment text
-	comment_content = strip_tags(comment_text)
-
-	sql = text(
-		f"""
-		INSERT INTO {_WP_POSTS_TABLE.replace('_posts', '_comments')}
-			(comment_post_ID, comment_author, comment_author_email, comment_author_url,
-			 comment_author_IP, comment_date, comment_date_gmt, comment_content,
-			 comment_karma, comment_approved, comment_agent, comment_type, comment_parent, user_id)
-		VALUES
-			(:post_id, :author, :email, :url,
-			 :ip, NOW(), UTC_TIMESTAMP(), :content,
-			 0, '1', :agent, 'comment', 0, 0)
-		"""
+	insert_comment(
+		post_id=row["ID"],
+		author=author_name,
+		email=author_email,
+		url=author_url,
+		content=strip_tags(comment_text),
+		ip=request.remote_addr or "",
+		user_agent=(request.headers.get("User-Agent") or ""),
 	)
-	with db.engine.connect() as conn:
-		conn.execute(sql, {
-			"post_id": row["ID"],
-			"author": author_name[:200],
-			"email": author_email[:100],
-			"url": author_url[:200],
-			"ip": request.remote_addr or "",
-			"content": comment_content,
-			"agent": (request.headers.get("User-Agent") or "")[:255],
-		})
-		conn.commit()
 
 	return redirect(f"/news/{slug}#comments")
 

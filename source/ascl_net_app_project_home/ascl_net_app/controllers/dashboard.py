@@ -203,8 +203,8 @@ _JOURNAL_NAMES = {
 
 
 def _get_db_session():
-	from ascl_core.database.connections import Trillian2Connection as db
-	return db.Session()
+	from ascl_net_app.model.database import Database
+	return Database().Session()
 
 
 def _get_models():

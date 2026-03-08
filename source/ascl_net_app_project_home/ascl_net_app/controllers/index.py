@@ -5,7 +5,7 @@ import os
 import flask
 from flask import current_app, render_template, send_from_directory, g
 
-from ascl_core.database.connections import Trillian2DBConnection as db
+from ascl_net_app.model.database import Database
 from ascl_core.database.ascldb.ASCLModelClasses import *
 
 index_page = flask.Blueprint("index_page", __name__)
@@ -18,7 +18,8 @@ def index():
 	templateDict = {}
 
 	# Get database session
-	session = db.Session()
+	database = Database()
+	session = database.Session()
 
 	# Get the 10 most recently added published codes
 	# Matches PHP logic: where("time_added >", "00-00-00") and where("published", 1)

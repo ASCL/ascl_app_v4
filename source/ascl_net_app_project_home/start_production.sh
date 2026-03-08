@@ -3,7 +3,7 @@
 # Production startup script for ASCL.net Flask application
 #
 # This script starts the Flask app using Uvicorn with production settings.
-# The app will use the production.cfg configuration file and ascl_db_v4 database.
+# The app will use the ascl_net.cfg configuration file and ascl_db_v4 database.
 #
 # Usage:
 #   ./start_production.sh [start|stop|restart|status]
@@ -15,7 +15,7 @@
 cd "$(dirname "$0")"
 
 # Configuration
-export FLASK_CONFIG=production.cfg
+export FLASK_CONFIG=ascl_net.cfg
 HOST="127.0.0.1"
 PORT=5050
 WORKERS=2  # Adjust based on CPU cores (recommended: 2-4)

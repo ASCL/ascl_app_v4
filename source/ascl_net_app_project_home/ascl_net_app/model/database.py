@@ -10,7 +10,7 @@ import logging
 from flask import current_app as app, g
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-from .DatabaseConnection import DatabaseConnection
+from dm_dbcore import DatabaseConnection
 from ..designpatterns import singleton
 
 logger = logging.getLogger(__name__)
@@ -60,14 +60,22 @@ class Database(object):
 				# Format: mysql://user:password@host:port/database
 				# For mysqlclient driver, use 'mysql' prefix
 				# For PyMySQL driver, use 'mysql+pymysql' prefix
-				self.database_connection_string = 'mysql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+				# When password is empty, omit it so mysqlclient falls back to ~/.my.cnf
+				if self.db_config['password']:
+					self.database_connection_string = 'mysql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+				else:
+					self.database_connection_string = 'mysql://{user}@{host}:{port}/{database}'.format(**self.db_config)
 				logger.info(f"Built MySQL connection string for {self.db_config['database']}")
 				logger.debug(f"Connection params: user={self.db_config['user']}, host={self.db_config['host']}, port={self.db_config['port']}, database={self.db_config['database']}, password={'***' if self.db_config['password'] else 'EMPTY (will use ~/.my.cnf)'}")
 
 			elif self.db_type == "postgresql":
 				# PostgreSQL connection string
 				# Format: postgresql://user:password@host:port/database
-				self.database_connection_string = 'postgresql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+				# When password is empty, omit it so libpq falls back to ~/.pgpass
+				if self.db_config['password']:
+					self.database_connection_string = 'postgresql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+				else:
+					self.database_connection_string = 'postgresql://{user}@{host}:{port}/{database}'.format(**self.db_config)
 				logger.info(f"Built PostgreSQL connection string for {self.db_config['database']}")
 
 			else:

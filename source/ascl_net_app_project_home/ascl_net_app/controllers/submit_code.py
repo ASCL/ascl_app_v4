@@ -77,7 +77,8 @@ def submit_code():
 
 	Matches PHP v3: /code/submit
 	"""
-	from ascl_core.database.connections import Trillian2DBConnection as db
+	from ascl_net_app.model.database import Database
+	db = Database()
 	from ascl_core.database.ascldb.ASCLModelClasses import ASCLCode
 
 	templateDict = {

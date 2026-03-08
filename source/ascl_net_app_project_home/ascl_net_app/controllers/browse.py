@@ -9,7 +9,8 @@ code_page = flask.Blueprint("code_page", __name__)
 @code_page.route("/code/all", methods=['GET'])
 def code_all():
 	''' Browse all codes with pagination and sorting. Matches PHP: Code::all() '''
-	from ascl_core.database.connections import Trillian2Connection as db
+	from ascl_net_app.model.database import Database
+	db = Database()
 	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
 
 	# Get parameters from URL
@@ -87,7 +88,8 @@ def code_all():
 @code_page.route("/code/all_by_id", methods=['GET'])
 def code_all_by_id():
 	''' List all codes organized by ASCL ID. Matches PHP: Code::all_by_id() '''
-	from ascl_core.database.connections import Trillian2Connection as db
+	from ascl_net_app.model.database import Database
+	db = Database()
 	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
 
 	session = db.Session()
@@ -116,7 +118,8 @@ def code_all_by_id():
 @code_page.route("/code/keywords/<path:keyword>", methods=['GET'])
 def code_keywords(keyword=None):
 	''' Browse keywords and codes by keyword. Matches PHP: Code::keywords() '''
-	from ascl_core.database.connections import Trillian2Connection as db
+	from ascl_net_app.model.database import Database
+	db = Database()
 	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
 
 	session = db.Session()
@@ -166,7 +169,8 @@ def code_keywords(keyword=None):
 @code_page.route("/code/alias_list", methods=['GET'])
 def code_alias_list():
 	''' List of code aliases. Matches PHP: Code::alias_list() '''
-	from ascl_core.database.connections import Trillian2Connection as db
+	from ascl_net_app.model.database import Database
+	db = Database()
 	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
 
 	session = db.Session()
@@ -190,7 +194,8 @@ def code_alias_list():
 @code_page.route("/code/random", methods=['GET'])
 def random_code():
 	''' Redirect to a random published code. '''
-	from ascl_core.database.connections import Trillian2Connection as db
+	from ascl_net_app.model.database import Database
+	db = Database()
 	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
 
 	session = db.Session()

@@ -5,7 +5,7 @@ from flask import render_template, abort, request
 from markupsafe import Markup
 from sqlalchemy import text
 
-from ascl_core.database.connections import Trillian2DBConnection as db
+from ascl_net_app.model.database import Database
 from ascl_net_app.utilities.wordpress import wpautop
 
 about_page = flask.Blueprint("about_page", __name__)
@@ -37,7 +37,7 @@ def _fetch_wp_page(page_id: int):
 		LIMIT 1
 		"""
 	)
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		return conn.execute(sql, {"id": page_id}).mappings().first()
 
 
@@ -70,7 +70,7 @@ def _fetch_subpages(parent_id: int):
 			ID ASC
 		"""
 	)
-	with db.engine.connect() as conn:
+	with Database().db.engine.connect() as conn:
 		return conn.execute(sql, {"parent": parent_id}).mappings().all()
 
 

@@ -94,7 +94,7 @@ def create_app(debug=False): #, conf=dict()):
 		# Load production configuration file.
 		#
 		# For production-specific configuration, you can:
-		# 1. Set environment variable: export FLASK_CONFIG=production.cfg
+		# 1. Set environment variable: export FLASK_CONFIG=ascl_net.cfg
 		# 2. Or specify config file when launching Uvicorn (see README.md)
 		#
 		config_from_env = os.environ.get('FLASK_CONFIG')
@@ -103,7 +103,7 @@ def create_app(debug=False): #, conf=dict()):
 		else:
 			# Default to production config if it exists, otherwise use default
 			try:
-				server_config_file = _app_setup_utils.getConfigFile("production.cfg")
+				server_config_file = _app_setup_utils.getConfigFile("ascl_net.cfg")
 			except:
 				server_config_file = _app_setup_utils.getConfigFile("default.cfg")
 
@@ -216,10 +216,10 @@ def create_app(debug=False): #, conf=dict()):
 
 	if app.config["USING_SQLALCHEMY"]:
 
-		# Database connection handled by ascl_core.database.connections.Trillian2DBConnection
-		# Controllers import: from ascl_core.database.connections import Trillian2DBConnection as db
-
-		app.logger.info("Database connection: ascl_core.database.connections.Trillian2DBConnection (dm-dbcore)")
+		# Establish database connection from Flask config
+		from .model.database import Database
+		database = Database()
+		database.connect(flask_app=app)
 
 		# PostgreSQL-specific setup
 		db_type = app.config.get("DB_TYPE", "mysql").lower()
@@ -235,32 +235,19 @@ def create_app(debug=False): #, conf=dict()):
 		def shutdown_session(exception=None):
 			"""
 			Remove database sessions at the end of each request or when the app shuts down.
-			Both `Trillian2Connection` (singleton object) and `Trillian2DBConnection`
-			(module-level) expose scoped sessions in current code, so clean up both.
 			Ref: http://flask.pocoo.org/docs/patterns/sqlalchemy/
 			"""
-			# Most controllers use this session handle.
-			from ascl_core.database.connections import Trillian2Connection as conn
-			# A few modules still import/use the module-level session.
-			from ascl_core.database.connections import Trillian2DBConnection as db_module
+			from .model.database import Database
+			session = Database().Session()
 
 			if exception is not None:
-				# Ensure failed requests don't leave transactions in invalid state.
 				try:
-					conn.Session.rollback()
-				except Exception:
-					pass
-				try:
-					db_module.Session.rollback()
+					session.rollback()
 				except Exception:
 					pass
 
 			try:
-				conn.Session.remove()
-			except Exception:
-				pass
-			try:
-				db_module.Session.remove()
+				session.remove()
 			except Exception:
 				pass
 
@@ -270,14 +257,9 @@ def create_app(debug=False): #, conf=dict()):
 			Start each request with a fresh scoped session to avoid carrying over
 			invalid transaction state between requests.
 			"""
-			from ascl_core.database.connections import Trillian2Connection as conn
-			from ascl_core.database.connections import Trillian2DBConnection as db_module
+			from .model.database import Database
 			try:
-				conn.Session.remove()
-			except Exception:
-				pass
-			try:
-				db_module.Session.remove()
+				Database().Session().remove()
 			except Exception:
 				pass
 

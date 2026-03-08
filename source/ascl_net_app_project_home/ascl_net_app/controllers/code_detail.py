@@ -15,7 +15,8 @@ def code_detail_alt(ascl_id):
 		from flask import abort
 		abort(404)
 
-	from ascl_core.database.connections import Trillian2Connection as db
+	from ascl_net_app.model.database import Database
+	db = Database()
 	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
 
 	# Get database session
@@ -92,7 +93,8 @@ def code_detail_alt(ascl_id):
 @code_detail_page.route("/<path:ascl_id>", methods=['GET'])
 def code_detail(ascl_id):
 	''' Show detailed information for a specific code, or resolve an alias. '''
-	from ascl_core.database.connections import Trillian2Connection as db
+	from ascl_net_app.model.database import Database
+	db = Database()
 	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
 
 	# Get database session
@@ -193,7 +195,8 @@ def delete_link(link_pk):
 	if not session.get("user_id"):
 		abort(403)
 
-	from ascl_core.database.connections import Trillian2Connection as db
+	from ascl_net_app.model.database import Database
+	db = Database()
 
 	db_session = db.Session()
 

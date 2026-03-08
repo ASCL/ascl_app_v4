@@ -645,6 +645,13 @@
   - [ ] Evaluate relevance and performance
   - [ ] Compare with MySQL FULLTEXT results
 
+- [ ] **SEARCH-002b**: Typesense remote authentication for cPanel deployment
+  - [ ] Typesense server lives on trillian2; if the app runs on cPanel (ascl.net), it
+        needs to authenticate against the remote Typesense instance over the network.
+  - [ ] Decide on authentication mechanism (API key over HTTPS, SSH tunnel, VPN, etc.)
+  - [ ] Update TYPESENSE_URL in ascl_net.cfg to point to the remote host
+  - [ ] Ensure TYPESENSE_API_KEY is in secrets.cfg on the cPanel host
+
 - [ ] **SEARCH-003**: Search template (search.html)
   - [x] Basic search form exists
   - [x] Basic results display
