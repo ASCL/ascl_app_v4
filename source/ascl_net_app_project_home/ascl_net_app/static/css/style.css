@@ -509,6 +509,163 @@ a.social_button:hover { color: #fff; }
 	color: #999;
 	font-size: 12px;
 }
+#category-select {
+	width: 100%;
+	padding: 6px 8px;
+	font-size: 13px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	background: #fff;
+	color: #333;
+	cursor: pointer;
+}
+
+/* Comments */
+.comments-section {
+	margin-top: 2rem;
+	border-top: 1px solid #e0e4e8;
+	padding-top: 1rem;
+}
+.comments-section h3 {
+	font-size: 1.1rem;
+	margin-bottom: 1rem;
+}
+.comment-list {
+	list-style: none;
+	padding-left: 0 !important;
+	margin: 0;
+}
+.comment-list .comment-list {
+	padding-left: 2rem !important;
+	border-left: 2px solid #e0e4e8;
+}
+.comment {
+	padding: 0.75rem 0;
+	border-bottom: 1px solid #f0f0f0;
+}
+.comment:last-child {
+	border-bottom: none;
+}
+.comment-author {
+	font-weight: bold;
+	font-size: 0.95rem;
+	color: #333;
+}
+.comment-date {
+	font-size: 0.8rem;
+	color: #888;
+	margin-bottom: 0.4rem;
+}
+.comment-date a {
+	color: #888;
+	text-decoration: none;
+}
+.comment-date a:hover {
+	text-decoration: underline;
+}
+.comment-content {
+	font-size: 0.9rem;
+	line-height: 1.5;
+	color: #333;
+}
+.comment-content p {
+	margin: 0.4rem 0;
+}
+.comment-respond {
+	margin-top: 2rem;
+	border-top: 1px solid #e0e4e8;
+	padding-top: 1rem;
+}
+.comment-respond h3 {
+	font-size: 1.1rem;
+	margin-bottom: 1rem;
+}
+.comment-form label {
+	display: block;
+	font-size: 0.9rem;
+	font-weight: 600;
+	margin-bottom: 0.25rem;
+	color: #333;
+}
+.comment-form .required {
+	color: #c00;
+}
+.comment-form textarea,
+.comment-form input[type="text"],
+.comment-form input[type="email"] {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 500px;
+	padding: 0.5rem 0.75rem;
+	font-size: 0.9rem;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-family: inherit;
+}
+.comment-form textarea {
+	max-width: 100%;
+}
+.comment-form textarea:focus,
+.comment-form input:focus {
+	outline: none;
+	border-color: #2c3e50;
+	box-shadow: 0 0 0 2px rgba(44, 62, 80, 0.1);
+}
+.comment-form p {
+	margin-bottom: 0.75rem;
+}
+.comment-submit {
+	padding: 0.5rem 1.5rem;
+	font-size: 0.9rem;
+	background: #2c3e50;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+}
+.comment-submit:hover {
+	opacity: 0.9;
+}
+.comment-error {
+	color: #c00;
+	font-weight: bold;
+	margin-bottom: 1rem;
+}
+
+/* WordPress captions */
+figure.wp-caption {
+	margin: 1rem 0;
+}
+figure.wp-caption.aligncenter {
+	margin-left: auto;
+	margin-right: auto;
+	text-align: center;
+}
+figure.wp-caption.alignleft {
+	float: left;
+	margin-right: 1.5rem;
+	margin-bottom: 0.5rem;
+}
+figure.wp-caption.alignright {
+	float: right;
+	margin-left: 1.5rem;
+	margin-bottom: 0.5rem;
+}
+figure.wp-caption.alignnone {
+	margin-left: 0;
+	margin-right: 0;
+}
+figure.wp-caption img {
+	max-width: 100%;
+	height: auto;
+}
+figure.wp-caption figcaption {
+	font-size: 0.85rem;
+	color: #666;
+	margin-top: 0.4rem;
+	font-style: italic;
+}
+
 .news-search input[type="text"] {
 	box-sizing: border-box;
 	width: 100%;

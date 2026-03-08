@@ -1,14 +1,12 @@
 #!/usr/bin/python
 
-import re
-import subprocess
-from pathlib import Path
 import flask
 from flask import render_template, abort, request
 from markupsafe import Markup
 from sqlalchemy import text
 
 from ascl_core.database.connections import Trillian2DBConnection as db
+from ascl_net_app.utilities.wordpress import wpautop
 
 about_page = flask.Blueprint("about_page", __name__)
 
@@ -26,54 +24,6 @@ _PAGE_ID_TO_ROUTE = {
 	_RESOURCES_PAGE_ID: "/resources",
 	_EXPLAIN_PAGE_ID: "/explain",
 }
-
-
-def _wpautop(content: str) -> str:
-	"""Use WordPress's wpautop implementation to match production behavior."""
-	content = content or ""
-	if not content:
-		return ""
-
-	repo_root = Path(__file__).resolve().parents[5]
-	formatting_php = repo_root / "ascl_php_application" / "web_root" / "wordpress" / "wp-includes" / "formatting.php"
-
-	if formatting_php.exists():
-		php_code = (
-			f"require {formatting_php.as_posix()!r}; "
-			"$content = stream_get_contents(STDIN); "
-			"echo wpautop($content);"
-		)
-		try:
-			result = subprocess.run(
-				["php", "-r", php_code],
-				input=content,
-				text=True,
-				capture_output=True,
-				check=False,
-				timeout=3,
-			)
-			if result.returncode == 0 and result.stdout:
-				return result.stdout
-		except Exception:
-			pass
-
-	# Fallback if PHP/WordPress helper is unavailable.
-	return _wpautop_fallback(content)
-
-
-def _wpautop_fallback(content: str) -> str:
-	content = content.replace("\r\n", "\n").replace("\r", "\n").strip()
-	if re.search(r"<\s*/?\s*(p|div|ul|ol|li|table|blockquote|pre|h[1-6]|dl|dt|dd)\b", content, re.IGNORECASE):
-		return content
-	parts = re.split(r"\n\s*\n", content)
-	paragraphs = []
-	for part in parts:
-		part = part.strip()
-		if not part:
-			continue
-		part = part.replace("\n", "<br />\n")
-		paragraphs.append(f"<p>{part}</p>")
-	return "\n".join(paragraphs)
 
 
 def _fetch_wp_page(page_id: int):
@@ -132,7 +82,7 @@ def _render_wp_page(page_id: int, back: str = None):
 	parent_id = page["post_parent"] or page["ID"]
 	subpages_raw = _fetch_subpages(parent_id) if parent_id else []
 	subpages = [{"ID": sp["ID"], "post_title": _title_case(sp["post_title"])} for sp in subpages_raw]
-	content_html = Markup(_wpautop(page["post_content"] or ""))
+	content_html = Markup(wpautop(page["post_content"] or ""))
 	back_link = (back or "").strip().lstrip("/")
 
 	return render_template(

@@ -130,8 +130,13 @@ USING_UVICORN = True  # Modern ASGI server
   - Routes: `/`, `/favicon.ico`, `/robots.txt`
 - `about.py` - About page
   - Route: `/about`
-- `browse.py` - Browse codes by keyword
-  - Route: `/browse`
+- `browse.py` - Browse codes (matches production `/code/*` routes)
+  - Route: `/code/all` — paginated code listing (filter: `published=1`)
+  - Route: `/code/all_by_id` — codes grouped by ASCL ID (filter: `published=1`)
+  - Route: `/code/keywords` — keyword cloud with counts (filter: `published=1`, `archived=0`)
+  - Route: `/code/keywords/<keyword>` — codes for a keyword (filter: `published=1`, `archived=0`)
+  - Route: `/code/alias_list` — code alias listing (filter: `published=1`, `archived=0`)
+  - Route: `/code/random` — redirect to random code (filter: `published=1`, `ascl_id != '0000.000'`)
 - `search.py` - Search functionality
   - Route: `/search`
 - `code_detail.py` - Individual code detail pages
@@ -146,7 +151,7 @@ USING_UVICORN = True  # Modern ASGI server
   - Features: Secure bcrypt authentication, session management, login attempt tracking
 
 **Templates** (`ascl_net_app/templates/`)
-- Public pages: `index.html`, `about.html`, `browse.html`, `search.html`, `code_detail.html`
+- Public pages: `index.html`, `about.html`, `code_all.html`, `code_all_by_id.html`, `code_keywords.html`, `code_alias_list.html`, `search.html`, `code_detail.html`
 - News: `news_list.html`, `news_detail.html`
 - Dashboard: `dashboard.html` - **NEW (2025-12-28)** Statistics dashboard
 - Admin: `admin/home.html`, `admin/codes_list.html`
@@ -421,7 +426,7 @@ The application now uses **bcrypt** for secure password hashing, replacing the d
 **Controllers**:
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/index.py` - Index page
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/about.py` - About page
-- `source/ascl_net_app_project_home/ascl_net_app/controllers/browse.py` - Browse codes
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/browse.py` - Browse codes (`/code/all`, `/code/all_by_id`, `/code/keywords`, `/code/alias_list`, `/code/random`)
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/search.py` - Search functionality
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/code_detail.py` - Code detail pages
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/news.py` - News pages
@@ -432,7 +437,10 @@ The application now uses **bcrypt** for secure password hashing, replacing the d
 - `source/ascl_net_app_project_home/ascl_net_app/templates/base.html` - Base template
 - `source/ascl_net_app_project_home/ascl_net_app/templates/index.html` - Home page
 - `source/ascl_net_app_project_home/ascl_net_app/templates/about.html` - About page
-- `source/ascl_net_app_project_home/ascl_net_app/templates/browse.html` - Browse page
+- `source/ascl_net_app_project_home/ascl_net_app/templates/code_all.html` - Browse all codes
+- `source/ascl_net_app_project_home/ascl_net_app/templates/code_all_by_id.html` - Codes by ASCL ID
+- `source/ascl_net_app_project_home/ascl_net_app/templates/code_keywords.html` - Keyword cloud + codes
+- `source/ascl_net_app_project_home/ascl_net_app/templates/code_alias_list.html` - Code aliases
 - `source/ascl_net_app_project_home/ascl_net_app/templates/search.html` - Search results
 - `source/ascl_net_app_project_home/ascl_net_app/templates/code_detail.html` - Code detail
 - `source/ascl_net_app_project_home/ascl_net_app/templates/news_list.html` - News listing

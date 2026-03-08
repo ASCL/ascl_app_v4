@@ -9,7 +9,7 @@
 {% macro pagination_bar() %}
 <div class="ascl_pagination">
 {% if page > 1 %}
-<a href="?page={{ page - 1 }}&per_page={{ per_page }}&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">Previous</a>
+<a href="?page={{ page - 1 }}&limit={{ per_page }}&order={{ sort_by }}&dir={{ sort_order }}&listmode={{ view_mode }}">Previous</a>
 {% else %}
 <div>Previous</div>
 {% endif %}
@@ -19,12 +19,12 @@
     {% if p == page %}
     <strong>{{ p }}</strong>
     {% else %}
-    <a href="?page={{ p }}&per_page={{ per_page }}&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">{{ p }}</a>
+    <a href="?page={{ p }}&limit={{ per_page }}&order={{ sort_by }}&dir={{ sort_order }}&listmode={{ view_mode }}">{{ p }}</a>
     {% endif %}
 {% endfor %}
 
 {% if page < total_pages %}
-<a href="?page={{ page + 1 }}&per_page={{ per_page }}&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">Next</a>
+<a href="?page={{ page + 1 }}&limit={{ per_page }}&order={{ sort_by }}&dir={{ sort_order }}&listmode={{ view_mode }}">Next</a>
 {% else %}
 <div>Next</div>
 {% endif %}
@@ -33,7 +33,7 @@
 
 <div class="browse-controls" id="browse-controls">
 <div class="ascl_pagination_wrap">
-<p>Results {{ start_result }}-{{ end_result }} of {{ total_codes | number_format }}</p>
+<p>Results {{ start_result }}-{{ end_result }} of {{ total_codes | number_format }} ({{ total_codes - total_sub_codes }} ASCL, {{ total_sub_codes }} submitted)</p>
 {{ pagination_bar() }}
 </div>
 
@@ -42,9 +42,9 @@
 		<div>Order</div>
 		{% if sort_by == 'title' %}
 		<strong>Title</strong>
-		<a href="?page={{ page }}&per_page={{ per_page }}&sort=date&order={{ sort_order }}&view={{ view_mode }}">Date</a>
+		<a href="?page={{ page }}&limit={{ per_page }}&order=date&dir={{ sort_order }}&listmode={{ view_mode }}">Date</a>
 		{% else %}
-		<a href="?page={{ page }}&per_page={{ per_page }}&sort=title&order={{ sort_order }}&view={{ view_mode }}">Title</a>
+		<a href="?page={{ page }}&limit={{ per_page }}&order=title&dir={{ sort_order }}&listmode={{ view_mode }}">Title</a>
 		<strong>Date</strong>
 		{% endif %}
 	</div>
@@ -52,28 +52,28 @@
 		<div>&nbsp;</div>
 		{% if sort_order == 'asc' %}
 		<strong>&#9650;</strong>
-		<a href="?page={{ page }}&per_page={{ per_page }}&sort={{ sort_by }}&order=desc&view={{ view_mode }}">&#9660;</a>
+		<a href="?page={{ page }}&limit={{ per_page }}&order={{ sort_by }}&dir=desc&listmode={{ view_mode }}">&#9660;</a>
 		{% else %}
-		<a href="?page={{ page }}&per_page={{ per_page }}&sort={{ sort_by }}&order=asc&view={{ view_mode }}">&#9650;</a>
+		<a href="?page={{ page }}&limit={{ per_page }}&order={{ sort_by }}&dir=asc&listmode={{ view_mode }}">&#9650;</a>
 		<strong>&#9660;</strong>
 		{% endif %}
 	</div>
 	<div class="col">
 		<div>Mode</div>
-		{% if view_mode == 'abstract' %}
+		{% if view_mode == 'full' %}
 		<strong>Abstract</strong>
-		<a href="?page={{ page }}&per_page={{ per_page }}&sort={{ sort_by }}&order={{ sort_order }}&view=compact">Compact</a>
+		<a href="?page={{ page }}&limit={{ per_page }}&order={{ sort_by }}&dir={{ sort_order }}&listmode=compact">Compact</a>
 		{% else %}
-		<a href="?page={{ page }}&per_page={{ per_page }}&sort={{ sort_by }}&order={{ sort_order }}&view=abstract">Abstract</a>
+		<a href="?page={{ page }}&limit={{ per_page }}&order={{ sort_by }}&dir={{ sort_order }}&listmode=full">Abstract</a>
 		<strong>Compact</strong>
 		{% endif %}
 	</div>
 	<div class="col limits">
 		<div>Per Page</div>
-		{% if per_page == 50 %}<strong>50</strong>{% else %}<a href="?page=1&per_page=50&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">50</a>{% endif %}
-		{% if per_page == 100 %}<strong>100</strong>{% else %}<a href="?page=1&per_page=100&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">100</a>{% endif %}
-		{% if per_page == 250 %}<strong>250</strong>{% else %}<a href="?page=1&per_page=250&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">250</a>{% endif %}
-		{% if per_page == -1 %}<strong>All</strong>{% else %}<a href="?page=1&per_page=-1&sort={{ sort_by }}&order={{ sort_order }}&view={{ view_mode }}">All</a>{% endif %}
+		{% for lim in [50, 100, 250, total_codes] %}
+		{% set label = 'All' if lim == total_codes else lim %}
+		{% if per_page == lim %}<strong>{{ label }}</strong>{% else %}<a href="?page=1&limit={{ lim }}&order={{ sort_by }}&dir={{ sort_order }}&listmode={{ view_mode }}">{{ label }}</a>{% endif %}
+		{% endfor %}
 	</div>
 	<div class="col">
 		<div>&nbsp;</div>
@@ -99,17 +99,21 @@
 			</span>
 
 			<span class="title">
+				{% if code.ascl_id == '0000.000' %}
+				<a href="/code/v/{{ code.pk }}">{{ code.title | safe }}</a>
+				{% else %}
 				<a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
+				{% endif %}
 				{% if is_admin_logged_in %}
-				<a href="/admin/update_code/{{ code.pk }}" class="admin-edit-btn">Edit</a>
+				<a href="/admin/update_code/{{ code.pk }}" class="admin-edit-btn">Update</a>
 				{% endif %}
 			</span>
 
+			{% if view_mode == 'full' %}
 			{% if code.credit %}
 			<div class="credit">{{ code.credit | link_author_credit }}</div>
 			{% endif %}
 
-			{% if view_mode == 'abstract' %}
 			<div class="abstract">
 				{{ code.abstract if code.abstract else 'No description available.' }}
 			</div>
@@ -117,7 +121,7 @@
 		</div>
 		{% endfor %}
 	{% else %}
-		<p>No codes found.</p>
+		<p>No results were returned.</p>
 	{% endif %}
 </div>
 
@@ -129,6 +133,8 @@
 {% endif %}
 
 <div class="clear"></div>
+
+<p style="margin-top: 20px;">Would you like to view a <a href="/code/random">random code</a>?</p>
 
 <style>
 .browse-controls {
@@ -158,7 +164,6 @@
 (function() {
 	var el = document.getElementById('browse-controls');
 	if (!el || !window.IntersectionObserver) return;
-	// Sentinel element placed just before the sticky element
 	var sentinel = document.createElement('div');
 	sentinel.style.height = '1px';
 	el.parentNode.insertBefore(sentinel, el);

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Keywords{% endblock %}
+
+{% block content %}
+<h1>Keywords</h1>
+<p>A list of keywords associated with codes in the ASCL.</p>
+
+{% for kw, count in keywords.items() %}{% if not loop.first %}, {% endif %}{% if kw == keyword %}<b>{{ kw }}</b> ({{ count }}){% else %}<a href="/code/keywords/{{ kw | urlencode }}">{{ kw }}</a> ({{ count }}){% endif %}{% endfor %}
+
+{% if result_count > 0 %}
+<h2>Codes associated with '{{ keyword }}'</h2>
+
+<div class="codelist">
+<p>Displaying {{ result_count }} codes.</p>
+{% for code in codes %}
+<div class="item">
+	<span class="ascl_id">
+		{% if code.ascl_id == '0000.000' %}
+		[submitted]
+		{% else %}
+		[ascl:{{ code.ascl_id }}]
+		{% endif %}
+	</span>
+
+	<span class="title">
+		{% if code.ascl_id == '0000.000' %}
+		<a href="/code/v/{{ code.pk }}">{{ code.title | safe }}</a>
+		{% else %}
+		<a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
+		{% endif %}
+	</span>
+
+	{% if code.credit %}
+	<div class="credit">{{ code.credit | link_author_credit }}</div>
+	{% endif %}
+
+	<div class="abstract">
+		{{ code.abstract if code.abstract else 'No description available.' }}
+	</div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

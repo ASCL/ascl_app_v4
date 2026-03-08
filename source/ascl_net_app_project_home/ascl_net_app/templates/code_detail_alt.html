@@ -30,7 +30,7 @@
 				{% if keywords %}
 				<div class="keyword-tags">
 					{% for keyword in keywords %}
-					<a href="/browse?keyword={{ keyword }}" class="keyword-tag">{{ keyword }}</a>
+					<a href="/code/keywords/{{ keyword | urlencode }}" class="keyword-tag">{{ keyword }}</a>
 					{% endfor %}
 				</div>
 				{% endif %}

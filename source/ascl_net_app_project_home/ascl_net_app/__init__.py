@@ -21,7 +21,7 @@ def register_blueprints(app=None):
 	controller file you create here.
 	'''
 	from .controllers.index import index_page
-	from .controllers.browse import browse_page
+	from .controllers.browse import code_page
 	from .controllers.search import search_page
 	from .controllers.code_detail import code_detail_page
 	from .controllers.about import about_page
@@ -31,7 +31,7 @@ def register_blueprints(app=None):
 	from .controllers.submit_code import submit_code_page
 
 	app.register_blueprint(index_page)
-	app.register_blueprint(browse_page)
+	app.register_blueprint(code_page)
 	app.register_blueprint(search_page)
 	app.register_blueprint(about_page)
 	app.register_blueprint(news_page)

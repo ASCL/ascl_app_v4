@@ -7,10 +7,61 @@
 	<div class="news-main">
 		<div class="item">
 			<h2>{{ post.title }}</h2>
-			<div class="news-meta">{{ post.date.strftime("%B %-d, %Y") if post.date else "" }}{% if post.author %} &mdash; {{ post.author }}{% endif %}</div>
 			<div class="news-content">
 				{{ post.content|safe }}
 			</div>
+			<div class="news-meta">This entry was posted in {% for cat in post.categories %}<a href="{{ url_for('news_page.news_index', category=cat.slug) }}">{{ cat.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %} on <a href="/news/{{ post.slug }}" title="{{ post.date.strftime('%-I:%M %p') if post.date else '' }}">{{ post.date.strftime("%B %-d, %Y") if post.date else "" }}</a>{% if post.author %} by <a href="{{ url_for('news_page.news_index', author=post.author_slug) }}" title="View all posts by {{ post.author }}">{{ post.author }}</a>{% endif %}.</div>
+		</div>
+
+		{% if comments %}
+		<div id="comments" class="comments-section">
+			<h3>{{ comments|length }} Response{{ 's' if comments|length != 1 else '' }} to <em>{{ post.title }}</em></h3>
+			{% macro render_comments(comment_list, depth=0) %}
+				<ol class="comment-list depth-{{ depth }}">
+				{% for comment in comment_list %}
+					<li class="comment" id="comment-{{ comment.id }}">
+						<div class="comment-body">
+							<div class="comment-author">{{ comment.author }}</div>
+							<div class="comment-date"><a href="#comment-{{ comment.id }}">{{ comment.date.strftime("%B %-d, %Y at %-I:%M %p") }}</a></div>
+							<div class="comment-content">{{ comment.content|safe }}</div>
+						</div>
+						{% if comment.children %}
+							{{ render_comments(comment.children, depth + 1) }}
+						{% endif %}
+					</li>
+				{% endfor %}
+				</ol>
+			{% endmacro %}
+			{{ render_comments(comments) }}
+		</div>
+		{% endif %}
+
+		<div id="respond" class="comment-respond">
+			<h3>Leave a Reply</h3>
+			{% if comment_error %}
+				<p class="comment-error">{{ comment_error }}</p>
+			{% endif %}
+			<form action="{{ url_for('news_page.post_comment', slug=post.slug) }}" method="post" class="comment-form">
+				<p>
+					<label for="comment">Comment <span class="required">*</span></label>
+					<textarea id="comment" name="comment" required rows="8"></textarea>
+				</p>
+				<p>
+					<label for="author">Name <span class="required">*</span></label>
+					<input type="text" id="author" name="author" required>
+				</p>
+				<p>
+					<label for="email">Email <span class="required">*</span></label>
+					<input type="email" id="email" name="email" required>
+				</p>
+				<p>
+					<label for="url">Website</label>
+					<input type="text" id="url" name="url">
+				</p>
+				<p>
+					<button type="submit" class="comment-submit">Post Comment</button>
+				</p>
+			</form>
 		</div>
 	</div>
 
@@ -36,14 +87,12 @@
 
 		<div class="news-side-block">
 			<h3>Categories</h3>
-			<ul class="news-side-list">
+			<select id="category-select" onchange="if(this.value) window.location.href=this.value;">
+				<option value="">Select Category</option>
 				{% for item in sidebar.categories %}
-					<li>
-						<a href="{{ url_for('news_page.news_index', category=item.slug) }}">{{ item.name }}</a>
-						<span class="news-count">({{ item.post_count }})</span>
-					</li>
+					<option value="{{ url_for('news_page.news_index', category=item.slug) }}">{{ item.name }} ({{ item.post_count }})</option>
 				{% endfor %}
-			</ul>
+			</select>
 		</div>
 
 		<div class="news-side-block">
@@ -56,6 +105,11 @@
 					</li>
 				{% endfor %}
 			</ul>
+		</div>
+
+		<div class="news-side-block">
+			<h3>RSS</h3>
+			<a href="{{ url_for('news_page.news_feed') }}">ASCL News Feed</a>
 		</div>
 	</aside>
 </div>

@@ -19,7 +19,7 @@ For complete project documentation, see:
 **Phase 2: Core Pages**
 - [x] Homepage (/)
 - [x] About, Resources, Submissions, Explain (WordPress-backed)
-- [x] Browse (/browse)
+- [x] Browse (/code/all, /code/all_by_id, /code/keywords, /code/alias_list, /code/random)
 - [x] Search (/search) with Typesense + MySQL fallback
 - [x] Code detail pages (/code/<ascl_id>)
 - [x] News/blog (/news) - Flask-rendered from WordPress DB

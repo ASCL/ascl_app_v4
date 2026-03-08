@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}List of Shortened Code Names{% endblock %}
+
+{% block content %}
+<h1>List of Shortened Code Names</h1>
+<p>A list of codes published at the ASCL that have been given shortened names / aliases. Note that some of these were given by the ASCL editors and not astronomers themselves.</p>
+<p>Result count: {{ result_count }}</p>
+
+{% for alias in aliases %}
+<a href="/{{ alias.ascl_id }}">{{ alias.alias }}</a><br />
+{% endfor %}
+{% endblock %}

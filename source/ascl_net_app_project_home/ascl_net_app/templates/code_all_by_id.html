@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}ASCL ID Index{% endblock %}
+
+{% block content %}
+<h1>List of Codes by ASCL ID</h1>
+
+<div class="codelist">
+<ul class="cleanlist">
+{% for yymm, entries in codes_by_id.items() %}
+	<li class="yymm">{{ yymm }}</li>
+	<ul class="cleanlist">
+	{% for xxx, title in entries.items() %}
+		<li><span class="xxx">{{ xxx }}</span> <a href="/{{ yymm }}.{{ xxx }}">{{ title | safe }}</a></li>
+	{% endfor %}
+	</ul>
+{% endfor %}
+</ul>
+</div>
+{% endblock %}

@@ -391,7 +391,7 @@ When migrating to cPanel/Apache production server:
 
 **Verified Endpoints:**
 - ✓ Homepage (/)
-- ✓ Browse (/browse)
+- ✓ Browse (/code/all, /code/all_by_id, /code/keywords, /code/alias_list, /code/random)
 - ✓ Search (/search)
 - ✓ About (/about)
 - ✓ Code detail pages (/code/*)

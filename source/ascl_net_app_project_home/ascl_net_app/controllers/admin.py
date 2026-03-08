@@ -360,14 +360,14 @@ def unpublished_codes():
 		# Show all results
 		codes = (
 			base_query
-			.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
+			.order_by(ascldb.ASCLCode.pk.desc())
 			.all()
 		)
 		total_pages = 1
 	else:
 		codes = (
 			base_query
-			.order_by(ascldb.ASCLCode.time_added.desc(), ascldb.ASCLCode.pk.desc())
+			.order_by(ascldb.ASCLCode.pk.desc())
 			.offset((page - 1) * per_page)
 			.limit(per_page)
 			.all()

@@ -13,7 +13,7 @@ def test_index_ok(client):
 
 
 def test_browse_ok(client):
-	resp = client.get("/browse?per_page=1")
+	resp = client.get("/code/all?limit=1")
 	assert resp.status_code == 200
 
 

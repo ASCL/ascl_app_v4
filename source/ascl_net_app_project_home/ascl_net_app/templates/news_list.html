@@ -7,12 +7,13 @@
 	<div class="news-main">
 		<h2>ASCL News</h2>
 
-		{% if q or category or archive %}
+		{% if q or category or archive or author %}
 			<div class="news-filters">
 				<strong>Filtered:</strong>
 				{% if q %}<span>search "{{ q }}"</span>{% endif %}
 				{% if category %}<span>category "{{ category }}"</span>{% endif %}
 				{% if archive %}<span>archive "{{ archive }}"</span>{% endif %}
+				{% if author %}<span>author "{{ author }}"</span>{% endif %}
 				<a href="/news">clear</a>
 			</div>
 		{% endif %}
@@ -24,8 +25,8 @@
 						<div class="news-title">
 							<a href="/news/{{ post.slug }}">{{ post.title }}</a>
 						</div>
-						<div class="news-meta">{{ post.date.strftime("%B %-d, %Y") if post.date else "" }}{% if post.author %} &mdash; {{ post.author }}{% endif %}</div>
 						<div class="news-content">{{ post.content }}</div>
+						<div class="news-meta">This entry was posted in {% for cat in post.categories %}<a href="{{ url_for('news_page.news_index', category=cat.slug) }}">{{ cat.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %} on <a href="/news/{{ post.slug }}" title="{{ post.date.strftime('%-I:%M %p') if post.date else '' }}">{{ post.date.strftime("%B %-d, %Y") if post.date else "" }}</a>{% if post.author %} by <a href="{{ url_for('news_page.news_index', author=post.author_slug) }}" title="View all posts by {{ post.author }}">{{ post.author }}</a>{% endif %}.</div>
 					</li>
 				{% endfor %}
 			</ul>
@@ -36,7 +37,7 @@
 					<p class="news-result-count">Results {{ start_result }}-{{ end_result }} of {{ total }}</p>
 					<div class="admin-pagination news-pagination">
 						{% if page > 1 %}
-							<a href="{{ url_for('news_page.news_index', page=page - 1, q=q or None, category=category or None, archive=archive or None) }}" class="btn btn-small">Previous</a>
+							<a href="{{ url_for('news_page.news_index', page=page - 1, q=q or None, category=category or None, archive=archive or None, author=author or None) }}" class="btn btn-small">Previous</a>
 						{% else %}
 							<span class="btn btn-small disabled">Previous</span>
 						{% endif %}
@@ -45,7 +46,7 @@
 							{% if p == page %}
 								<strong class="current-page">{{ p }}</strong>
 							{% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
-								<a href="{{ url_for('news_page.news_index', page=p, q=q or None, category=category or None, archive=archive or None) }}" class="btn btn-small">{{ p }}</a>
+								<a href="{{ url_for('news_page.news_index', page=p, q=q or None, category=category or None, archive=archive or None, author=author or None) }}" class="btn btn-small">{{ p }}</a>
 							{% elif p == 4 and page > 5 %}
 								<span class="ellipsis">...</span>
 							{% elif p == total_pages - 2 and page < total_pages - 4 %}
@@ -54,7 +55,7 @@
 						{% endfor %}
 
 						{% if page < total_pages %}
-							<a href="{{ url_for('news_page.news_index', page=page + 1, q=q or None, category=category or None, archive=archive or None) }}" class="btn btn-small">Next</a>
+							<a href="{{ url_for('news_page.news_index', page=page + 1, q=q or None, category=category or None, archive=archive or None, author=author or None) }}" class="btn btn-small">Next</a>
 						{% else %}
 							<span class="btn btn-small disabled">Next</span>
 						{% endif %}
@@ -88,14 +89,12 @@
 
 		<div class="news-side-block">
 			<h3>Categories</h3>
-			<ul class="news-side-list">
+			<select id="category-select" onchange="if(this.value) window.location.href=this.value;">
+				<option value="">Select Category</option>
 				{% for item in sidebar.categories %}
-					<li>
-						<a href="{{ url_for('news_page.news_index', category=item.slug) }}">{{ item.name }}</a>
-						<span class="news-count">({{ item.post_count }})</span>
-					</li>
+					<option value="{{ url_for('news_page.news_index', category=item.slug) }}"{% if category == item.slug %} selected{% endif %}>{{ item.name }} ({{ item.post_count }})</option>
 				{% endfor %}
-			</ul>
+			</select>
 		</div>
 
 		<div class="news-side-block">
@@ -108,6 +107,11 @@
 					</li>
 				{% endfor %}
 			</ul>
+		</div>
+
+		<div class="news-side-block">
+			<h3>RSS</h3>
+			<a href="{{ url_for('news_page.news_feed') }}">ASCL News Feed</a>
 		</div>
 	</aside>
 </div>
