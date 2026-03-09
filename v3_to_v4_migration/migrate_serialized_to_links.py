@@ -119,9 +119,9 @@ def create_see_also_table(cursor):
 def migrate_field_to_links(cursor, field_name, link_type_pk, dry_run=False):
     """Migrate a PHP-serialized field to the link table, preserving order.
 
-    The link table already contains rows from v3 links_new. For URLs that
-    already exist, update their link_type_pk and display_order. For URLs
-    that don't exist yet, insert them.
+    The link-checker rows (link_type_pk IS NULL) from v3 links_new have already
+    been deleted by rename_pk_columns.sql. Only EMAC rows remain. This function
+    inserts new rows from the PHP-serialized codes fields.
     """
     cursor.execute(f"""
         SELECT pk, {field_name} FROM codes
@@ -129,7 +129,6 @@ def migrate_field_to_links(cursor, field_name, link_type_pk, dry_run=False):
     """)
     rows = cursor.fetchall()
 
-    updated = 0
     inserted = 0
     for code_pk, serialized in rows:
         urls = unserialize_php(serialized)
@@ -140,22 +139,13 @@ def migrate_field_to_links(cursor, field_name, link_type_pk, dry_run=False):
             if dry_run:
                 print(f"    [DRY] code_pk={code_pk}, order={display_order}, url={url[:60]}...")
             else:
-                # Try to update existing row (from links_new) that has no type yet
                 cursor.execute("""
-                    UPDATE link SET link_type_pk = %s, display_order = %s
-                    WHERE code_pk = %s AND url = %s AND link_type_pk IS NULL
-                """, (link_type_pk, display_order, code_pk, url))
-                if cursor.rowcount > 0:
-                    updated += cursor.rowcount
-                else:
-                    # URL not in link table yet — insert it
-                    cursor.execute("""
-                        INSERT IGNORE INTO link (code_pk, url, link_type_pk, display_order)
-                        VALUES (%s, %s, %s, %s)
-                    """, (code_pk, url, link_type_pk, display_order))
-                    inserted += cursor.rowcount
+                    INSERT IGNORE INTO link (code_pk, url, link_type_pk, display_order)
+                    VALUES (%s, %s, %s, %s)
+                """, (code_pk, url, link_type_pk, display_order))
+                inserted += cursor.rowcount
 
-    return len(rows), updated, inserted
+    return len(rows), inserted
 
 
 def migrate_see_also(cursor, dry_run=False):
@@ -230,10 +220,10 @@ def main():
     print("\n3. Migrating PHP-serialized fields to link table...")
     for field, link_type in field_mapping:
         print(f"\n   {field} → link (type={link_type}):")
-        codes_count, updated, inserted = migrate_field_to_links(
+        codes_count, inserted = migrate_field_to_links(
             cursor, field, type_pks[link_type], dry_run
         )
-        print(f"   Processed {codes_count} codes, updated {updated} existing links, inserted {inserted} new links")
+        print(f"   Processed {codes_count} codes, inserted {inserted} new links")
 
     # Migrate see_also
     print("\n4. Migrating see_also to code_see_also...")

@@ -36,6 +36,13 @@ RENAME TABLE links TO link;
 RENAME TABLE ads_entries TO ads_entry;
 RENAME TABLE keywords TO keyword;
 
+-- Delete link-checker rows from v3 links_new. These rows (link_type_pk IS NULL)
+-- were populated by the external link_checker.py script for health monitoring and
+-- are not canonical link data. Only EMAC rows (link_type_pk = 1) are real links;
+-- all other links come from the PHP-serialized codes fields (site_list, ref_list,
+-- described_in, used_in) which are migrated by migrate_serialized_to_links.py.
+DELETE FROM link WHERE link_type_pk IS NULL;
+
 -- Rename keyword.keyword column to label and add short_name
 ALTER TABLE keyword CHANGE COLUMN keyword label VARCHAR(64) NOT NULL;
 ALTER TABLE keyword ADD COLUMN short_name VARCHAR(64) NULL AFTER pk;

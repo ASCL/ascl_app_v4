@@ -8,7 +8,8 @@ This project aims to recreate the **ascl.net** (Astrophysics Source Code Library
 - **Original Platform**: cPanel + WordPress + MySQL 8.0.42
 - **Database**: MySQL 8.0.42 (PostgreSQL support built-in for future migration)
 - **Database Backup**: `ascl_db_2025.09.30_bkup.sql.gz` (5.3 MB compressed, MySQL format)
-- **Target Platform**: Flask + SQLAlchemy + MySQL + Nginx + Uvicorn
+- **Target Platform**: Flask + SQLAlchemy + MySQL + Phusion Passenger (cPanel)
+- **Dev Server**: Uvicorn (local development); Passenger (production on cPanel)
 - **Status**: Framework configured with dual database support, models defined, ready for development
 
 ---
@@ -188,16 +189,11 @@ USING_UVICORN = True  # Modern ASGI server
 - **SQLAlchemy 2.0** - ORM and database abstraction
 - **MySQL 8.0** - Current database (maintaining compatibility)
 - **PostgreSQL** - Supported for future migration
-- **Uvicorn** - Modern ASGI server (replaces uWSGI)
-- **Nginx** - Reverse proxy and static file server
 
-### Why Uvicorn?
-Uvicorn is a modern ASGI server that offers:
-- **4.5x faster** than traditional WSGI servers (45,000 vs 10,000 req/s)
-- **HTTP/2 support** for improved performance
-- **WebSocket support** for future real-time features
-- **Active development** and strong community adoption
-- **Production-ready** with excellent stability
+### Deployment
+- **Production**: Phusion Passenger on shared cPanel hosting (one Python app per domain/subdomain)
+- **Development**: Uvicorn ASGI server for local development
+- **Note**: Uvicorn/Nginx/systemd deployment requires a VPS and is not available on shared cPanel
 
 ### Database Strategy
 - **Current**: MySQL 8.0.42 (backup available in MySQL format)
@@ -340,10 +336,11 @@ The `ascldb` schema contains the core ASCL data:
 
 **⚠️ Remaining Limitations**:
 1. MySQL → PostgreSQL migration not completed (MySQL support fully functional)
-2. Admin code editing/insertion not yet implemented
-3. REST API not yet implemented
-4. CSRF protection not yet added to admin forms
-5. Role-based permissions not yet implemented
+2. Data export endpoints not yet implemented (JSON, XML, ADS formats)
+3. CodeMeta/CFF file endpoints not yet implemented
+4. REST API not yet implemented
+5. CSRF protection not yet added to admin forms
+6. Role-based permissions not yet implemented
 
 ---
 
@@ -371,25 +368,38 @@ The application now uses **bcrypt** for secure password hashing, replacing the d
 ## Next Steps / TODO
 
 ### High Priority
-1. **Admin Interface Enhancements**:
-   - Add code editing functionality (`/admin/update_code/<id>`)
-   - Add code insertion functionality (`/admin/insert_code`)
-   - Add pagination to unpublished/archived code lists
-   - Implement bulk actions (publish, archive, delete multiple codes)
+1. **Data Export Endpoints** (as Flask blueprints within this app):
+   - `/code/json` — all codes as JSON
+   - `/code/xml`, `/code/dci` — XML exports
+   - `/code/ads/{date}` — plain text for ADS import
+   - `/{ascl_id}/codemeta.json` — CodeMeta 2.0 export
+   - `/{ascl_id}/CITATION.cff` — Citation File Format
 
-2. **Security Improvements**:
+2. **REST API** (as a Flask blueprint within this app):
+   - `/api/search` — programmatic search with authentication
+   - See `ENDPOINT_MAPPING.md` for full v3→v4 endpoint status
+
+3. **Security Improvements**:
    - Add CSRF protection to admin forms
    - Implement role-based access control (admin, curator, user)
-   - Add secure session configuration
    - Implement rate limiting for login attempts
 
-3. **Database Migration**:
-   - Complete MySQL → PostgreSQL migration (optional, MySQL fully supported)
-   - Create migration scripts for schema changes
-   - Test PostgreSQL compatibility
+4. **Remaining Admin Utilities** (see `ENDPOINT_MAPPING.md`):
+   - Several v3 utility pages not yet ported
+
+### Architectural Decisions
+
+**Single App / No Separate API Service (2026-03-09)**:
+The REST API and data export endpoints will be implemented as Flask blueprints
+within this application, not as a separate service. Rationale:
+- Production runs on **shared cPanel hosting** with Phusion Passenger, which
+  supports one Python app per domain/subdomain
+- Uvicorn/Nginx/systemd deployment is not available on shared cPanel
+- Data exports are lightweight — just alternative serializations of the same queries
+- A separate `api.ascl.net` subdomain remains an option if needed later,
+  since both apps share `ascl_core`
 
 ### Future Enhancements
-- **REST API**: Programmatic access to ASCL data
 - **ADS Integration**: Automatic citation data synchronization
 - **Zenodo Integration**: Software preservation and DOI minting
 - **Citation Export**: BibTeX, RIS, EndNote formats
