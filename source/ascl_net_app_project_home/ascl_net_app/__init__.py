@@ -29,6 +29,8 @@ def register_blueprints(app=None):
 	from .controllers.admin import admin_page
 	from .controllers.dashboard import dashboard_page
 	from .controllers.submit_code import submit_code_page
+	from .controllers.exports import exports_page
+	from .controllers.codemeta import codemeta_page
 
 	app.register_blueprint(index_page)
 	app.register_blueprint(code_page)
@@ -38,6 +40,10 @@ def register_blueprints(app=None):
 	app.register_blueprint(admin_page)
 	app.register_blueprint(dashboard_page)
 	app.register_blueprint(submit_code_page)
+	app.register_blueprint(exports_page)
+	# Register codemeta_page before code_detail_page (catch-all) so
+	# /<ascl_id>/codemeta.json and /<ascl_id>/CITATION.cff match first.
+	app.register_blueprint(codemeta_page)
 	# Register code_detail_page LAST - it has a catch-all route
 	app.register_blueprint(code_detail_page)
 

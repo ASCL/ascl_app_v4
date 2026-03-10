@@ -7,7 +7,7 @@ implemented as Flask blueprints within the main app (not a separate service). Pr
 runs on shared cPanel with Phusion Passenger, which supports one Python app per
 domain/subdomain. A separate `api.ascl.net` subdomain remains an option if needed later.
 
-*Last Updated: 2026-03-09*
+*Last Updated: 2026-03-10*
 
 ---
 
@@ -49,20 +49,20 @@ domain/subdomain. A separate `api.ascl.net` subdomain remains an option if neede
 
 | v3 PHP Endpoint | v4 Flask Endpoint | Description | Done | Notes |
 |---|---|---|---|---|
-| `/code/json` | — | Export all codes as JSON | [ ] | |
-| `/code/xml` | — | Export 100 most recent as XML | [ ] | |
-| `/code/dci` | — | Export all codes as XML | [ ] | |
-| `/code/dci/{date}` | — | Export codes updated since date | [ ] | |
-| `/code/ole/{date}` | — | JSON export for Alice (auth req) | [ ] | |
-| `/code/ads/{date}` | — | Plain text format for ADS import | [ ] | |
+| `/code/json` | `/code/json` | Export all codes as JSON | [x] | |
+| `/code/xml` | `/code/xml` | Export 100 most recent as XML | [x] | |
+| `/code/dci` | `/code/dci` | Export all codes as XML | [x] | |
+| `/code/dci/{date}` | `/code/dci/<date>` | Export codes updated since date | [x] | |
+| `/code/ole/{date}` | `/code/ole/<date>` | JSON export for Alice (auth req) | [x] | 1-month restriction for guests |
+| `/code/ads/{date}` | `/code/ads/<date>` | Plain text format for ADS import | [x] | 1-month restriction for guests |
 
 ## CodeMeta & Citation Files
 
 | v3 PHP Endpoint | v4 Flask Endpoint | Description | Done | Notes |
 |---|---|---|---|---|
-| `/{ascl_id}/codemeta.json` | — | CodeMeta 2.0 JSON export | [ ] | |
-| `/{ascl_id}/CITATION.cff` | — | Citation File Format (CFF) | [ ] | |
-| `/{ascl_id}/citation.cff` | — | Redirect to CITATION.cff | [ ] | |
+| `/{ascl_id}/codemeta.json` | `/<ascl_id>/codemeta.json` | CodeMeta 2.0 JSON export | [x] | Uses v4 author table |
+| `/{ascl_id}/CITATION.cff` | `/<ascl_id>/CITATION.cff` | Citation File Format (CFF) | [x] | Uses v4 author table |
+| `/{ascl_id}/citation.cff` | `/<ascl_id>/citation.cff` | Redirect to CITATION.cff | [x] | 301 redirect |
 
 ## Webhooks
 
@@ -190,8 +190,8 @@ domain/subdomain. A separate `api.ascl.net` subdomain remains an option if neede
 | Public Pages | 6 | 6 | 0 |
 | Code Browsing | 10 | 10 | 0 |
 | Code Submission/Edit | 3 | 1 | 2 |
-| Data Export | 6 | 0 | 6 |
-| CodeMeta/CFF | 3 | 0 | 3 |
+| Data Export | 6 | 6 | 0 |
+| CodeMeta/CFF | 3 | 3 | 0 |
 | Webhooks | 2 | 0 | 2 |
 | API | 1 | 0 | 1 |
 | Dashboard | 1 | 1 | 0 |
@@ -199,5 +199,5 @@ domain/subdomain. A separate `api.ascl.net` subdomain remains an option if neede
 | Admin Code Mgmt | 6 | 6 | 0 |
 | Admin Utilities | 14 | 4 | 10 |
 | Error Handling | 1 | 1 | 0 |
-| **Total v3 endpoints** | **54** | **30** | **24** |
+| **Total v3 endpoints** | **54** | **39** | **15** |
 | v4-only additions | — | 28 | — |
