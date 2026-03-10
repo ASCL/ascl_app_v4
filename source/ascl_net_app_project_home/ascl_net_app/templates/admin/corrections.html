@@ -1,0 +1,350 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Corrections{% endblock %}
+
+{% block admin_content %}
+<h1>Suggested Corrections ({{ pending_count }} pending)</h1>
+
+<div class="correction-filters">
+    <a href="?status=pending" class="filter-tab {% if filter_status == 'pending' %}active{% endif %}">Pending</a>
+    <a href="?status=all" class="filter-tab {% if filter_status == 'all' %}active{% endif %}">All</a>
+    <a href="?status=applied" class="filter-tab {% if filter_status == 'applied' %}active{% endif %}">Applied</a>
+    <a href="?status=rejected" class="filter-tab {% if filter_status == 'rejected' %}active{% endif %}">Rejected</a>
+    <a href="?status=noted" class="filter-tab {% if filter_status == 'noted' %}active{% endif %}">Needs Additional Review</a>
+</div>
+
+{% if not corrections %}
+<p>No corrections to display.</p>
+{% endif %}
+
+{% for c in corrections %}
+<div class="correction-card correction-{{ c.status }}">
+    <div class="correction-meta">
+        Submitted by {{ c.submitter_name }} ({{ c.submitter_email }})
+        <span class="correction-timestamp toggleable-time" data-utc="{{ c.submitted_at.strftime('%Y-%m-%dT%H:%M') }}">{{ c.submitted_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
+        {% if c.status != 'pending' %}
+        <span class="status-badge status-{{ c.status }}">{{ c.status }}</span>
+        {% endif %}
+    </div>
+    <div class="correction-header">
+        <strong><a href="/{{ c.ascl_id }}">ascl:{{ c.ascl_id }}</a></strong>
+        &mdash; {{ c.code_title }}
+    </div>
+
+    <div class="correction-body">
+        {% if c.title is not none %}
+        <div class="correction-field">
+            <div class="field-label">Title</div>
+            <div class="field-current">{{ c.title_diff_current | safe }}</div>
+            <div class="field-arrow">&rarr;</div>
+            <div class="field-proposed">{{ c.title_diff_proposed | safe }}</div>
+        </div>
+        {% endif %}
+
+        {% if c.credit is not none %}
+        <div class="correction-field">
+            <div class="field-label">Credit</div>
+            <div class="field-current">{{ c.credit_diff_current | safe }}</div>
+            <div class="field-arrow">&rarr;</div>
+            <div class="field-proposed">{{ c.credit_diff_proposed | safe }}</div>
+        </div>
+        {% endif %}
+
+        {% if c.abstract is not none %}
+        <div class="correction-field">
+            <div class="field-label">Abstract</div>
+            <div class="field-current">{{ c.abstract_diff_current | safe }}</div>
+            <div class="field-arrow">&rarr;</div>
+            <div class="field-proposed">{{ c.abstract_diff_proposed | safe }}</div>
+        </div>
+        {% endif %}
+
+        {% if c.citation_method is not none %}
+        <div class="correction-field">
+            <div class="field-label">Preferred citation</div>
+            <div class="field-current">{{ c.citation_method_diff_current | safe }}</div>
+            <div class="field-arrow">&rarr;</div>
+            <div class="field-proposed">{{ c.citation_method_diff_proposed | safe }}</div>
+        </div>
+        {% endif %}
+
+        {% for lc in c.link_changes %}
+        <div class="correction-field">
+            <div class="field-label">{{ lc.link_type_name }}</div>
+            <div class="field-current"><pre>{{ lc.diff_current | safe }}</pre></div>
+            <div class="field-arrow">&rarr;</div>
+            <div class="field-proposed"><pre>{{ lc.diff_proposed | safe }}</pre></div>
+        </div>
+        {% endfor %}
+
+        {% if c.submitter_notes %}
+        <div class="submitter-notes">
+            <strong>Notes from submitter:</strong> {{ c.submitter_notes }}
+        </div>
+        {% endif %}
+    </div>
+
+    {% if c.curator_notes %}
+    <div class="curator-notes-list">
+        <div class="curator-notes-header">Curator Notes</div>
+        {% for note in c.curator_notes %}
+        <div class="curator-note-entry">
+            <div class="curator-note-who">
+                <div class="curator-note-author">{{ note.author }}</div>
+                <div class="curator-note-time toggleable-time" data-utc="{{ note.created_at.strftime('%Y-%m-%dT%H:%M') }}">{{ note.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</div>
+            </div>
+            <div class="curator-note-text">{{ note.note }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="curator-note-add">
+        <form method="POST" action="{{ url_for('admin_page.save_curator_note', pk=c.pk) }}" class="curator-note-form">
+            <div class="curator-note-row">
+                <input type="text" name="curator_note" id="curator_note_{{ c.pk }}"
+                       placeholder="Add curator note..." class="curator-note-input">
+                <button type="submit" class="btn btn-note">Add note</button>
+            </div>
+        </form>
+    </div>
+
+    {% if c.status == 'pending' %}
+    <div class="correction-actions">
+        <form method="POST" action="{{ url_for('admin_page.apply_correction', pk=c.pk) }}" class="inline-form">
+            <button type="submit" class="btn btn-apply">Apply Changes</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_page.reject_correction', pk=c.pk) }}" class="inline-form">
+            <input type="text" name="reviewer_notes" placeholder="Reason (optional)" class="reviewer-notes-input">
+            <button type="submit" class="btn btn-reject">Reject</button>
+        </form>
+    </div>
+    {% elif c.reviewer_notes %}
+    <div class="reviewer-notes-display">
+        <strong>Reviewer notes:</strong> {{ c.reviewer_notes }}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+
+<style>
+.correction-filters {
+    margin-bottom: 20px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+.filter-tab {
+    display: inline-block;
+    padding: 6px 16px;
+    margin-right: 4px;
+    text-decoration: none;
+    color: #555;
+    border-radius: 4px 4px 0 0;
+    border: 1px solid transparent;
+}
+.filter-tab:hover { background: #f5f5f5; }
+.filter-tab.active {
+    background: #fff;
+    border-color: #ddd #ddd #fff;
+    color: #2980b9;
+    font-weight: 600;
+}
+
+.correction-card {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+.correction-card.correction-applied { border-left: 4px solid #27ae60; opacity: 0.7; }
+.correction-card.correction-rejected { border-left: 4px solid #c0392b; opacity: 0.7; }
+.correction-card.correction-pending { border-left: 4px solid #f39c12; }
+
+.correction-meta {
+    background: #e8eaed;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #555;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.correction-timestamp {
+    color: #777;
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+.toggleable-time {
+    cursor: pointer;
+}
+.correction-header {
+    background: #f8f9fa;
+    padding: 10px 14px;
+    border-bottom: 1px solid #eee;
+    font-size: 15px;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    float: right;
+}
+.status-applied { background: #d4edda; color: #155724; }
+.status-rejected { background: #f8d7da; color: #721c24; }
+
+.correction-body { padding: 12px 14px; }
+
+.correction-field {
+    display: grid;
+    grid-template-columns: 120px 1fr 30px 1fr;
+    gap: 8px;
+    align-items: stretch;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.field-label { font-weight: 600; color: #555; font-size: 13px; }
+.field-current { background: #fff3f3; padding: 4px 8px; border-radius: 3px; font-size: 13px; word-break: break-word; }
+.field-arrow { text-align: center; color: #999; font-size: 18px; }
+.field-proposed { background: #f0fff0; padding: 4px 8px; border-radius: 3px; font-size: 13px; word-break: break-word; }
+.field-current pre, .field-proposed pre { margin: 0; white-space: pre-wrap; font-size: 12px; }
+
+.submitter-notes {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.correction-actions {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f8f9fa;
+    border-top: 1px solid #eee;
+    align-items: center;
+}
+.inline-form { display: flex; align-items: center; gap: 6px; }
+.btn { padding: 6px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.btn-apply { background: #27ae60; color: #fff; }
+.btn-apply:hover { background: #219a52; }
+.btn-reject { background: #c0392b; color: #fff; }
+.btn-reject:hover { background: #a93226; }
+.reviewer-notes-input { padding: 5px 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 13px; width: 250px; }
+
+.curator-notes-list {
+    padding: 8px 14px;
+    background: #fdf8ec;
+    border-top: 1px solid #eee;
+    border-left: 3px solid #d4a017;
+}
+.curator-notes-header {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #856404;
+    margin-bottom: 4px;
+}
+.curator-note-entry {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 10px;
+    font-size: 13px;
+    padding: 6px 0;
+}
+.curator-note-entry + .curator-note-entry {
+    border-top: 1px solid #f0e8d0;
+}
+.curator-note-who {
+    min-width: 0;
+}
+.curator-note-author {
+    font-weight: 600;
+    color: #555;
+}
+.curator-note-time {
+    color: #999;
+    font-size: 11px;
+    white-space: nowrap;
+}
+.curator-note-text {
+    color: #333;
+}
+.curator-note-add {
+    padding: 6px 14px;
+    background: #f8f9fa;
+    border-top: 1px solid #eee;
+}
+.curator-note-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.curator-note-input {
+    flex: 1;
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 13px;
+}
+.btn-note {
+    background: #d4a017;
+    color: #fff;
+    white-space: nowrap;
+}
+.btn-note:hover {
+    background: #b8860b;
+}
+
+.reviewer-notes-display {
+    padding: 8px 14px;
+    background: #f8f9fa;
+    border-top: 1px solid #eee;
+    font-size: 13px;
+}
+
+mark.diff-del {
+    background: #fdd;
+    color: #900;
+    padding: 1px 2px;
+    border-radius: 2px;
+    text-decoration: none;
+}
+mark.diff-add {
+    background: #afa;
+    color: #060;
+    padding: 1px 2px;
+    border-radius: 2px;
+    text-decoration: none;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.toggleable-time').forEach(function(el) {
+        var utcStr = el.getAttribute('data-utc');
+        var utcDate = new Date(utcStr + 'Z');
+        var estStr = utcDate.toLocaleString('en-US', {
+            timeZone: 'America/New_York',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false
+        });
+        // Format to match YYYY-MM-DD HH:MM
+        var parts = estStr.split(', ');
+        var dateParts = parts[0].split('/');
+        var estFormatted = dateParts[2] + '-' + dateParts[0] + '-' + dateParts[1] + ' ' + parts[1];
+        var showingUTC = true;
+        var utcFormatted = el.textContent;
+
+        el.addEventListener('click', function() {
+            showingUTC = !showingUTC;
+            el.textContent = showingUTC ? utcFormatted : estFormatted + ' EST';
+        });
+    });
+});
+</script>
+{% endblock %}

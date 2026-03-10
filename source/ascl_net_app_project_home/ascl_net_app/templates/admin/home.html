@@ -6,6 +6,13 @@
 <h1>Admin Home</h1>
 
 {% if current_user %}
+	{% if correction_count > 0 %}
+	<div class="attention-alert" style="border-left-color: #3498db;">
+		<strong>{{ correction_count }}</strong> suggested correction{{ 's' if correction_count != 1 else '' }} pending review.
+		<a href="{{ url_for('admin_page.corrections') }}">Review &rarr;</a>
+	</div>
+	{% endif %}
+
 	{% if attention_count > 0 %}
 	<div class="attention-alert">
 		<strong>{{ attention_count }}</strong> note{{ 's' if attention_count != 1 else '' }} need{{ '' if attention_count != 1 else 's' }} attention.

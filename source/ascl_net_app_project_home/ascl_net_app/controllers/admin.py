@@ -187,10 +187,22 @@ def admin_home():
 			# Tables may not exist yet
 			attention_count = 0
 
+	# Count pending corrections
+	correction_count = 0
+	if current_usr:
+		try:
+			from sqlalchemy import text as sa_text
+			correction_count = db_session.execute(sa_text(
+				"SELECT COUNT(*) FROM code_correction WHERE status = 'pending'"
+			)).scalar()
+		except Exception:
+			correction_count = 0
+
 	return render_template(
 		"admin/home.html",
 		current_user=current_usr,
-		attention_count=attention_count
+		attention_count=attention_count,
+		correction_count=correction_count,
 	)
 
 
@@ -1748,3 +1760,288 @@ def codes_submitted_by_authors():
 	)
 
 	return _paginated_code_list(query, "Codes Submitted by Authors", show_ascl_id_filter=True)
+
+
+# ==========================================
+# Corrections Review Routes
+# ==========================================
+
+def _diff_highlight(old_text, new_text):
+	"""Return (old_html, new_html) with <mark> tags highlighting differences."""
+	import difflib
+	from markupsafe import escape
+
+	old_text = old_text or ""
+	new_text = new_text or ""
+
+	sm = difflib.SequenceMatcher(None, old_text, new_text)
+	old_parts = []
+	new_parts = []
+
+	for op, i1, i2, j1, j2 in sm.get_opcodes():
+		old_chunk = str(escape(old_text[i1:i2]))
+		new_chunk = str(escape(new_text[j1:j2]))
+
+		if op == "equal":
+			old_parts.append(old_chunk)
+			new_parts.append(new_chunk)
+		elif op == "replace":
+			old_parts.append(f'<mark class="diff-del">{old_chunk}</mark>')
+			new_parts.append(f'<mark class="diff-add">{new_chunk}</mark>')
+		elif op == "delete":
+			old_parts.append(f'<mark class="diff-del">{old_chunk}</mark>')
+		elif op == "insert":
+			new_parts.append(f'<mark class="diff-add">{new_chunk}</mark>')
+
+	return "".join(old_parts), "".join(new_parts)
+
+
+@admin_page.route("/corrections", methods=["GET"])
+@_login_required
+def corrections():
+	"""List user-submitted corrections for review."""
+	from sqlalchemy import text as sa_text
+
+	db_session = _get_db_session()
+	filter_status = request.args.get("status", "pending")
+
+	where = ""
+	join_extra = ""
+	params = {}
+	if filter_status in ("pending", "applied", "rejected"):
+		where = "WHERE cc.status = :status"
+		params["status"] = filter_status
+	elif filter_status == "noted":
+		join_extra = ("JOIN code_note cn ON cn.correction_pk = cc.pk "
+		              "JOIN users u_note ON u_note.pk = cn.user_pk AND u_note.username != 'ASCLbot'")
+		where = "WHERE cc.status = 'pending'"
+
+	rows = db_session.execute(sa_text(f"""
+		SELECT DISTINCT cc.*, c.ascl_id, c.title AS code_title,
+		       c.credit AS current_credit, c.abstract AS current_abstract,
+		       c.citation_method AS current_citation_method
+		FROM code_correction cc
+		JOIN codes c ON c.pk = cc.code_pk
+		{join_extra}
+		{where}
+		ORDER BY cc.submitted_at DESC
+	"""), params).mappings().all()
+
+	pending_count = db_session.execute(sa_text(
+		"SELECT COUNT(*) FROM code_correction WHERE status = 'pending'"
+	)).scalar()
+
+	# Fetch link changes for each correction
+	corrections_list = []
+	for row in rows:
+		c = dict(row)
+		link_rows = db_session.execute(sa_text("""
+			SELECT ccl.urls AS proposed_urls, lt.name AS link_type_name, lt.pk AS link_type_pk
+			FROM code_correction_link ccl
+			JOIN link_type lt ON lt.pk = ccl.link_type_pk
+			WHERE ccl.correction_pk = :correction_pk
+		"""), {"correction_pk": c["pk"]}).mappings().all()
+
+		link_changes = []
+		for lr in link_rows:
+			# Get current URLs for this link type
+			current = db_session.execute(sa_text("""
+				SELECT l.url FROM link l
+				WHERE l.code_pk = :code_pk AND l.link_type_pk = :lt_pk
+				ORDER BY l.display_order, l.pk
+			"""), {"code_pk": c["code_pk"], "lt_pk": lr["link_type_pk"]}).fetchall()
+			current_urls = "\n".join(r[0] for r in current)
+			link_changes.append({
+				"link_type_name": lr["link_type_name"],
+				"link_type_pk": lr["link_type_pk"],
+				"current_urls": current_urls,
+				"proposed_urls": lr["proposed_urls"],
+			})
+		c["link_changes"] = link_changes
+
+		# Compute diff-highlighted HTML for each changed scalar field
+		for field, current_key in [
+			("title", "code_title"),
+			("credit", "current_credit"),
+			("abstract", "current_abstract"),
+			("citation_method", "current_citation_method"),
+		]:
+			if c[field] is not None:
+				old_html, new_html = _diff_highlight(c[current_key] or "", c[field])
+				c[f"{field}_diff_current"] = old_html
+				c[f"{field}_diff_proposed"] = new_html
+
+		# Compute diff-highlighted HTML for link changes
+		for lc in link_changes:
+			old_html, new_html = _diff_highlight(
+				lc["current_urls"] or "", lc["proposed_urls"] or ""
+			)
+			lc["diff_current"] = old_html
+			lc["diff_proposed"] = new_html
+
+		# Fetch curator notes linked to this correction
+		c["curator_notes"] = db_session.execute(sa_text("""
+			SELECT cn.note, cn.created_at, u.username AS author
+			FROM code_note cn
+			LEFT JOIN users u ON u.pk = cn.user_pk
+			WHERE cn.correction_pk = :correction_pk
+			ORDER BY cn.created_at
+		"""), {"correction_pk": c["pk"]}).mappings().all()
+
+		corrections_list.append(c)
+
+	return render_template(
+		"admin/corrections.html",
+		corrections=corrections_list,
+		current_user=_current_user(db_session),
+		filter_status=filter_status,
+		pending_count=pending_count,
+	)
+
+
+@admin_page.route("/corrections/<int:pk>/apply", methods=["POST"])
+@_login_required
+def apply_correction(pk):
+	"""Apply a correction to the code entry."""
+	from datetime import datetime
+	from sqlalchemy import text as sa_text
+
+	db_session = _get_db_session()
+	ascldb = _get_models()
+
+	correction = db_session.execute(sa_text(
+		"SELECT * FROM code_correction WHERE pk = :pk AND status = 'pending'"
+	), {"pk": pk}).mappings().first()
+
+	if not correction:
+		flash("Correction not found or already processed.", "error")
+		return redirect(url_for("admin_page.corrections"))
+
+	code = db_session.query(ascldb.ASCLCode).filter(
+		ascldb.ASCLCode.pk == correction["code_pk"]
+	).one_or_none()
+
+	if not code:
+		flash("Code not found.", "error")
+		return redirect(url_for("admin_page.corrections"))
+
+	# Apply scalar field changes
+	if correction["title"] is not None:
+		code.title = correction["title"]
+	if correction["credit"] is not None:
+		code.credit = correction["credit"]
+		_sync_authors_from_credit(db_session, ascldb, code.pk, correction["credit"])
+	if correction["abstract"] is not None:
+		code.abstract = correction["abstract"]
+	if correction["citation_method"] is not None:
+		code.citation_method = correction["citation_method"]
+
+	code.time_updated = datetime.now()
+
+	# Apply link changes
+	link_changes = db_session.execute(sa_text("""
+		SELECT link_type_pk, urls FROM code_correction_link
+		WHERE correction_pk = :pk
+	"""), {"pk": pk}).mappings().all()
+
+	for lc in link_changes:
+		# Delete existing links of this type for the code
+		db_session.execute(sa_text("""
+			DELETE FROM link WHERE code_pk = :code_pk AND link_type_pk = :lt_pk
+		"""), {"code_pk": code.pk, "lt_pk": lc["link_type_pk"]})
+
+		# Insert new links
+		urls = [u.strip() for u in (lc["urls"] or "").splitlines() if u.strip()]
+		for order, url in enumerate(urls):
+			db_session.execute(sa_text("""
+				INSERT INTO link (code_pk, url, link_type_pk, display_order)
+				VALUES (:code_pk, :url, :lt_pk, :display_order)
+			"""), {
+				"code_pk": code.pk,
+				"url": url,
+				"lt_pk": lc["link_type_pk"],
+				"display_order": order,
+			})
+
+	# Mark correction as applied
+	db_session.execute(sa_text("""
+		UPDATE code_correction
+		SET status = 'applied', reviewed_at = :now, reviewed_by = :user_pk
+		WHERE pk = :pk
+	"""), {"pk": pk, "now": datetime.now(), "user_pk": session.get("user_id")})
+
+	db_session.commit()
+	flash(f"Correction applied to <a href='/{code.ascl_id}'>ascl:{code.ascl_id}</a>.", "success")
+	return redirect(url_for("admin_page.corrections"))
+
+
+@admin_page.route("/corrections/<int:pk>/reject", methods=["POST"])
+@_login_required
+def reject_correction(pk):
+	"""Reject a correction."""
+	from datetime import datetime
+	from sqlalchemy import text as sa_text
+
+	db_session = _get_db_session()
+
+	correction = db_session.execute(sa_text(
+		"SELECT pk FROM code_correction WHERE pk = :pk AND status = 'pending'"
+	), {"pk": pk}).mappings().first()
+
+	if not correction:
+		flash("Correction not found or already processed.", "error")
+		return redirect(url_for("admin_page.corrections"))
+
+	reviewer_notes = request.form.get("reviewer_notes", "").strip() or None
+
+	db_session.execute(sa_text("""
+		UPDATE code_correction
+		SET status = 'rejected', reviewed_at = :now, reviewed_by = :user_pk,
+		    reviewer_notes = :notes
+		WHERE pk = :pk
+	"""), {
+		"pk": pk,
+		"now": datetime.now(),
+		"user_pk": session.get("user_id"),
+		"notes": reviewer_notes,
+	})
+
+	db_session.commit()
+	flash("Correction rejected.", "info")
+	return redirect(url_for("admin_page.corrections"))
+
+
+@admin_page.route("/corrections/<int:pk>/note", methods=["POST"])
+@_login_required
+def save_curator_note(pk):
+	"""Add a curator note to a correction via the code_note table."""
+	from sqlalchemy import text as sa_text
+
+	db_session = _get_db_session()
+
+	correction = db_session.execute(sa_text(
+		"SELECT pk, code_pk FROM code_correction WHERE pk = :pk"
+	), {"pk": pk}).mappings().first()
+
+	if not correction:
+		flash("Correction not found.", "error")
+		return redirect(url_for("admin_page.corrections"))
+
+	note_text = request.form.get("curator_note", "").strip()
+	if not note_text:
+		flash("Note is empty.", "error")
+		return redirect(url_for("admin_page.corrections"))
+
+	db_session.execute(sa_text("""
+		INSERT INTO code_note (code_pk, correction_pk, user_pk, note_type_pk, note)
+		VALUES (:code_pk, :correction_pk, :user_pk, 3, :note)
+	"""), {
+		"code_pk": correction["code_pk"],
+		"correction_pk": pk,
+		"user_pk": session.get("user_id"),
+		"note": note_text,
+	})
+
+	db_session.commit()
+	flash("Curator note added.", "info")
+	return redirect(url_for("admin_page.corrections"))

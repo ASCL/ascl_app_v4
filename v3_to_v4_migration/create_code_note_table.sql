@@ -30,6 +30,7 @@ INSERT INTO note_type (short_name, name, description, display_order) VALUES
 CREATE TABLE IF NOT EXISTS code_note (
     pk INT AUTO_INCREMENT PRIMARY KEY,
     code_pk INT NOT NULL COMMENT 'FK to codes table',
+    correction_pk INT NULL COMMENT 'FK to code_correction (if note is about a specific correction)',
     user_pk INT NULL COMMENT 'FK to users table (who created the note)',
     note_type_pk INT NOT NULL COMMENT 'FK to note_type table',
     note TEXT NOT NULL COMMENT 'The note content',
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS code_note (
 
     -- Indexes
     INDEX idx_code_pk (code_pk),
+    INDEX idx_correction_pk (correction_pk),
     INDEX idx_user_pk (user_pk),
     INDEX idx_note_type_pk (note_type_pk),
     INDEX idx_created_at (created_at),
@@ -65,6 +67,10 @@ CROSS JOIN note_type nt
 WHERE nt.short_name = 'legacy'
   AND c.notes IS NOT NULL
   AND c.notes != '';
+
+-- Create ASCLbot system user for automated curator notes (e.g. URL normalization)
+INSERT IGNORE INTO users (username, real_name, password, login_attempts)
+VALUES ('ASCLbot', 'ASCL Bot', '', 0);
 
 -- Report migration results
 SELECT

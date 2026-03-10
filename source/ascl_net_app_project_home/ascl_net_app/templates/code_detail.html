@@ -2,6 +2,70 @@
 
 {% block title %}{{ code.title | safe }}{% endblock %}
 
+{% block below_menu %}
+<div id="discovery-bar" style="display:none">
+  <div class="discovery-bar-inner">
+    <span class="discovery-label"></span>
+    <span class="discovery-prompt">Find another code</span>
+    <span class="discovery-pills">
+      {% if has_keywords %}
+      <a href="/discover/similar/{{ code.ascl_id }}"
+         class="discovery-pill"
+         onclick="sessionStorage.setItem('discoveryMode','1')">Similar</a>
+      {% endif %}
+      <a href="/discover/mentioned/{{ code.ascl_id }}"
+         class="discovery-pill"
+         onclick="sessionStorage.setItem('discoveryMode','1')">Referenced by</a>
+      {% for dm in domain_matches %}
+      <a href="/discover/domain/{{ dm.term | urlencode }}?from={{ code.ascl_id }}"
+         class="discovery-pill"
+         onclick="sessionStorage.setItem('discoveryMode','1')">More {{ dm.label }}</a>
+      {% endfor %}
+      {% for mm in mission_matches %}
+      <a href="/discover/domain/{{ mm.search | urlencode }}?from={{ code.ascl_id }}"
+         class="discovery-pill"
+         onclick="sessionStorage.setItem('discoveryMode','1')">More {{ mm.keyword }}</a>
+      {% endfor %}
+      {% for lang in code_languages %}
+      <a href="/discover/language/{{ lang | urlencode }}?from={{ code.ascl_id }}"
+         class="discovery-pill"
+         onclick="sessionStorage.setItem('discoveryMode','1')">More {{ lang }}</a>
+      {% if lang == 'IDL' %}
+      <a href="/discover/language/Python?from={{ code.ascl_id }}"
+         class="discovery-pill"
+         onclick="sessionStorage.setItem('discoveryMode','1')">Less IDL</a>
+      {% endif %}
+      {% endfor %}
+      {% if author_has_other_codes %}
+      <a href="/discover/author/{{ code.ascl_id }}"
+         class="discovery-pill"
+         onclick="sessionStorage.setItem('discoveryMode','1')">By same author{% if author_count > 1 %}s{% endif %}</a>
+      {% endif %}
+    </span>
+    <span class="discovery-separator">or</span>
+    <a href="/code/random" class="discovery-pill discovery-random"
+       onclick="sessionStorage.setItem('discoveryMode','1')">Surprise me</a>
+    <button id="discovery-close"
+       onclick="sessionStorage.removeItem('discoveryMode');this.parentNode.parentNode.style.display='none'">&times;</button>
+  </div>
+</div>
+<script>
+(function() {
+  var mode = sessionStorage.getItem('discoveryMode');
+  if (!mode) return;
+  var bar = document.getElementById('discovery-bar');
+  var label = bar.querySelector('.discovery-label');
+  if (mode === 'new') {
+    label.textContent = 'Random code browser activated!';
+    sessionStorage.setItem('discoveryMode', '1');
+  } else {
+    label.textContent = 'Random code browser:';
+  }
+  bar.style.display = '';
+})();
+</script>
+{% endblock %}
+
 {% block content %}
 {% if is_admin_logged_in and not code.published %}
 <div class="admin-info-banner">This code is <strong>unpublished</strong> and only visible to admins.</div>
@@ -104,12 +168,7 @@
 		{% endif %}
 
 
-		<div class="explain"><a href="/explain">Explain these fields?</a></div>
-
-		<div class="clear"></div>
-
-
-		<br>
+		<div class="explain"><a href="/explain">Explain these fields?</a> | <a href="/{{ code.ascl_id }}/suggest-edit">Suggest a correction</a></div>
 
 		<div class="clear"></div>
 

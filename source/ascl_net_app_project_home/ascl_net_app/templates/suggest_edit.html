@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<h1>Suggest Changes to <a href="/{{ code.ascl_id }}">ascl:{{ code.ascl_id }}</a></h1>
+
+{% if err %}<div class="err">{{ err | safe }}</div>{% endif %}
+{% if msg %}<div class="msg">{{ msg | safe }}</div>{% endif %}
+
+{% if not hide_form %}
+<p>Request changes or additions to this code entry using the form below.</p>
+<p>Your changes will be sent to an editor for consideration and will appear
+publicly after approval.</p>
+
+<div class="forms block-labels">
+<form method="POST" action="/{{ code.ascl_id }}/suggest-edit">
+
+    <label for="title">Title</label>
+    <input type="text" name="title" id="title" maxlength="255"
+           value="{{ form_data.get('title', code.title or '') }}">
+    <small>No HTML.</small>
+
+    <label>Credit</label>
+    <small>Format: Surname, Firstname I. You can also paste multiple names separated by semicolons.</small>
+    <div id="credit-fields">
+    {% for author in credit_names %}
+        <div class="credit-row">
+            <input type="text" name="credit" maxlength="255" value="{{ author }}">
+            <button type="button" class="credit-remove" title="Remove">&times;</button>
+        </div>
+    {% endfor %}
+    </div>
+    <button type="button" id="credit-add" class="credit-add-btn">+ Add author</button>
+
+    <label for="abstract">Abstract</label>
+    <textarea name="abstract" id="abstract" rows="8">{{ form_data.get('abstract', code.abstract or '') }}</textarea>
+    <small>No HTML.</small>
+
+    <label for="citation_method">Preferred citation method</label>
+    <input type="text" name="citation_method" id="citation_method" maxlength="255"
+           value="{{ form_data.get('citation_method', code.citation_method or '') }}">
+
+    <hr>
+    <h3>Links</h3>
+    <p>Edit the URLs below for each link category. Leave unchanged if no correction needed.</p>
+
+    {% for lt in link_types %}
+    <label>{{ lt.name }}</label>
+    <div class="url-fields" data-link-type="{{ lt.pk }}">
+    {% for url in lt.current_urls %}
+        <div class="credit-row">
+            <input type="text" name="links_{{ lt.pk }}" value="{{ url }}">
+            <button type="button" class="credit-remove" title="Remove">&times;</button>
+        </div>
+    {% endfor %}
+    </div>
+    <button type="button" class="url-add-btn credit-add-btn">+ Add URL</button>
+    {% endfor %}
+
+    <hr>
+    <h3>Your information</h3>
+
+    <label for="name">Your name <span style="color:#c00">*</span></label>
+    <input type="text" name="name" id="name" maxlength="255"
+           value="{{ form_data.get('name', '') }}">
+
+    <label for="email">Email <span style="color:#c00">*</span></label>
+    <input type="email" name="email" id="email" maxlength="255"
+           value="{{ form_data.get('email', '') }}">
+    <small>Required in case an editor needs to contact you. Not displayed publicly.</small>
+
+    <label for="notes">Notes to editors</label>
+    <textarea name="notes" id="notes" rows="4">{{ form_data.get('notes', '') }}</textarea>
+    <small>Any further information for the editors. Not displayed publicly.</small>
+
+    <hr>
+
+    <p><img src="/static/images/challenge.jpg" id="bot_challenge" alt="Bot challenge"></p>
+
+    <label for="challenge">Bot challenge <span style="color:#c00">*</span></label>
+    <input type="text" name="challenge" id="challenge" maxlength="50"
+           value="{{ form_data.get('challenge', '') }}">
+    <small>Type what the galaxies say.</small>
+
+    <div style="margin-top: 20px"><input type="submit" value="Submit Suggested Changes"></div>
+
+</form>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    function makeRow(fieldName, value) {
+        var row = document.createElement('div');
+        row.className = 'credit-row';
+        row.innerHTML = '<input type="text" name="' + fieldName + '" value="">'
+                      + '<button type="button" class="credit-remove" title="Remove">&times;</button>';
+        row.querySelector('input').value = value;
+        return row;
+    }
+
+    function initAddRemove(container, addBtn, fieldName) {
+        addBtn.addEventListener('click', function() {
+            var row = makeRow(fieldName, '');
+            container.appendChild(row);
+            row.querySelector('input').focus();
+        });
+
+        container.addEventListener('click', function(e) {
+            if (e.target.classList.contains('credit-remove')) {
+                var rows = container.querySelectorAll('.credit-row');
+                if (rows.length > 1) {
+                    e.target.parentNode.remove();
+                } else {
+                    e.target.parentNode.querySelector('input').value = '';
+                }
+            }
+        });
+    }
+
+    // Credit fields
+    var creditContainer = document.getElementById('credit-fields');
+    var creditAdd = document.getElementById('credit-add');
+    if (creditContainer && creditAdd) {
+        initAddRemove(creditContainer, creditAdd, 'credit');
+
+        // Split pasted semicolon-separated names into separate fields
+        creditContainer.addEventListener('paste', function(e) {
+            var target = e.target;
+            if (target.tagName !== 'INPUT' || target.name !== 'credit') return;
+            var text = (e.clipboardData || window.clipboardData).getData('text');
+            if (text.indexOf(';') === -1) return;
+            e.preventDefault();
+            var names = text.split(';').map(function(s) { return s.trim(); }).filter(Boolean);
+            if (names.length === 0) return;
+            target.value = names[0];
+            var currentRow = target.closest('.credit-row');
+            var nextSibling = currentRow.nextSibling;
+            for (var i = 1; i < names.length; i++) {
+                var row = makeRow('credit', names[i]);
+                creditContainer.insertBefore(row, nextSibling);
+            }
+        });
+    }
+
+    // URL fields (one group per link type)
+    document.querySelectorAll('.url-fields').forEach(function(container) {
+        var linkType = container.getAttribute('data-link-type');
+        var addBtn = container.nextElementSibling;
+        if (addBtn && addBtn.classList.contains('url-add-btn')) {
+            initAddRemove(container, addBtn, 'links_' + linkType);
+        }
+    });
+});
+</script>
+{% endblock %}

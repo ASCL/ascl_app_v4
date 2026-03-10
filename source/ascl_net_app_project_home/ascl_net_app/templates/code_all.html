@@ -77,7 +77,8 @@
 	</div>
 	<div class="col">
 		<div>&nbsp;</div>
-		<a href="/code/random" class="random-code-btn">Random</a>
+		<a href="/code/random" class="random-code-btn"
+		   onclick="sessionStorage.setItem('discoveryMode','new')">Random</a>
 	</div>
 </div>
 
@@ -134,7 +135,7 @@
 
 <div class="clear"></div>
 
-<p style="margin-top: 20px;">Would you like to view a <a href="/code/random">random code</a>?</p>
+<p style="margin-top: 20px;">Would you like to view a <a href="/code/random" onclick="sessionStorage.setItem('discoveryMode','new')">random code</a>?</p>
 
 <style>
 .browse-controls {

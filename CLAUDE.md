@@ -333,14 +333,15 @@ The `ascldb` schema contains the core ASCL data:
 4. Public statistics dashboard with comprehensive metrics
 5. Templates styled and functional across all pages
 6. Admin interface for managing unpublished/archived codes
+7. Data export endpoints: `/code/json`, `/code/xml`, `/code/dci`, `/code/ole/<date>`, `/code/ads/<date>`
+8. CodeMeta/CFF endpoints: `/<ascl_id>/codemeta.json`, `/<ascl_id>/CITATION.cff`
+9. User correction/update submission system (`/<ascl_id>/suggest-edit`) with admin review queue (`/admin/corrections`)
 
 **⚠️ Remaining Limitations**:
 1. MySQL → PostgreSQL migration not completed (MySQL support fully functional)
-2. Data export endpoints not yet implemented (JSON, XML, ADS formats)
-3. CodeMeta/CFF file endpoints not yet implemented
-4. REST API not yet implemented
-5. CSRF protection not yet added to admin forms
-6. Role-based permissions not yet implemented
+2. REST API not yet implemented
+3. CSRF protection not yet added to admin forms
+4. Role-based permissions not yet implemented
 
 ---
 
@@ -368,12 +369,8 @@ The application now uses **bcrypt** for secure password hashing, replacing the d
 ## Next Steps / TODO
 
 ### High Priority
-1. **Data Export Endpoints** (as Flask blueprints within this app):
-   - `/code/json` — all codes as JSON
-   - `/code/xml`, `/code/dci` — XML exports
-   - `/code/ads/{date}` — plain text for ADS import
-   - `/{ascl_id}/codemeta.json` — CodeMeta 2.0 export
-   - `/{ascl_id}/CITATION.cff` — Citation File Format
+1. **Verify `/code/ads/{date}` Export**: The ADS plain-text export endpoint is implemented
+   but needs verification against the production v3 output to ensure format compatibility.
 
 2. **REST API** (as a Flask blueprint within this app):
    - `/api/search` — programmatic search with authentication
@@ -442,6 +439,9 @@ within this application, not as a separate service. Rationale:
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/news.py` - News pages
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/dashboard.py` - **NEW** Statistics dashboard
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/admin.py` - Admin interface
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/exports.py` - Data exports (JSON, XML, DCI, OLE, ADS)
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/codemeta.py` - CodeMeta 2.0 and CITATION.cff exports
+- `source/ascl_net_app_project_home/ascl_net_app/controllers/suggest_edit.py` - Public correction/update submission form
 
 **Templates**:
 - `source/ascl_net_app_project_home/ascl_net_app/templates/base.html` - Base template

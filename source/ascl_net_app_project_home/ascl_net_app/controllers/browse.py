@@ -2,7 +2,7 @@
 
 import flask
 from flask import request, render_template, redirect
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 code_page = flask.Blueprint("code_page", __name__)
 
@@ -203,3 +203,141 @@ def random_code():
 	if code:
 		return redirect(f"/{code.ascl_id}")
 	return redirect("/code/all")
+
+
+@code_page.route("/discover/similar/<ascl_id>", methods=['GET'])
+def discover_similar(ascl_id):
+	''' Redirect to a random published code sharing any keyword with the given code. '''
+	from ascl_net_app.model.database import Database
+	db = Database()
+
+	session = db.Session()
+
+	row = session.execute(text("""
+		SELECT c2.ascl_id FROM codes c1
+		JOIN code_to_keyword ck1 ON c1.pk = ck1.code_pk
+		JOIN code_to_keyword ck2 ON ck1.keyword_pk = ck2.keyword_pk
+		JOIN public_codes c2 ON c2.pk = ck2.code_pk
+		WHERE c1.ascl_id = :ascl_id
+		  AND c2.ascl_id != :ascl_id
+		ORDER BY RAND() LIMIT 1
+	"""), {"ascl_id": ascl_id}).first()
+
+	if row:
+		return redirect(f"/{row.ascl_id}")
+	return redirect(request.referrer or "/code/all")
+
+
+@code_page.route("/discover/mentioned/<ascl_id>", methods=['GET'])
+def discover_mentioned(ascl_id):
+	''' Redirect to a random published code that mentions this code's title in its abstract. '''
+	from ascl_net_app.model.database import Database
+	db = Database()
+
+	session = db.Session()
+
+	# Get the source code's title
+	source = session.execute(text("""
+		SELECT pk, title FROM codes WHERE ascl_id = :ascl_id
+	"""), {"ascl_id": ascl_id}).first()
+
+	if source:
+		row = session.execute(text("""
+			SELECT ascl_id FROM public_codes
+			WHERE MATCH(abstract) AGAINST(:title IN NATURAL LANGUAGE MODE)
+			  AND pk != :source_pk
+			ORDER BY RAND() LIMIT 1
+		"""), {"title": source.title, "source_pk": source.pk}).first()
+
+		if row:
+			return redirect(f"/{row.ascl_id}")
+
+	return redirect(request.referrer or "/code/all")
+
+
+@code_page.route("/discover/domain/<term>", methods=['GET'])
+def discover_domain(term):
+	''' Redirect to a random published code whose abstract matches a domain term. '''
+	from ascl_net_app.model.database import Database
+	db = Database()
+
+	session = db.Session()
+	exclude_ascl_id = request.args.get('from', '')
+
+	# Short terms (< 3 chars) fall below MySQL fulltext min token size;
+	# use REGEXP with word boundaries instead
+	if len(term) < 3:
+		row = session.execute(text("""
+			SELECT ascl_id FROM public_codes
+			WHERE abstract REGEXP CONCAT('\\\\b', :term, '\\\\b')
+			  AND ascl_id != :exclude_id
+			ORDER BY RAND() LIMIT 1
+		"""), {"term": term, "exclude_id": exclude_ascl_id}).first()
+	else:
+		# Wrap multi-word terms in quotes for exact phrase matching
+		search_term = f'"{term}"' if ' ' in term else term
+
+		row = session.execute(text("""
+			SELECT ascl_id FROM public_codes
+			WHERE MATCH(abstract) AGAINST(:term IN BOOLEAN MODE)
+			  AND ascl_id != :exclude_id
+			ORDER BY RAND() LIMIT 1
+		"""), {"term": search_term, "exclude_id": exclude_ascl_id}).first()
+
+	if row:
+		return redirect(f"/{row.ascl_id}")
+	return redirect(request.referrer or "/code/all")
+
+
+@code_page.route("/discover/language/<lang>", methods=['GET'])
+def discover_language(lang):
+	''' Redirect to a random published code written in the given language. '''
+	from ascl_net_app.model.database import Database
+	db = Database()
+
+	session = db.Session()
+	exclude_ascl_id = request.args.get('from', '')
+
+	# C++ can't use fulltext ('+' is an operator) — use LIKE instead
+	# Other languages use REGEXP with word boundaries to avoid false positives
+	if lang == 'C++':
+		row = session.execute(text("""
+			SELECT ascl_id FROM public_codes
+			WHERE abstract LIKE :pattern
+			  AND ascl_id != :exclude_id
+			ORDER BY RAND() LIMIT 1
+		"""), {"pattern": "%C++%", "exclude_id": exclude_ascl_id}).first()
+	else:
+		row = session.execute(text("""
+			SELECT ascl_id FROM public_codes
+			WHERE abstract REGEXP CONCAT('\\\\b', :lang, '\\\\b')
+			  AND ascl_id != :exclude_id
+			ORDER BY RAND() LIMIT 1
+		"""), {"lang": lang, "exclude_id": exclude_ascl_id}).first()
+
+	if row:
+		return redirect(f"/{row.ascl_id}")
+	return redirect(request.referrer or "/code/all")
+
+
+@code_page.route("/discover/author/<ascl_id>", methods=['GET'])
+def discover_author(ascl_id):
+	''' Redirect to a random published code sharing any author with the given code. '''
+	from ascl_net_app.model.database import Database
+	db = Database()
+
+	session = db.Session()
+
+	row = session.execute(text("""
+		SELECT c2.ascl_id FROM codes c1
+		JOIN code_to_author ca1 ON c1.pk = ca1.code_pk
+		JOIN code_to_author ca2 ON ca1.author_pk = ca2.author_pk
+		JOIN public_codes c2 ON c2.pk = ca2.code_pk
+		WHERE c1.ascl_id = :ascl_id
+		  AND c2.ascl_id != :ascl_id
+		ORDER BY RAND() LIMIT 1
+	"""), {"ascl_id": ascl_id}).first()
+
+	if row:
+		return redirect(f"/{row.ascl_id}")
+	return redirect(request.referrer or "/code/all")

@@ -729,10 +729,78 @@ figure.wp-caption figcaption {
 
 .forms label { display: inline; margin-right: 5px; color: #6058c4; }
 .forms input[type="text"], .forms input[type="password"] { margin-right: 10px; }
-.forms.block-labels label { display: block; margin-top: 8px; }
+.forms.block-labels label { display: block; margin-top: 14px; margin-bottom: 4px; font-weight: 600; }
+.forms.block-labels small { display: block; margin-top: 4px; }
 .forms form { margin-bottom: 20px; }
 .forms small { color: #777; font-size: 12px; }
 .forms input, .forms textarea { font-size: 16px; }
+.forms.block-labels input[type="text"],
+.forms.block-labels input[type="email"],
+.forms.block-labels textarea {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 700px;
+	padding: 8px 10px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-family: inherit;
+}
+.forms.block-labels input[type="text"]:focus,
+.forms.block-labels input[type="email"]:focus,
+.forms.block-labels textarea:focus {
+	outline: none;
+	border-color: #6058c4;
+	box-shadow: 0 0 0 2px rgba(96, 88, 196, 0.15);
+}
+.forms.block-labels input[type="submit"] {
+	padding: 10px 24px;
+	background: #352bb3;
+	color: #fff;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 16px;
+}
+.forms.block-labels input[type="submit"]:hover {
+	background: #2a2290;
+}
+.credit-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+.credit-row input[type="text"] {
+	flex: 1;
+}
+.credit-remove {
+	background: none;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	color: #999;
+	font-size: 18px;
+	line-height: 1;
+	padding: 4px 8px;
+	cursor: pointer;
+}
+.credit-remove:hover {
+	color: #c00;
+	border-color: #c00;
+}
+.credit-add-btn {
+	background: none;
+	border: 1px dashed #aaa;
+	border-radius: 4px;
+	color: #6058c4;
+	font-size: 14px;
+	padding: 6px 14px;
+	cursor: pointer;
+	margin-top: 4px;
+}
+.credit-add-btn:hover {
+	border-color: #6058c4;
+	background: #f5f4ff;
+}
 
 .highlight { background-color: #FF0; }
 .small { font-size: 13px; }
@@ -883,6 +951,81 @@ a.forumtitle, a.topictitle { font-weight: normal !important; }
 .admin-inline-note .admin-inline-text {
 	color: #415768;
 	font-size: 12px;
+}
+
+/* Discovery Mode Bar */
+#discovery-bar {
+	background: #f0eef5;
+	border-bottom: 1px solid #d0cde0;
+	padding: 8px 0;
+}
+.discovery-bar-inner {
+	display: flex;
+	align-items: center;
+	flex-wrap: nowrap;
+	gap: 6px;
+	padding: 0 20px;
+}
+.discovery-label {
+	font-size: 12px;
+	color: #555;
+	font-weight: 600;
+	margin-right: 4px;
+	flex-shrink: 0;
+	white-space: nowrap;
+}
+.discovery-prompt {
+	font-size: 12px;
+	color: #777;
+	flex-shrink: 0;
+	white-space: nowrap;
+}
+.discovery-pills {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+	overflow: hidden;
+	max-height: 24px;
+	flex: 1;
+	min-width: 0;
+}
+.discovery-separator {
+	font-size: 12px;
+	color: #999;
+	flex-shrink: 0;
+}
+.discovery-pill {
+	display: inline-block;
+	padding: 4px 12px;
+	font-size: 12px;
+	color: #fff;
+	background: #352bb3;
+	border-radius: 12px;
+	text-decoration: none;
+	transition: background 0.15s, color 0.15s;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+.discovery-pill:hover {
+	background: #fff;
+	color: #352bb3;
+	outline: 1px solid #352bb3;
+	outline-offset: -1px;
+}
+#discovery-close {
+	margin-left: auto;
+	background: none;
+	border: none;
+	font-size: 18px;
+	color: #999;
+	cursor: pointer;
+	padding: 2px 6px;
+	line-height: 1;
+	flex-shrink: 0;
+}
+#discovery-close:hover {
+	color: #333;
 }
 
 @media only screen and (max-width: 1000px), only screen and (max-device-width: 1000px) {

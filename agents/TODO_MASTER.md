@@ -1748,6 +1748,12 @@
   - [ ] Add keyword suggestions based on UAT relationships
   - [ ] Consider integration with ADS keyword system
   - [ ] Document keyword assignment guidelines for curators
+  - [ ] When keywords are updated/expanded, revisit discovery bar pills — currently keywords (mostly mission names) are used for the mission pill in discovery mode, and a hardcoded DOMAIN_TERMS list in `code_detail.py` drives the "More stellar" / "More cosmology" pill. A richer keyword system could replace both.
+
+- [ ] **DB-MIGRATION-NOTE**: Any manual database changes (new keywords, views, schema changes) must be reflected in `alt_ascl/v3_to_v4_migration/` scripts so they survive a full rebuild/migration. Current discovery-related DB additions:
+  - `public_codes` view → `create_public_codes_view.sql` (step 13)
+  - Gaia, 2MASS, SDSS keywords → `seed_mission_keywords.sql` (step 14)
+  - New keywords added in the future should be appended to `seed_mission_keywords.sql`
 
 - [ ] **MISC-005**: Internationalization (i18n)
   - [ ] If desired: Set up Flask-Babel
