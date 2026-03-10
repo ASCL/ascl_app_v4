@@ -295,4 +295,18 @@ def create_app(debug=False): #, conf=dict()):
 			'admin_username': admin_username
 		}
 
+	# Cache-busting version for static assets (based on file mtime)
+	_static_versions = {}
+	@app.context_processor
+	def inject_static_version():
+		def static_version(filename):
+			if filename not in _static_versions or app.debug:
+				filepath = os.path.join(app.static_folder, filename)
+				try:
+					_static_versions[filename] = int(os.path.getmtime(filepath))
+				except OSError:
+					_static_versions[filename] = 0
+			return _static_versions[filename]
+		return {'static_version': static_version}
+
 	return app

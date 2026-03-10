@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width,initial-scale=1">
 	<link href='https://fonts.googleapis.com/css?family=Merriweather:400,400italic,700,700italic' rel='stylesheet' type='text/css'>
 	<link href='https://fonts.googleapis.com/css?family=Merriweather+Sans:400,400italic,700,700italic' rel='stylesheet' type='text/css'>
-	<link rel="stylesheet" type="text/css" media="all" href="{{ url_for('static', filename='css/style.css') }}" />
+	<link rel="stylesheet" type="text/css" media="all" href="{{ url_for('static', filename='css/style.css') }}?v={{ static_version('css/style.css') }}" />
 	<link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}?v=2" />
 	<title>
 		ASCL.net
@@ -62,6 +62,6 @@
 	</div>
 </div>
 {% block extra_js %}{% endblock %}
-<script src="{{ url_for('static', filename='js/search_typeahead.js') }}"></script>
+<script src="{{ url_for('static', filename='js/search_typeahead.js') }}?v={{ static_version('js/search_typeahead.js') }}"></script>
 </body>
 </html>
