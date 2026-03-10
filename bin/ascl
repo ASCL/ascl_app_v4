@@ -4,7 +4,7 @@ ascl — management CLI for the ASCL Flask application.
 
 Usage:
     ascl restart [TARGET]      Restart the app (default target from config)
-    ascl redeploy TARGET       Full redeploy (sync, install deps, restart)
+    ascl redeploy TARGET       Full redeploy (sync code, install deps, restart)
     ascl status [TARGET]       Show app/service status
     ascl config                Show resolved config for a target
     ascl init                  Create default config at ~/.config/ascl/config.toml
@@ -24,7 +24,9 @@ import tomllib
 # Config
 # ---------------------------------------------------------------------------
 
-CONFIG_DIR = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "ascl"
+# When run with sudo, $HOME becomes /root. Use SUDO_USER to find the real user's home.
+_real_home = pathlib.Path(f"~{os.environ['SUDO_USER']}").expanduser() if os.environ.get("SUDO_USER") else pathlib.Path.home()
+CONFIG_DIR = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", _real_home / ".config")) / "ascl"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
 TARGETS = ("vps", "cpanel")
@@ -41,26 +43,22 @@ DEFAULT_CONFIG = """\
 default_target = "vps"
 
 # ---------------------------------------------------------------------------
-# VPS target — Nginx + Uvicorn + systemd (e.g. ascl.bistromath.net)
+# VPS target — Nginx + Uvicorn + systemd
 # ---------------------------------------------------------------------------
 [vps]
 restart_method = "systemd"
 service_name   = "ascl_net_app"
 
-# Where the running app lives
-deploy_app       = "/var/www/ascl_net_app"
-deploy_dmdbcore  = "/var/www/dm-dbcore"
-deploy_ascl_core = "/var/www/ascl_core"
+# Source repository (for rsync during redeploy)
+repo_app = ""
 
-# Source repository paths (for rsync during redeploy)
-repo_app       = "/home/demitri/repositories/ASCL/alt_ascl/source/ascl_net_app_project_home"
-repo_dmdbcore  = "/home/demitri/repositories/ASCL/dm-dbcore"
-repo_ascl_core = "/home/demitri/repositories/ASCL/ascl_core"
+# Where the running app is deployed to
+deploy_app = "/var/www/ascl_net_app"
 
-# File ownership after sync
+# File ownership after sync (leave empty to skip)
 run_as_user = "www-data"
 
-# Flask config file to use
+# Flask config and secrets
 flask_config = "ascl_net.cfg"
 secrets_file = "/etc/ascl/secrets.cfg"
 
@@ -69,31 +67,28 @@ typesense_url        = "http://127.0.0.1:8108"
 typesense_collection = "codes"
 
 # ---------------------------------------------------------------------------
-# cPanel target — Phusion Passenger (e.g. ascl.net)
+# cPanel target — Phusion Passenger
 # ---------------------------------------------------------------------------
 [cpanel]
 restart_method = "passenger"
 
-# cPanel app root (contains passenger_wsgi.py and tmp/restart.txt)
-deploy_app       = "~/ascl.net"
-deploy_dmdbcore  = "~/ascl.net/vendor/dm-dbcore"
-deploy_ascl_core = "~/ascl.net/vendor/ascl_core"
+# Source repository (for rsync during redeploy; leave empty if using git pull)
+repo_app = ""
 
-# Source — can be local paths (if running on cPanel host) or empty (if using git pull)
-repo_app       = ""
-repo_dmdbcore  = ""
-repo_ascl_core = ""
+# cPanel app root (contains passenger_wsgi.py and tmp/restart.txt)
+deploy_app = "~/ascl.net"
 
 # On cPanel you run as yourself, leave empty
 run_as_user = ""
 
-# SSH access for remote deploy from VPS (leave empty to deploy locally on cPanel)
+# SSH access for remote deploy (leave empty to deploy locally on cPanel host)
 ssh_host = ""
 # ssh_host = "ascl.net"
 # ssh_user = ""  # defaults to your local username
 
+# Flask config and secrets
 flask_config = "ascl_net.cfg"
-secrets_file = "~/etc/ascl/secrets.cfg"
+secrets_file = ""
 
 # Typesense (may be remote if cPanel can't run Typesense locally)
 typesense_url        = ""
@@ -110,6 +105,10 @@ def _bold(text):
 
 def _green(text):
     return f"\033[92m{text}\033[0m"
+
+
+def _yellow(text):
+    return f"\033[93m{text}\033[0m"
 
 
 def _red(text):
@@ -241,15 +240,15 @@ def _status_passenger(cfg):
 # Redeploy strategies
 # ---------------------------------------------------------------------------
 
-def _sync_repos(cfg):
-    """Rsync the three repos to their deploy paths."""
-    excludes = _rsync_excludes()
-
-    pairs = [
-        ("application", cfg.get("repo_app"), cfg.get("deploy_app")),
-        ("dm-dbcore",   cfg.get("repo_dmdbcore"), cfg.get("deploy_dmdbcore")),
-        ("ascl_core",   cfg.get("repo_ascl_core"), cfg.get("deploy_ascl_core")),
-    ]
+def _sync_app(cfg):
+    """Rsync the app source to the deploy path."""
+    src = cfg.get("repo_app", "")
+    dst = cfg.get("deploy_app", "")
+    if not src:
+        print(_yellow("  (skipping sync — no repo_app configured)"))
+        return
+    src = os.path.expanduser(src)
+    dst = os.path.expanduser(dst)
 
     ssh_host = cfg.get("ssh_host", "")
     ssh_user = cfg.get("ssh_user", "")
@@ -257,15 +256,9 @@ def _sync_repos(cfg):
     if ssh_host:
         remote_prefix = f"{ssh_user}@{ssh_host}:" if ssh_user else f"{ssh_host}:"
 
-    for label, src, dst in pairs:
-        if not src:
-            print(f"  (skipping {label} — no repo_* path configured)")
-            continue
-        src = os.path.expanduser(src)
-        dst = os.path.expanduser(dst)
-
-        _step(f"Syncing {label}")
-        _run(f"rsync -a --delete {excludes} {src}/ {remote_prefix}{dst}/")
+    excludes = _rsync_excludes()
+    _step("Syncing application")
+    _run(f"rsync -a --delete {excludes} {src}/ {remote_prefix}{dst}/")
 
 
 def _set_ownership(cfg):
@@ -273,52 +266,31 @@ def _set_ownership(cfg):
     if not user:
         return
 
-    _step("Setting ownership")
-    for path_key in ("deploy_app", "deploy_dmdbcore", "deploy_ascl_core"):
-        path = os.path.expanduser(cfg.get(path_key, ""))
-        if path:
-            _run(f"chown -R {user}:{user} {path}")
+    deploy = os.path.expanduser(cfg.get("deploy_app", ""))
+    if deploy:
+        _step("Setting ownership")
+        _run(f"chown -R {user}:{user} {deploy}")
 
 
-def _install_deps_vps(cfg):
-    _step("Installing dependencies")
-    deploy = cfg["deploy_app"]
-    dmdbcore = cfg["deploy_dmdbcore"]
-    ascl_core = cfg["deploy_ascl_core"]
-    user = cfg.get("run_as_user", "")
-    uv_env = "UV_CACHE_DIR=/var/cache/uv"
-
-    if user:
-        prefix = f"runuser -u {user} -- env {uv_env}"
-    else:
-        prefix = f"env {uv_env}"
-
-    _run(f'{prefix} uv pip install "{dmdbcore}/[mysql]"')
-    _run(f"{prefix} uv pip install {ascl_core}/")
-    _run(f"{prefix} uv pip install -r {deploy}/requirements.txt")
-
-
-def _install_deps_cpanel(cfg):
+def _install_deps(cfg, use_ssh=False):
     _step("Installing dependencies")
     deploy = os.path.expanduser(cfg["deploy_app"])
-    dmdbcore = os.path.expanduser(cfg["deploy_dmdbcore"])
-    ascl_core = os.path.expanduser(cfg["deploy_ascl_core"])
 
     ssh_host = cfg.get("ssh_host", "")
-    if ssh_host:
+    if use_ssh and ssh_host:
         ssh_user = cfg.get("ssh_user", "")
         host = f"{ssh_user}@{ssh_host}" if ssh_user else ssh_host
-        cmds = " && ".join([
-            f'cd {deploy}',
-            f'pip install "{dmdbcore}/[mysql]"',
-            f'pip install {ascl_core}/',
-            f'pip install -r requirements.txt',
-        ])
-        _run(f"ssh {host} '{cmds}'")
+        _run(f"ssh {host} 'cd {deploy} && pip install -r requirements.txt'")
+        return
+
+    user = cfg.get("run_as_user", "")
+    if user:
+        venv = os.path.join(deploy, ".venv")
+        env_vars = f"UV_CACHE_DIR=/var/cache/uv VIRTUAL_ENV={venv}"
+        prefix = f"runuser -u {user} -- env {env_vars}"
+        _run(f"{prefix} uv pip install -r {deploy}/requirements.txt")
     else:
-        _run(f'cd {deploy} && pip install "{dmdbcore}/[mysql]"')
-        _run(f"cd {deploy} && pip install {ascl_core}/")
-        _run(f"cd {deploy} && pip install -r {deploy}/requirements.txt")
+        _run(f"cd {deploy} && pip install -r requirements.txt")
 
 
 def _redeploy_vps(target_name, cfg):
@@ -334,9 +306,9 @@ def _redeploy_vps(target_name, cfg):
     _step("Stopping service")
     _run(f"systemctl stop {service}")
 
-    _sync_repos(cfg)
+    _sync_app(cfg)
     _set_ownership(cfg)
-    _install_deps_vps(cfg)
+    _install_deps(cfg)
 
     _step("Starting service")
     _run(f"systemctl start {service}")
@@ -349,8 +321,8 @@ def _redeploy_vps(target_name, cfg):
 
 
 def _redeploy_cpanel(target_name, cfg):
-    _sync_repos(cfg)
-    _install_deps_cpanel(cfg)
+    _sync_app(cfg)
+    _install_deps(cfg, use_ssh=bool(cfg.get("ssh_host")))
 
     _step("Restarting Passenger")
     _restart_passenger(cfg)

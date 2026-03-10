@@ -7,6 +7,8 @@
 '''
 
 import logging
+from urllib.parse import quote_plus
+
 from flask import current_app as app, g
 from sqlalchemy.orm import sessionmaker, scoped_session
 
@@ -58,22 +60,38 @@ class Database(object):
 			if self.db_type == "mysql":
 				# MySQL connection string
 				# Format: mysql://user:password@host:port/database
-				# For mysqlclient driver, use 'mysql' prefix
-				# For PyMySQL driver, use 'mysql+pymysql' prefix
-				# When password is empty, omit it so mysqlclient falls back to ~/.my.cnf
+				# When password is empty, read it from ~/.my.cnf via dm_dbcore.
+				# (Unlike PostgreSQL's libpq which reads ~/.pgpass automatically,
+				# MySQL through SQLAlchemy does NOT read ~/.my.cnf on its own.)
+				if not self.db_config['password']:
+					import os
+					from dm_dbcore.mysql import read_password_from_my_cnf
+					mycnf_section = os.environ.get('ASCLDB_MYCNF_SECTION', 'client')
+					mycnf_password = read_password_from_my_cnf(
+						host=self.db_config['host'],
+						user=self.db_config['user'],
+						section=mycnf_section,
+					)
+					if mycnf_password:
+						self.db_config['password'] = mycnf_password
+						logger.info(f"Read MySQL password from ~/.my.cnf [{mycnf_section}]")
+					else:
+						logger.warning(f"No password in config and none found in ~/.my.cnf [{mycnf_section}]")
+
 				if self.db_config['password']:
-					self.database_connection_string = 'mysql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+					safe_password = quote_plus(self.db_config['password'])
+					self.database_connection_string = f"mysql://{self.db_config['user']}:{safe_password}@{self.db_config['host']}:{self.db_config['port']}/{self.db_config['database']}"
 				else:
 					self.database_connection_string = 'mysql://{user}@{host}:{port}/{database}'.format(**self.db_config)
 				logger.info(f"Built MySQL connection string for {self.db_config['database']}")
-				logger.debug(f"Connection params: user={self.db_config['user']}, host={self.db_config['host']}, port={self.db_config['port']}, database={self.db_config['database']}, password={'***' if self.db_config['password'] else 'EMPTY (will use ~/.my.cnf)'}")
 
 			elif self.db_type == "postgresql":
 				# PostgreSQL connection string
 				# Format: postgresql://user:password@host:port/database
 				# When password is empty, omit it so libpq falls back to ~/.pgpass
 				if self.db_config['password']:
-					self.database_connection_string = 'postgresql://{user}:{password}@{host}:{port}/{database}'.format(**self.db_config)
+					safe_password = quote_plus(self.db_config['password'])
+					self.database_connection_string = f"postgresql://{self.db_config['user']}:{safe_password}@{self.db_config['host']}:{self.db_config['port']}/{self.db_config['database']}"
 				else:
 					self.database_connection_string = 'postgresql://{user}@{host}:{port}/{database}'.format(**self.db_config)
 				logger.info(f"Built PostgreSQL connection string for {self.db_config['database']}")
