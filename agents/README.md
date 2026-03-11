@@ -37,6 +37,18 @@ This directory contains documentation for AI agents working on the ASCL.net v3 �
 **"What logging work was done?"**
 → See `completed/logging/LOGGING_FINAL_STATUS.md`
 
+## 🔬 Discovery Bar (Random Code Browser)
+
+The discovery bar appears on code detail pages and lets users browse related codes.
+All logic is in `controllers/code_detail.py`.
+
+- **Domain terms** (`DOMAIN_TERMS` list, ~line 210): Tuples of `(match_pattern, display_label)` scanned against the code's abstract. Patterns ending with `*` match as prefix. Matched terms become "More X" pills linking to `/discover/domain/`.
+- **Mission/survey pills** (~line 303): Primary source is the code's keywords from DB. Fallback: `MISSION_FALLBACKS` list scans the abstract for well-known mission names (case-sensitive).
+- **Language pills** (`LANGUAGE_TERMS`, ~line 344): Programming languages/tools matched in abstract, shown as "More X" pills linking to `/discover/language/`.
+- **Other pills**: "Similar" (keyword overlap), "Referenced by" (citation links), "By same author", "Surprise me" (random).
+- **CSS**: `static/css/style.css` lines 956-1029 (`.discovery-bar`, `.discovery-pill`, etc.)
+- **Template**: `templates/code_detail.html` lines 6-66 (`#discovery-bar`)
+
 ## 📝 File Organization
 
 As of 2026-01-01, agent documentation has been reorganized:

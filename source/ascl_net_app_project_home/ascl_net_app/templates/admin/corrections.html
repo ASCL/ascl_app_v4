@@ -33,47 +33,62 @@
 
     <div class="correction-body">
         {% if c.title is not none %}
-        <div class="correction-field">
+        <div class="correction-field" data-correction="{{ c.pk }}" data-field="title">
             <div class="field-label">Title</div>
             <div class="field-current">{{ c.title_diff_current | safe }}</div>
             <div class="field-arrow">&rarr;</div>
             <div class="field-proposed">{{ c.title_diff_proposed | safe }}</div>
+            {% if c.status == 'pending' %}
+            <div class="field-check"><input type="checkbox" name="include_title" value="1" checked form="apply-form-{{ c.pk }}"></div>
+            {% endif %}
         </div>
         {% endif %}
 
         {% if c.credit is not none %}
-        <div class="correction-field">
+        <div class="correction-field" data-correction="{{ c.pk }}" data-field="credit">
             <div class="field-label">Credit</div>
             <div class="field-current">{{ c.credit_diff_current | safe }}</div>
             <div class="field-arrow">&rarr;</div>
             <div class="field-proposed">{{ c.credit_diff_proposed | safe }}</div>
+            {% if c.status == 'pending' %}
+            <div class="field-check"><input type="checkbox" name="include_credit" value="1" checked form="apply-form-{{ c.pk }}"></div>
+            {% endif %}
         </div>
         {% endif %}
 
         {% if c.abstract is not none %}
-        <div class="correction-field">
+        <div class="correction-field" data-correction="{{ c.pk }}" data-field="abstract">
             <div class="field-label">Abstract</div>
             <div class="field-current">{{ c.abstract_diff_current | safe }}</div>
             <div class="field-arrow">&rarr;</div>
             <div class="field-proposed">{{ c.abstract_diff_proposed | safe }}</div>
+            {% if c.status == 'pending' %}
+            <div class="field-check"><input type="checkbox" name="include_abstract" value="1" checked form="apply-form-{{ c.pk }}"></div>
+            {% endif %}
         </div>
         {% endif %}
 
         {% if c.citation_method is not none %}
-        <div class="correction-field">
+        <div class="correction-field" data-correction="{{ c.pk }}" data-field="citation_method">
             <div class="field-label">Preferred citation</div>
             <div class="field-current">{{ c.citation_method_diff_current | safe }}</div>
             <div class="field-arrow">&rarr;</div>
             <div class="field-proposed">{{ c.citation_method_diff_proposed | safe }}</div>
+            {% if c.status == 'pending' %}
+            <div class="field-check"><input type="checkbox" name="include_citation_method" value="1" checked form="apply-form-{{ c.pk }}"></div>
+            {% endif %}
         </div>
         {% endif %}
 
         {% for lc in c.link_changes %}
-        <div class="correction-field">
+        <div class="correction-field" data-correction="{{ c.pk }}" data-field="link_{{ lc.link_type_pk }}">
             <div class="field-label">{{ lc.link_type_name }}</div>
             <div class="field-current"><pre>{{ lc.diff_current | safe }}</pre></div>
             <div class="field-arrow">&rarr;</div>
             <div class="field-proposed"><pre>{{ lc.diff_proposed | safe }}</pre></div>
+            {% if c.status == 'pending' %}
+            <div class="field-check"><input type="checkbox" name="include_link_{{ lc.link_type_pk }}" value="1" checked form="apply-form-{{ c.pk }}"></div>
+            {% endif %}
         </div>
         {% endfor %}
 
@@ -110,8 +125,8 @@
 
     {% if c.status == 'pending' %}
     <div class="correction-actions">
-        <form method="POST" action="{{ url_for('admin_page.apply_correction', pk=c.pk) }}" class="inline-form">
-            <button type="submit" class="btn btn-apply">Apply Changes</button>
+        <form method="POST" action="{{ url_for('admin_page.apply_correction', pk=c.pk) }}" class="inline-form" id="apply-form-{{ c.pk }}">
+            <button type="submit" class="btn btn-apply">Apply Selected</button>
         </form>
         <form method="POST" action="{{ url_for('admin_page.reject_correction', pk=c.pk) }}" class="inline-form">
             <input type="text" name="reviewer_notes" placeholder="Reason (optional)" class="reviewer-notes-input">
@@ -199,12 +214,28 @@
 
 .correction-field {
     display: grid;
-    grid-template-columns: 120px 1fr 30px 1fr;
+    grid-template-columns: 120px 1fr 30px 1fr 40px;
     gap: 8px;
     align-items: stretch;
     margin-bottom: 10px;
     padding-bottom: 10px;
     border-bottom: 1px solid #f0f0f0;
+}
+.correction-field.field-excluded .field-label,
+.correction-field.field-excluded .field-current,
+.correction-field.field-excluded .field-arrow,
+.correction-field.field-excluded .field-proposed {
+    opacity: 0.3;
+}
+.field-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.field-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
 }
 .field-label { font-weight: 600; color: #555; font-size: 13px; }
 .field-current { background: #fff3f3; padding: 4px 8px; border-radius: 3px; font-size: 13px; word-break: break-word; }
@@ -343,6 +374,14 @@ document.addEventListener('DOMContentLoaded', function() {
         el.addEventListener('click', function() {
             showingUTC = !showingUTC;
             el.textContent = showingUTC ? utcFormatted : estFormatted + ' EST';
+        });
+    });
+
+    // Checkbox toggle: grey out excluded correction fields
+    document.querySelectorAll('.field-check input[type="checkbox"]').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            var row = cb.closest('.correction-field');
+            row.classList.toggle('field-excluded', !cb.checked);
         });
     });
 });

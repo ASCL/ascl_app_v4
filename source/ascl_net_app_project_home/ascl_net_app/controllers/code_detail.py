@@ -219,7 +219,7 @@ def code_detail(ascl_id):
 		('AGN', 'AGN'),
 		('CMB', 'CMB'),
 		('N body', 'N-body'),
-		('hydrodynamic', 'hydrodynamics'),
+		('hydrodynamic*', 'hydrodynamics'),
 		('star form*', 'star formation'),
 		('stellar', 'stellar'),
 		('galactic', 'galactic'),

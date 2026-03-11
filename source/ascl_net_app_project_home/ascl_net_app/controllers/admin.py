@@ -1925,26 +1925,46 @@ def apply_correction(pk):
 		flash("Code not found.", "error")
 		return redirect(url_for("admin_page.corrections"))
 
-	# Apply scalar field changes
+	# Apply scalar field changes (only those selected by curator)
+	total_fields = 0
+	applied_fields = 0
 	if correction["title"] is not None:
-		code.title = correction["title"]
+		total_fields += 1
+		if request.form.get("include_title"):
+			code.title = correction["title"]
+			applied_fields += 1
 	if correction["credit"] is not None:
-		code.credit = correction["credit"]
-		_sync_authors_from_credit(db_session, ascldb, code.pk, correction["credit"])
+		total_fields += 1
+		if request.form.get("include_credit"):
+			code.credit = correction["credit"]
+			_sync_authors_from_credit(db_session, ascldb, code.pk, correction["credit"])
+			applied_fields += 1
 	if correction["abstract"] is not None:
-		code.abstract = correction["abstract"]
+		total_fields += 1
+		if request.form.get("include_abstract"):
+			code.abstract = correction["abstract"]
+			applied_fields += 1
 	if correction["citation_method"] is not None:
-		code.citation_method = correction["citation_method"]
+		total_fields += 1
+		if request.form.get("include_citation_method"):
+			code.citation_method = correction["citation_method"]
+			applied_fields += 1
 
 	code.time_updated = datetime.now()
 
-	# Apply link changes
+	# Apply link changes (only those selected by curator)
 	link_changes = db_session.execute(sa_text("""
 		SELECT link_type_pk, urls FROM code_correction_link
 		WHERE correction_pk = :pk
 	"""), {"pk": pk}).mappings().all()
 
 	for lc in link_changes:
+		total_fields += 1
+		if not request.form.get(f"include_link_{lc['link_type_pk']}"):
+			continue
+
+		applied_fields += 1
+
 		# Delete existing links of this type for the code
 		db_session.execute(sa_text("""
 			DELETE FROM link WHERE code_pk = :code_pk AND link_type_pk = :lt_pk
@@ -1963,6 +1983,10 @@ def apply_correction(pk):
 				"display_order": order,
 			})
 
+	if applied_fields == 0:
+		flash("No changes were selected to apply.", "error")
+		return redirect(url_for("admin_page.corrections"))
+
 	# Mark correction as applied
 	db_session.execute(sa_text("""
 		UPDATE code_correction
@@ -1971,7 +1995,10 @@ def apply_correction(pk):
 	"""), {"pk": pk, "now": datetime.now(), "user_pk": session.get("user_id")})
 
 	db_session.commit()
-	flash(f"Correction applied to <a href='/{code.ascl_id}'>ascl:{code.ascl_id}</a>.", "success")
+	if applied_fields < total_fields:
+		flash(f"Correction partially applied ({applied_fields} of {total_fields} changes) to <a href='/{code.ascl_id}'>ascl:{code.ascl_id}</a>.", "success")
+	else:
+		flash(f"Correction applied to <a href='/{code.ascl_id}'>ascl:{code.ascl_id}</a>.", "success")
 	return redirect(url_for("admin_page.corrections"))
 
 
