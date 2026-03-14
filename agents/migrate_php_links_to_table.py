@@ -57,7 +57,7 @@ class LinkMigrator:
         'site_list': 'code-site',
         'described_in': 'described-in',
         'used_in': 'used-in',
-        'ref_list': 'reference'
+        'ref_list': 'refereed'
     }
 
     def __init__(self, dry_run: bool = False):

@@ -76,7 +76,7 @@ def get_or_create_link_types(cursor):
     """Ensure link_type table has the required types, return pk mapping."""
     required_types = [
         ('code-site', 'Code Site'),
-        ('reference', 'Reference'),
+        ('refereed', 'Refereed'),
         ('described-in', 'Described In'),
         ('used-in', 'Used In'),
     ]
@@ -212,7 +212,7 @@ def main():
     # Migrate each field
     field_mapping = [
         ('site_list', 'code-site'),
-        ('ref_list', 'reference'),
+        ('ref_list', 'refereed'),
         ('described_in', 'described-in'),
         ('used_in', 'used-in'),
     ]

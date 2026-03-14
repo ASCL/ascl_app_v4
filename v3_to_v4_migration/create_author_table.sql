@@ -9,14 +9,14 @@ SET SESSION sql_mode = '';
 -- Create orcid_provenance lookup table
 CREATE TABLE IF NOT EXISTS orcid_provenance (
     pk SMALLINT AUTO_INCREMENT PRIMARY KEY,
-    short_name VARCHAR(32) NOT NULL UNIQUE COMMENT 'Internal identifier (e.g. orcid-api, manual, ads)',
+    short_name VARCHAR(32) NOT NULL UNIQUE COMMENT 'Internal identifier (e.g. orcid-api, user-submitted, ads)',
     label VARCHAR(64) NOT NULL COMMENT 'Display name'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='How the ORCID was obtained or verified';
 
 -- Populate initial provenance types
 INSERT INTO orcid_provenance (short_name, label) VALUES
-    ('manual', 'Manual Entry'),
+    ('user-submitted', 'User Submitted'),
     ('orcid-api', 'ORCID API'),
     ('ads', 'ADS Import'),
     ('open-alex', 'OpenAlex');

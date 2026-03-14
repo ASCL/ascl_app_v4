@@ -18,5 +18,8 @@ ALTER TABLE link_type ADD UNIQUE INDEX idx_short_name (short_name);
 -- Add description column
 ALTER TABLE link_type ADD COLUMN description VARCHAR(255) NULL AFTER name;
 
+-- Rename 'reference' to 'refereed' (v4 terminology)
+UPDATE link_type SET short_name = 'refereed', name = 'Refereed' WHERE short_name = 'reference';
+
 -- Fix collation to match other tables
 ALTER TABLE link_type CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

@@ -460,7 +460,7 @@ INSERT INTO link_type (label, short_name, description) VALUES
 ('Code Site', 'code-site', 'This should be the URL to a site from where the code can be downloaded or copied.'),
 ('Described In', 'described-in', 'Publication where the code is described.'),
 ('Used In', 'used-in', 'Publications that use the code.'),
-('Reference', 'reference', 'Paper that uses the code.');
+('Refereed', 'refereed', 'Paper that uses the code.');
 
 -- Rename links_new to link (singular, to match Python class naming convention)
 -- The legacy 'links' table was already dropped in STEP 0a

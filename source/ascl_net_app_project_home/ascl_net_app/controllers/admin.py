@@ -509,7 +509,7 @@ def view_code(pk):
 
 	# Get links from link table
 	site_urls = _get_links_for_code(db_session, ascldb, pk, 'code-site')
-	reference_urls = _get_links_for_code(db_session, ascldb, pk, 'reference')
+	reference_urls = _get_links_for_code(db_session, ascldb, pk, 'refereed')
 	described_in_urls = _get_links_for_code(db_session, ascldb, pk, 'described-in')
 	used_in_urls = _get_links_for_code(db_session, ascldb, pk, 'used-in')
 
@@ -654,6 +654,7 @@ def update_code(pk):
 		described_in_urls=described_in_urls,
 		used_in_urls=used_in_urls,
 		see_also_str=see_also_str,
+		all_keywords_json=json.dumps(_get_all_keyword_labels(db_session)),
 		current_user=_current_user(db_session),
 	)
 
@@ -742,6 +743,7 @@ def insert_code():
 						described_in_urls=request.form.get("described_in_urls", ""),
 						used_in_urls=request.form.get("used_in_urls", ""),
 						see_also_str=request.form.get("see_also", ""),
+						all_keywords_json=json.dumps(_get_all_keyword_labels(db_session)),
 						current_user=_current_user(db_session),
 					)
 
@@ -821,6 +823,7 @@ def insert_code():
 		described_in_urls="",
 		used_in_urls="",
 		see_also_str="",
+		all_keywords_json=json.dumps(_get_all_keyword_labels(db_session)),
 		current_user=_current_user(db_session),
 	)
 
@@ -876,6 +879,13 @@ def _get_link_type_pk(db_session, ascldb, short_name):
 	return new_type.pk
 
 
+def _get_all_keyword_labels(db_session):
+	"""Return sorted list of all keyword labels for typeahead."""
+	ascldb = _get_models()
+	rows = db_session.query(ascldb.Keyword.label).order_by(ascldb.Keyword.label).all()
+	return [r.label for r in rows]
+
+
 def _get_url_link_types(db_session):
 	"""Get all link types except described-in and used-in (those have special bibcode UI).
 	Returns list of {pk, short_name, name, description}."""
@@ -883,7 +893,12 @@ def _get_url_link_types(db_session):
 	results = db_session.execute(text("""
 		SELECT pk, short_name, name, description FROM link_type
 		WHERE short_name NOT IN ('described-in', 'used-in')
-		ORDER BY pk
+		ORDER BY CASE short_name
+			WHEN 'code-site' THEN 0
+			WHEN 'refereed' THEN 1
+			WHEN 'emac' THEN 2
+			ELSE 3
+		END, pk
 	""")).fetchall()
 	return [
 		{"pk": row.pk, "short_name": row.short_name, "name": row.name, "description": row.description}

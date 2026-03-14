@@ -28,7 +28,7 @@ The `copy_ascl_database.sh` script automatically migrates PHP-serialized fields 
 | Old Field (codes table) | Storage Format | Migrated To |
 |-------------------------|----------------|-------------|
 | `site_list` | PHP serialized array | `link` table (type: code-site) |
-| `ref_list` | PHP serialized array | `link` table (type: reference) |
+| `ref_list` | PHP serialized array | `link` table (type: refereed) |
 | `described_in` | PHP serialized array | `link` table (type: described-in) |
 | `used_in` | PHP serialized array | `link` table (type: used-in) |
 | `see_also` | Semicolon-separated string | `code_see_also` table (new) |
@@ -50,7 +50,7 @@ python migrate_serialized_to_links.py ascl_db_v4 --dry-run
 | short_name | name | Used For |
 |------------|------|----------|
 | code-site | Code Site | site_list URLs |
-| reference | Reference | ref_list URLs |
+| refereed | Refereed | ref_list URLs |
 | described-in | Described In | described_in bibcodes/URLs |
 | used-in | Used In | used_in bibcodes/URLs |
 

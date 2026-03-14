@@ -11,6 +11,7 @@ These replicate the v3 PHP data export formats for backward compatibility.
 
 import re
 import html
+import html.entities
 from datetime import datetime, timedelta
 from xml.sax.saxutils import escape as xml_escape
 
@@ -36,7 +37,8 @@ def _parse_date(date_str):
     Returns a datetime or None if invalid.
     """
     date_str = date_str.strip().strip("/")
-    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M:%S",
+    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y%m%d",
+                "%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M:%S",
                 "%Y/%m", "%Y-%m", "%Y"):
         try:
             return datetime.strptime(date_str, fmt)
@@ -306,6 +308,59 @@ _BIBCODE_URL_PATTERNS = [
 ]
 
 
+def _htmlentities(text_str):
+    """Mimic PHP's htmlentities($s, ENT_QUOTES, 'UTF-8', false).
+
+    Escapes &, <, >, ", ' AND converts non-ASCII characters to named HTML
+    entities (e.g. é → &eacute;) or numeric references when no name exists.
+    The false (double_encode=False) behaviour is replicated: existing HTML
+    entities like &eacute; are left intact instead of becoming &amp;eacute;.
+    """
+    # First pass: protect existing HTML entities from double-encoding by
+    # replacing & in valid entities with a placeholder.
+    _ENTITY_RE = re.compile(r'&(?:#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z]+);')
+    preserved = []
+
+    def _preserve(m):
+        preserved.append(m.group(0))
+        return f"\x00ENTITY{len(preserved) - 1}\x00"
+
+    text_str = _ENTITY_RE.sub(_preserve, text_str)
+
+    out = []
+    i = 0
+    while i < len(text_str):
+        # Check for placeholder
+        if text_str[i] == '\x00' and text_str[i+1:i+7] == 'ENTITY':
+            end = text_str.index('\x00', i + 1)
+            idx = int(text_str[i+7:end])
+            out.append(preserved[idx])
+            i = end + 1
+            continue
+        ch = text_str[i]
+        cp = ord(ch)
+        if cp > 127:
+            name = html.entities.codepoint2name.get(cp)
+            if name:
+                out.append(f"&{name};")
+            else:
+                out.append(f"&#{cp};")
+        elif ch == '&':
+            out.append("&amp;")
+        elif ch == '<':
+            out.append("&lt;")
+        elif ch == '>':
+            out.append("&gt;")
+        elif ch == '"':
+            out.append("&quot;")
+        elif ch == "'":
+            out.append("&#039;")
+        else:
+            out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def _extract_bibcode_from_url(url):
     """If the URL contains a known ADS bibcode pattern, return the bibcode portion."""
     from urllib.parse import unquote
@@ -316,7 +371,7 @@ def _extract_bibcode_from_url(url):
     return None
 
 
-@exports_page.route("/code/ads/<path:date_str>")
+@exports_page.route("/code/ads/<date_str>")
 def code_ads(date_str):
     dt = _parse_date(date_str)
     if dt is None:
@@ -338,69 +393,114 @@ def code_ads(date_str):
         f"FROM codes WHERE {_published_codes_query()} AND time_updated > :since ORDER BY pk"
     ), {"since": since}).mappings().all()
 
+    records = []
+    for row in codes:
+        records.append(_build_ads_record(db_session, row))
+
+    output_format = flask.request.args.get("format", "text").lower()
+    if output_format == "json":
+        result = {
+            "date_interpreted_as": since,
+            "record_count": len(records),
+            "records": records,
+        }
+        return Response(flask.json.dumps(result), mimetype="application/json")
+
+    # Default: plain-text ADS format (matches v3 PHP output)
     lines = [
         f"Date interpreted as: {since}",
-        f"Returned {len(codes)} records",
+        f"Returned {len(records)} records",
         "",
     ]
+    for rec in records:
+        lines.append(f"%R {rec['bibcode']}")
+        lines.append(f"%A {rec['credit']}")
+        lines.append(f"%J Astrophysics Source Code Library, record ascl:{rec['ascl_id']}")
+        lines.append(f"%D {rec['pubdate']}")
+        lines.append(f"%T {rec['title']}")
 
-    for row in codes:
-        code_pk = row["pk"]
-        links = _links_by_type(db_session, code_pk)
-        keywords = _keywords_for_code(db_session, code_pk)
-
-        ascl_id = row["ascl_id"]
-        century = row["century"] or 20
-        D = f"{ascl_id[2:4]}/{century}{ascl_id[0:2]}"
-
-        credit = re.sub(r"<[^>]+>", "", row["credit"] or "")
-        credit = html.unescape(credit)
-
-        title = re.sub(r"<[^>]+>", "", row["title"] or "")
-        title = html.unescape(title)
-        title = re.sub(r"\s+", " ", title).strip()
-
-        abstract = row["abstract"] or ""
-        abstract = re.sub(r"[\n\r]+", "\n   ", abstract)
-        # Preserve <a> tags, strip everything else
-        abstract_clean = re.sub(r"<(?!/?a[ >])[^>]+>", "", abstract)
-        abstract_clean = html.unescape(abstract_clean)
-
-        # %R bibcode
-        lines.append(f"%R {row['bibcode'] or ''}")
-        # %A authors
-        lines.append(f"%A {credit}")
-        # %J journal
-        lines.append(f"%J Astrophysics Source Code Library, record ascl:{ascl_id}")
-        # %D date
-        lines.append(f"%D {D}")
-        # %T title
-        lines.append(f"%T {title}")
-
-        # %I links with bibcode extraction
-        i_line = f"%I ELECTR: https://ascl.net/{ascl_id}"
-
-        for url in links.get("described-in", []):
-            bibcode = _extract_bibcode_from_url(url)
-            if bibcode:
-                i_line += f"; ASCL_D: {bibcode}"
-
-        for url in links.get("used-in", []):
-            bibcode = _extract_bibcode_from_url(url)
-            if bibcode:
-                i_line += f"; ASCL_U: {bibcode}"
-
+        i_line = f"%I ELECTR: https://ascl.net/{rec['ascl_id']}"
+        for bibcode in rec["described_in_bibcodes"]:
+            i_line += f"; ASCL_D: {bibcode}"
+        for bibcode in rec["used_in_bibcodes"]:
+            i_line += f"; ASCL_U: {bibcode}"
+        if rec["preferred_citation"]:
+            i_line += f"; PREFERRED: {rec['preferred_citation']}"
         lines.append(i_line)
 
-        # %B abstract
-        lines.append(f"%B {abstract_clean}")
+        lines.append(f"%B {rec['abstract']}")
 
-        # %K keywords
         kw_str = "Software"
-        if keywords:
-            kw_str += ", " + ", ".join(keywords)
+        if rec["keywords"]:
+            kw_str += ", " + ", ".join(rec["keywords"])
         lines.append(f"%K {kw_str}")
 
         lines.append("")
 
     return Response("\n".join(lines), mimetype="text/plain; charset=utf-8")
+
+
+def _build_ads_record(db_session, row):
+    """Build a single ADS record dict from a codes row.
+
+    Text fields are processed to match the v3 PHP output:
+    credit and title are HTML-entity-encoded (htmlentities equivalent);
+    abstract preserves <a> tags and entity-encodes everything else.
+    """
+    code_pk = row["pk"]
+    links = _links_by_type(db_session, code_pk)
+    keywords = _keywords_for_code(db_session, code_pk)
+
+    ascl_id = row["ascl_id"]
+    century = row["century"] or 20
+    pubdate = f"{ascl_id[2:4]}/{century}{ascl_id[0:2]}"
+
+    # credit: strip all HTML, then entity-encode (matches PHP htmlentities)
+    credit = _htmlentities(re.sub(r"<[^>]+>", "", row["credit"] or ""))
+
+    # title: strip all HTML, collapse whitespace, then entity-encode
+    title = re.sub(r"<[^>]+>", "", row["title"] or "")
+    title = re.sub(r"\s+", " ", title).strip()
+    title = _htmlentities(title)
+
+    # abstract: normalise newlines, strip non-<a> HTML tags,
+    # entity-encode, then restore <a> tags from their encoded form
+    # (this matches the PHP: strip_tags keeps <a>, htmlentities encodes
+    # everything, then a regex restores the <a> tags).
+    abstract_raw = row["abstract"] or ""
+    abstract_raw = re.sub(r"[\n\r]+", "\n   ", abstract_raw)
+    abstract_encoded = _htmlentities(
+        re.sub(r"<(?!/?a[ >])[^>]+>", "", abstract_raw)
+    )
+    # Restore entity-encoded <a> tags back to real HTML
+    abstract_encoded = re.sub(
+        r"&lt;a href=&quot;(.*?)&quot;&gt;(.*?)&lt;/a&gt;",
+        r'<a href="\1">\2</a>',
+        abstract_encoded,
+    )
+
+    # Extract bibcodes from described-in and used-in links
+    described_in_bibcodes = []
+    for url in links.get("described-in", []):
+        bibcode = _extract_bibcode_from_url(url)
+        if bibcode:
+            described_in_bibcodes.append(bibcode)
+
+    used_in_bibcodes = []
+    for url in links.get("used-in", []):
+        bibcode = _extract_bibcode_from_url(url)
+        if bibcode:
+            used_in_bibcodes.append(bibcode)
+
+    return {
+        "ascl_id": ascl_id,
+        "bibcode": row["bibcode"] or "",
+        "credit": credit,
+        "title": title,
+        "abstract": abstract_encoded,
+        "pubdate": pubdate,
+        "keywords": keywords,
+        "preferred_citation": row["citation_method"] or "",
+        "described_in_bibcodes": described_in_bibcodes,
+        "used_in_bibcodes": used_in_bibcodes,
+    }

@@ -63,5 +63,8 @@
 </div>
 {% block extra_js %}{% endblock %}
 <script src="{{ url_for('static', filename='js/search_typeahead.js') }}?v={{ static_version('js/search_typeahead.js') }}"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}], throwOnError: false});"></script>
 </body>
 </html>

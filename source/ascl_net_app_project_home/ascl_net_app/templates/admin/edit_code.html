@@ -41,11 +41,9 @@
 	</div>
 	{% endif %}
 
-	<!-- SECTION: Basic Information -->
 	<div class="form-section">
-		<h3 class="section-title">Basic Information</h3>
 
-			<div class="field-row-split">
+			<div class="field-row field-row-split">
 				<div class="field-half">
 					<div class="inline-label-field">
 						<label for="ascl_id">ASCL ID</label>
@@ -56,28 +54,26 @@
 						{% endif %}
 					</div>
 					</div>
-					<small>Leave blank or as 0000.000 for user-submitted codes.</small>
+					<small >Leave blank or as 0000.000 for user-submitted codes.</small>
 				</div>
 				<div class="field-half">
 					<div class="inline-label-field">
 						<label for="published">Publish?</label>
-						<select name="published" id="published">
-							<option value="0" {% if not code.published or code.published == 0 %}selected{% endif %}>No</option>
-							<option value="1" {% if code.published == 1 %}selected{% endif %}>Yes</option>
-						</select>
+						<input type="checkbox" name="published" id="published" value="1" {% if code.published == 1 %}checked{% endif %}>
 					</div>
-					<small>Unpublished codes are not publicly viewable.</small>
+					<small >Unpublished codes are not publicly viewable.</small>
 				</div>
 			</div>
 
 		<div class="field-row">
 			<label for="title">Title</label>
 			<input type="text" name="title" id="title" value="{{ code.title or '' }}" maxlength="255" size="80" required>
-			<small>Simple HTML is ok &mdash; no anchors, though.</small>
+			<small>Simple HTML is ok (no anchors though). LaTeX math mode accepted.</small>
 		</div>
 
 		<div class="field-row">
 			<label>Credit</label>
+			<small>Names auto-normalize to "Surname, Firstname I." format. List of names separated by ";" also accepted.</small>
 			<div class="entry-manager">
 				<table class="entry-table" id="credit-table">
 					<thead><tr><th>Name</th><th></th></tr></thead>
@@ -89,7 +85,12 @@
 				</div>
 			</div>
 			<input type="hidden" name="credit" id="credit_hidden" value="">
-			<small>Names auto-normalized to "Surname, Firstname I." format.</small>
+			<div class="entry-input-row" style="margin-top: 6px;">
+				<input type="text" id="credit-bibcode-input" placeholder="Bibcode" size="22" maxlength="19" style="flex: none;" oninput="checkCreditBibcode()">
+				<span class="validation-status" id="credit-bibcode-status"></span>
+				<button type="button" id="import-credit-btn" onclick="importCreditsFromCreditBibcode()">Import Authors from Bibcode</button>
+			</div>
+			<div id="credit-bibcode-info" class="field-info"></div>
 		</div>
 
 		<div class="field-row">
@@ -101,14 +102,8 @@
 				<button type="button" onclick="insertAtCursor('abstract', '&amp;lt;')" title="Insert less-than sign">&lt;</button>
 				<button type="button" onclick="insertAtCursor('abstract', '&amp;gt;')" title="Insert greater-than sign">&gt;</button>
 			</div>
-			<small>HTML is ok. FYI, use &amp;gt; and &amp;lt; for &gt; and &lt; signs.</small>
+			<small>HTML is ok. Note: use <code>&amp;gt;</code> for &gt; and <code>&amp;lt;</code> for &lt; (or just use the buttons above). LaTeX math mode (e.g. <code>$E=mc^2$</code>) accepted.</small>
 		</div>
-	</div>
-
-	<!-- SECTION: Links -->
-	<div class="form-section">
-		<h3 class="section-title">Links</h3>
-
 		<div class="field-row">
 			<label>Links</label>
 			<div class="url-manager">
@@ -117,30 +112,19 @@
 					<tbody></tbody>
 				</table>
 				<div class="url-input-row">
+					<input type="text" id="typed-link-input" placeholder="https://..." size="50" onkeydown="handleTypedLinkEnterKey(event)">
 					<select id="link-type-select">
 						<option value="">Type...</option>
 						{% for lt in url_link_types %}
 						<option value="{{ lt.short_name }}">{{ lt.name }}</option>
 						{% endfor %}
 					</select>
-					<input type="text" id="typed-link-input" placeholder="https://..." size="50" onkeydown="handleTypedLinkEnterKey(event)">
 					<span id="typed-link-status" class="url-check-status"></span>
 					<button type="button" onclick="addTypedLink()">Add</button>
 				</div>
 			</div>
 			<input type="hidden" name="typed_links" id="typed_links_hidden" value="">
-			<small>
-				{% for lt in url_link_types %}
-				<strong>{{ lt.name }}</strong>{% if lt.description %}: {{ lt.description }}{% endif %}{% if not loop.last %} | {% endif %}
-				{% endfor %}
-			</small>
 		</div>
-	</div>
-
-	<!-- SECTION: Identity -->
-	<div class="form-section">
-		<h3 class="section-title">Identity &amp; Contact</h3>
-
 		<div class="field-row">
 			<label>Aliases</label>
 			<div class="alias-manager">
@@ -161,8 +145,8 @@
 		{% if mode == 'update' %}
 		<div class="field-row">
 			<label for="time_added">Time Added</label>
-			<input type="text" name="time_added" id="time_added" value="{{ code.time_added }}" size="25" readonly>
-			<small>YYYY-MM-DD HH:MM:SS (read-only)</small>
+			<input type="text" name="time_added" id="time_added" value="{{ code.time_added }}" size="25" readonly style="opacity: 0.6;">
+			<small>Read only, UT. Format: YYYY-MM-DD HH:MM:SS</small>
 		</div>
 		{% endif %}
 
@@ -182,17 +166,10 @@
 			<input type="hidden" name="email" id="email_hidden" value="">
 			<small><span class="private-note">Not publicly visible.</span></small>
 		</div>
-	</div>
-
-	<!-- SECTION: Bibliographic References -->
-	<div class="form-section">
-		<h3 class="section-title">Bibliographic References</h3>
 
 		<div class="field-row">
-			<label for="bibcode">Bibcode <span class="validation-status" id="bibcode-status"></span></label>
+			<label for="bibcode">ASCL Bibcode <span class="validation-status" id="bibcode-status"></span></label>
 			<input type="text" name="bibcode" id="bibcode" value="{{ code.bibcode or '' }}" maxlength="19" size="22" oninput="checkBibcode()">
-			<button type="button" id="import-credit-btn" onclick="importCreditsFromBibcode()">Import Authors to Credit</button>
-			<div id="bibcode-credit-info" class="field-info"></div>
 			<div id="bibcode-info" class="field-info"></div>
 			<small>19-character ADS bibcode (e.g., 2019ApJ...887..229S)</small>
 		</div>
@@ -208,7 +185,7 @@
 			<label>Described In (Bibcodes)</label>
 			<div class="bibcode-manager">
 				<table class="bibcode-table sortable-table" id="described-in-table">
-					<thead><tr><th class="drag-col"></th><th>Bibcode / URL</th><th>Title</th><th></th></tr></thead>
+					<thead><tr><th class="drag-col"></th><th>Bibcode / URL</th><th></th></tr></thead>
 					<tbody></tbody>
 				</table>
 				<div class="bibcode-input-row">
@@ -225,7 +202,7 @@
 			<label>Used In (Bibcodes)</label>
 			<div class="bibcode-manager">
 				<table class="bibcode-table sortable-table" id="used-in-table">
-					<thead><tr><th class="drag-col"></th><th>Bibcode / URL</th><th>Title</th><th></th></tr></thead>
+					<thead><tr><th class="drag-col"></th><th>Bibcode / URL</th><th></th></tr></thead>
 					<tbody></tbody>
 				</table>
 				<div class="bibcode-input-row">
@@ -237,12 +214,6 @@
 			<input type="hidden" name="used_in_urls" id="used_in_urls_hidden" value="">
 			<small>19-char bibcodes or URLs.</small>
 		</div>
-	</div>
-
-	<!-- SECTION: Relationships & Metadata -->
-	<div class="form-section">
-		<h3 class="section-title">Relationships &amp; Metadata</h3>
-
 		<div class="field-row">
 			<label for="citation_method">Preferred Citation Method <span class="html-warning" id="citation-html-warning"></span></label>
 			<input type="text" name="citation_method" id="citation_method" value="{{ code.citation_method or '' }}" maxlength="255" size="80" oninput="checkForHTML(this, 'citation-html-warning'); updateCharCount()">
@@ -259,7 +230,7 @@
 				<div class="seealso-input-row">
 					<input type="text" id="seealso-input" placeholder="YYMM.NNN" size="12" maxlength="8" oninput="checkSeeAlsoInput()" onkeydown="handleEnterKey(event, addSeeAlso)">
 					<span id="seealso-status" class="seealso-status"></span>
-					<button type="button" id="seealso-add-btn" onclick="addSeeAlso()">Add</button>
+					<button type="button" id="seealso-add-btn" onclick="addSeeAlso()">Add ASCL ID</button>
 				</div>
 			</div>
 			<input type="hidden" name="see_also" id="see_also_hidden" value="">
@@ -271,16 +242,21 @@
 			<div class="keyword-manager">
 				<div class="keyword-badges" id="keyword-badges"></div>
 				<div class="keyword-input-row">
-					<input type="text" id="keyword-input" placeholder="Enter keyword" size="30" oninput="checkKeywordInput()" onkeydown="handleEnterKey(event, addKeyword)">
+					<input type="text" id="keyword-input" list="keyword-datalist" placeholder="Enter keyword" size="30" autocomplete="off" oninput="checkKeywordInput()" onkeydown="handleEnterKey(event, addKeyword)">
+					<datalist id="keyword-datalist"></datalist>
 					<span id="keyword-status" class="keyword-status"></span>
-					<button type="button" onclick="addKeyword()">Add</button>
+					<button type="button" onclick="addKeyword()">Add Keyword</button>
 				</div>
 			</div>
 			<input type="hidden" name="keywords" id="keywords_hidden" value="">
 			<small>Add keywords one at a time. Spaces are permitted in keywords.</small>
 		</div>
+		<div class="field-row">
+			<label for="notes">Notes</label>
+			<textarea name="notes" id="notes" rows="4" style="width:100%; max-width:700px; font-family:inherit; font-size:14px;">{{ code.notes or '' }}</textarea>
+			<small><span class="private-note">Not publicly visible. Internal notes for editors.</span></small>
+		</div>
 	</div>
-
 
 </form>
 </div>
@@ -557,10 +533,20 @@ function findDuplicateBibcodeOrUrl(value, items) {
 	return null;
 }
 
+function normalizeUrl(value) {
+	if (!value) return value;
+	if (isValidBibcode(value)) return value;
+	if (!value.match(/^https?:\/\//i) && value.match(/\./)) {
+		return 'https://' + value;
+	}
+	return value;
+}
+
 function isValidBibcodeOrUrl(value) {
 	if (isValidBibcode(value)) return { valid: true, type: 'bibcode', bibcode: value };
-	if (value.match(/^https?:\/\/.+/i)) {
-		var extracted = extractBibcodeFromUrl(value);
+	var normalized = normalizeUrl(value);
+	if (normalized.match(/^https?:\/\/.+/i)) {
+		var extracted = extractBibcodeFromUrl(normalized);
 		return { valid: true, type: 'url', bibcode: extracted };
 	}
 	return { valid: false, type: null, bibcode: null };
@@ -875,7 +861,7 @@ function renderTypedLinksTable() {
 		cellStatus.innerHTML = getUrlStatusIcon(link.url);
 		cellStatus.className = 'url-status-cell';
 		cellStatus.id = 'typed-link-status-' + index;
-		cellAction.innerHTML = '<button type="button" onclick="removeTypedLink(' + index + ')">Remove</button>';
+		cellAction.innerHTML = '<button type="button" class="remove-x" onclick="removeTypedLink(' + index + ')" title="Remove">&times;</button>';
 	});
 	document.getElementById('typed_links_hidden').value = JSON.stringify(typedLinks);
 }
@@ -956,38 +942,38 @@ function renderCreditTable() {
 function addCredit() {
 	var input = document.getElementById('credit-input');
 	var btn = input.parentElement.querySelector('button');
-	var name = input.value.trim();
+	var raw = input.value.trim();
 
-	if (!name) return;
+	if (!raw) return;
+
+	var names = raw.split(';').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+	if (names.length === 0) return;
 
 	// Disable input while normalizing
 	input.disabled = true;
 	btn.disabled = true;
 	btn.textContent = '...';
 
-	fetch('/admin/api/normalize_name', {
-		method: 'POST',
-		headers: {'Content-Type': 'application/json'},
-		body: JSON.stringify({name: name})
-	})
-	.then(response => response.json())
-	.then(data => {
-		var normalized = data.normalized || name;
-		if (credits.indexOf(normalized) === -1) {
-			credits.push(normalized);
-			renderCreditTable();
-		}
+	var promises = names.map(function(name) {
+		return fetch('/admin/api/normalize_name', {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({name: name})
+		})
+		.then(function(response) { return response.json(); })
+		.then(function(data) { return data.normalized || name; })
+		.catch(function() { return name; });
+	});
+
+	Promise.all(promises).then(function(normalizedNames) {
+		normalizedNames.forEach(function(normalized) {
+			if (credits.indexOf(normalized) === -1) {
+				credits.push(normalized);
+			}
+		});
+		renderCreditTable();
 		input.value = '';
-	})
-	.catch(err => {
-		// On error, add as-is
-		if (credits.indexOf(name) === -1) {
-			credits.push(name);
-			renderCreditTable();
-		}
-		input.value = '';
-	})
-	.finally(() => {
+	}).finally(function() {
 		input.disabled = false;
 		btn.disabled = false;
 		btn.textContent = 'Add';
@@ -1124,9 +1110,56 @@ function fetchBibcodeTitle(bibcode, callback) {
 	});
 }
 
-function importCreditsFromBibcode() {
-	var bibcodeInput = document.getElementById('bibcode');
-	var infoDiv = document.getElementById('bibcode-credit-info');
+var pendingCreditBibcodeCheck = null;
+
+function checkCreditBibcode() {
+	var input = document.getElementById('credit-bibcode-input');
+	var statusSpan = document.getElementById('credit-bibcode-status');
+	var infoDiv = document.getElementById('credit-bibcode-info');
+	var value = input.value.trim();
+
+	if (pendingCreditBibcodeCheck) {
+		clearTimeout(pendingCreditBibcodeCheck);
+		pendingCreditBibcodeCheck = null;
+	}
+
+	if (!value) {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'validation-status';
+		infoDiv.innerHTML = '';
+		return;
+	}
+
+	if (isValidBibcode(value)) {
+		statusSpan.innerHTML = '&#10003;';
+		statusSpan.className = 'validation-status valid';
+
+		infoDiv.innerHTML = '<span class="title-loading">Looking up title...</span>';
+		pendingCreditBibcodeCheck = setTimeout(function() {
+			fetchBibcodeTitle(value, function(title) {
+				if (input.value.trim() === value) {
+					if (title) {
+						infoDiv.innerHTML = '<a href="https://ui.adsabs.harvard.edu/abs/' + value + '/abstract" target="_blank" class="field-link">' + title + '</a>';
+					} else {
+						infoDiv.innerHTML = '<a href="https://ui.adsabs.harvard.edu/abs/' + value + '/abstract" target="_blank" class="field-link field-link-notfound">View on ADS (title not found)</a>';
+					}
+				}
+			});
+		}, 500);
+	} else {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'validation-status';
+		pendingCreditBibcodeCheck = setTimeout(function() {
+			if (input.value.trim() === value) {
+				infoDiv.innerHTML = '<span class="title-notfound">Invalid format, needs 19-character ADS bibcode (e.g., 2019ApJ...887..229S)</span>';
+			}
+		}, 1000);
+	}
+}
+
+function importCreditsFromCreditBibcode() {
+	var bibcodeInput = document.getElementById('credit-bibcode-input');
+	var infoDiv = document.getElementById('credit-bibcode-info');
 	var btn = document.getElementById('import-credit-btn');
 	var bibcode = bibcodeInput.value.trim();
 
@@ -1171,6 +1204,49 @@ var describedInItems = [];
 describedInItems = "{{ described_in_urls }}".split(/\n/).map(s => s.trim()).filter(s => s);
 {% endif %}
 
+function renderBibcodeCell(cellContent, item, index, tableId) {
+	var extractedBibcode = item.match(/^https?:\/\//i) ? extractBibcodeFromUrl(item) : null;
+	var bibcodeToLookup = isValidBibcode(item) ? item : extractedBibcode;
+
+	var linkHtml, titleHtml = '';
+
+	if (item.match(/^https?:\/\//i)) {
+		linkHtml = '<a href="' + item + '" target="_blank">' + item + '</a>';
+		if (extractedBibcode) {
+			if (bibcodeTitleCache[extractedBibcode] !== undefined) {
+				titleHtml = bibcodeTitleCache[extractedBibcode] ? '<span class="bibcode-title">' + bibcodeTitleCache[extractedBibcode] + '</span>' : '';
+			} else {
+				titleHtml = '<span class="title-loading">Loading...</span>';
+				fetchBibcodeTitle(extractedBibcode, function(title) {
+					var rows = document.getElementById(tableId).getElementsByTagName('tbody')[0].rows;
+					if (rows[index]) {
+						var titleDiv = rows[index].cells[1].querySelector('.bibcode-cell-title');
+						if (titleDiv) titleDiv.innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '';
+					}
+				});
+			}
+		}
+	} else if (isValidBibcode(item)) {
+		linkHtml = '<a href="https://ui.adsabs.harvard.edu/abs/' + item + '/abstract" target="_blank">' + item + '</a>';
+		if (bibcodeTitleCache[item] !== undefined) {
+			titleHtml = bibcodeTitleCache[item] ? '<span class="bibcode-title">' + bibcodeTitleCache[item] + '</span>' : '';
+		} else {
+			titleHtml = '<span class="title-loading">Loading...</span>';
+			fetchBibcodeTitle(item, function(title) {
+				var rows = document.getElementById(tableId).getElementsByTagName('tbody')[0].rows;
+				if (rows[index]) {
+					var titleDiv = rows[index].cells[1].querySelector('.bibcode-cell-title');
+					if (titleDiv) titleDiv.innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '';
+				}
+			});
+		}
+	} else {
+		linkHtml = item;
+	}
+
+	cellContent.innerHTML = '<div class="bibcode-cell-title">' + titleHtml + '</div><div class="bibcode-cell-url">' + linkHtml + '</div>';
+}
+
 function renderDescribedInTable() {
 	var tbody = document.getElementById('described-in-table').getElementsByTagName('tbody')[0];
 	tbody.innerHTML = '';
@@ -1183,55 +1259,14 @@ function renderDescribedInTable() {
 		row.addEventListener('drop', function(e) { handleDrop(e, describedInItems, renderDescribedInTable); });
 		row.addEventListener('dragend', handleDragEnd);
 		var cellDrag = row.insertCell(0);
-		var cellItem = row.insertCell(1);
-		var cellTitle = row.insertCell(2);
-		var cellAction = row.insertCell(3);
+		var cellContent = row.insertCell(1);
+		var cellAction = row.insertCell(2);
 		cellDrag.className = 'drag-handle';
 		cellDrag.innerHTML = '&#9776;';
 
-		// Check if URL contains a bibcode (ADS URL)
-		var extractedBibcode = item.match(/^https?:\/\//i) ? extractBibcodeFromUrl(item) : null;
-		var bibcodeToLookup = isValidBibcode(item) ? item : extractedBibcode;
+		renderBibcodeCell(cellContent, item, index, 'described-in-table');
 
-		// Make URLs clickable, bibcodes link to ADS
-		if (item.match(/^https?:\/\//i)) {
-			cellItem.innerHTML = '<a href="' + item + '" target="_blank">' + item + '</a>';
-			// If it's an ADS URL with a bibcode, fetch the title
-			if (extractedBibcode) {
-				if (bibcodeTitleCache[extractedBibcode] !== undefined) {
-					cellTitle.innerHTML = bibcodeTitleCache[extractedBibcode] ? '<span class="bibcode-title">' + bibcodeTitleCache[extractedBibcode] + '</span>' : '<span class="title-notfound">Not found</span>';
-				} else {
-					cellTitle.innerHTML = '<span class="title-loading">Loading...</span>';
-					fetchBibcodeTitle(extractedBibcode, function(title) {
-						var rows = document.getElementById('described-in-table').getElementsByTagName('tbody')[0].rows;
-						if (rows[index]) {
-							rows[index].cells[2].innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '<span class="title-notfound">Not found</span>';
-						}
-					});
-				}
-			} else {
-				cellTitle.innerHTML = '<span class="title-na">-</span>';
-			}
-		} else if (isValidBibcode(item)) {
-			cellItem.innerHTML = '<a href="https://ui.adsabs.harvard.edu/abs/' + item + '/abstract" target="_blank">' + item + '</a>';
-			// Show cached title or fetch it
-			if (bibcodeTitleCache[item] !== undefined) {
-				cellTitle.innerHTML = bibcodeTitleCache[item] ? '<span class="bibcode-title">' + bibcodeTitleCache[item] + '</span>' : '<span class="title-notfound">Not found</span>';
-			} else {
-				cellTitle.innerHTML = '<span class="title-loading">Loading...</span>';
-				fetchBibcodeTitle(item, function(title) {
-					var rows = document.getElementById('described-in-table').getElementsByTagName('tbody')[0].rows;
-					if (rows[index]) {
-						rows[index].cells[2].innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '<span class="title-notfound">Not found</span>';
-					}
-				});
-			}
-		} else {
-			cellItem.textContent = item;
-			cellTitle.innerHTML = '<span class="title-na">-</span>';
-		}
-
-		cellAction.innerHTML = '<button type="button" onclick="removeDescribedIn(' + index + ')">Remove</button>';
+		cellAction.innerHTML = '<button type="button" class="remove-x" onclick="removeDescribedIn(' + index + ')" title="Remove">&times;</button>';
 	});
 	document.getElementById('described_in_urls_hidden').value = describedInItems.join('\n');
 }
@@ -1263,7 +1298,7 @@ function addDescribedIn() {
 		return;
 	}
 
-	describedInItems.push(item);
+	describedInItems.push(normalizeUrl(item));
 	renderDescribedInTable();
 	input.value = '';
 	statusSpan.innerHTML = '';
@@ -1294,55 +1329,14 @@ function renderUsedInTable() {
 		row.addEventListener('drop', function(e) { handleDrop(e, usedInItems, renderUsedInTable); });
 		row.addEventListener('dragend', handleDragEnd);
 		var cellDrag = row.insertCell(0);
-		var cellItem = row.insertCell(1);
-		var cellTitle = row.insertCell(2);
-		var cellAction = row.insertCell(3);
+		var cellContent = row.insertCell(1);
+		var cellAction = row.insertCell(2);
 		cellDrag.className = 'drag-handle';
 		cellDrag.innerHTML = '&#9776;';
 
-		// Check if URL contains a bibcode (ADS URL)
-		var extractedBibcode = item.match(/^https?:\/\//i) ? extractBibcodeFromUrl(item) : null;
-		var bibcodeToLookup = isValidBibcode(item) ? item : extractedBibcode;
+		renderBibcodeCell(cellContent, item, index, 'used-in-table');
 
-		// Make URLs clickable, bibcodes link to ADS
-		if (item.match(/^https?:\/\//i)) {
-			cellItem.innerHTML = '<a href="' + item + '" target="_blank">' + item + '</a>';
-			// If it's an ADS URL with a bibcode, fetch the title
-			if (extractedBibcode) {
-				if (bibcodeTitleCache[extractedBibcode] !== undefined) {
-					cellTitle.innerHTML = bibcodeTitleCache[extractedBibcode] ? '<span class="bibcode-title">' + bibcodeTitleCache[extractedBibcode] + '</span>' : '<span class="title-notfound">Not found</span>';
-				} else {
-					cellTitle.innerHTML = '<span class="title-loading">Loading...</span>';
-					fetchBibcodeTitle(extractedBibcode, function(title) {
-						var rows = document.getElementById('used-in-table').getElementsByTagName('tbody')[0].rows;
-						if (rows[index]) {
-							rows[index].cells[2].innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '<span class="title-notfound">Not found</span>';
-						}
-					});
-				}
-			} else {
-				cellTitle.innerHTML = '<span class="title-na">-</span>';
-			}
-		} else if (isValidBibcode(item)) {
-			cellItem.innerHTML = '<a href="https://ui.adsabs.harvard.edu/abs/' + item + '/abstract" target="_blank">' + item + '</a>';
-			// Show cached title or fetch it
-			if (bibcodeTitleCache[item] !== undefined) {
-				cellTitle.innerHTML = bibcodeTitleCache[item] ? '<span class="bibcode-title">' + bibcodeTitleCache[item] + '</span>' : '<span class="title-notfound">Not found</span>';
-			} else {
-				cellTitle.innerHTML = '<span class="title-loading">Loading...</span>';
-				fetchBibcodeTitle(item, function(title) {
-					var rows = document.getElementById('used-in-table').getElementsByTagName('tbody')[0].rows;
-					if (rows[index]) {
-						rows[index].cells[2].innerHTML = title ? '<span class="bibcode-title">' + title + '</span>' : '<span class="title-notfound">Not found</span>';
-					}
-				});
-			}
-		} else {
-			cellItem.textContent = item;
-			cellTitle.innerHTML = '<span class="title-na">-</span>';
-		}
-
-		cellAction.innerHTML = '<button type="button" onclick="removeUsedIn(' + index + ')">Remove</button>';
+		cellAction.innerHTML = '<button type="button" class="remove-x" onclick="removeUsedIn(' + index + ')" title="Remove">&times;</button>';
 	});
 	document.getElementById('used_in_urls_hidden').value = usedInItems.join('\n');
 }
@@ -1374,7 +1368,7 @@ function addUsedIn() {
 		return;
 	}
 
-	usedInItems.push(item);
+	usedInItems.push(normalizeUrl(item));
 	renderUsedInTable();
 	input.value = '';
 	statusSpan.innerHTML = '';
@@ -1397,8 +1391,10 @@ seeAlsoItems = "{{ code.see_also }}".split(/[;\s]+/).filter(a => a.trim());
 {% endif %}
 
 function renderSeeAlsoTable() {
-	var tbody = document.getElementById('seealso-table').getElementsByTagName('tbody')[0];
+	var table = document.getElementById('seealso-table');
+	var tbody = table.getElementsByTagName('tbody')[0];
 	tbody.innerHTML = '';
+	table.style.display = seeAlsoItems.length > 0 ? '' : 'none';
 	seeAlsoItems.forEach(function(asclId, index) {
 		var row = tbody.insertRow();
 		var cellId = row.insertCell(0);
@@ -1421,7 +1417,7 @@ function renderSeeAlsoTable() {
 			fetchSeeAlsoInfo(asclId, index);
 		}
 
-		cellAction.innerHTML = '<button type="button" onclick="removeSeeAlso(' + index + ')">Remove</button>';
+		cellAction.innerHTML = '<button type="button" class="remove-x" onclick="removeSeeAlso(' + index + ')" title="Remove">&times;</button>';
 	});
 	document.getElementById('see_also_hidden').value = seeAlsoItems.join(';');
 }
@@ -1564,6 +1560,15 @@ function removeSeeAlso(index) {
 // Keyword management
 var keywords = [];
 var keywordCounts = {}; // Cache for keyword usage counts
+var allKeywords = {{ all_keywords_json | default('[]') | safe }};
+(function() {
+	var dl = document.getElementById('keyword-datalist');
+	allKeywords.forEach(function(kw) {
+		var opt = document.createElement('option');
+		opt.value = kw;
+		dl.appendChild(opt);
+	});
+})();
 
 {% if keywords_str %}
 // Parse keywords - handle quoted keywords with spaces
@@ -2053,7 +2058,6 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 .bibcode-manager {
 	margin: 5px 0 10px 0;
-	max-width: 600px;
 }
 .bibcode-table {
 	width: 100%;
@@ -2073,12 +2077,20 @@ document.addEventListener('DOMContentLoaded', function() {
 	word-break: break-all;
 }
 .bibcode-table td:last-child {
-	width: 70px;
+	width: 30px;
 	text-align: center;
 }
 .bibcode-table button {
 	padding: 3px 8px;
 	cursor: pointer;
+}
+.bibcode-cell-title {
+	font-size: 12px;
+	color: #555;
+	margin-bottom: 2px;
+}
+.bibcode-cell-url {
+	font-size: 13px;
 }
 .bibcode-input-row {
 	display: flex;
@@ -2115,11 +2127,6 @@ document.addEventListener('DOMContentLoaded', function() {
 .bibcode-title {
 	font-size: 12px;
 	color: #555;
-	max-width: 300px;
-	display: inline-block;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 .title-loading {
 	font-size: 12px;
@@ -2150,6 +2157,11 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 .url-manager, .entry-manager {
 	margin: 5px 0 10px 0;
+}
+.url-manager {
+	max-width: 100%;
+}
+.entry-manager {
 	max-width: 600px;
 }
 .url-table, .entry-table {
@@ -2169,13 +2181,33 @@ document.addEventListener('DOMContentLoaded', function() {
 	border: 1px solid #ddd;
 	word-break: break-all;
 }
-.url-table td:last-child, .entry-table td:last-child {
+.url-table td:nth-child(2) {
+	width: 1%;
+	white-space: nowrap;
+}
+.url-table td:last-child {
+	width: 30px;
+	text-align: center;
+}
+.entry-table td:last-child {
 	width: 70px;
 	text-align: center;
 }
 .url-table button, .entry-table button {
 	padding: 3px 8px;
 	cursor: pointer;
+}
+.remove-x {
+	background: none;
+	border: none;
+	color: #999;
+	font-size: 16px;
+	padding: 2px 6px;
+	cursor: pointer;
+	line-height: 1;
+}
+.remove-x:hover {
+	color: #c0392b;
 }
 /* Drag and drop styles */
 .sortable-table tbody tr {
@@ -2217,12 +2249,10 @@ document.addEventListener('DOMContentLoaded', function() {
 	padding: 4px 12px;
 	cursor: pointer;
 }
-.link-type-select {
-	font-size: 12px;
-	padding: 2px 4px;
-}
+.link-type-select,
 .url-input-row select {
-	padding: 4px 8px;
+	font-size: 11px;
+	padding: 2px 4px;
 }
 .url-check-status {
 	font-size: 12px;
@@ -2339,8 +2369,12 @@ document.addEventListener('DOMContentLoaded', function() {
 	padding: 5px 8px;
 	border: 1px solid #ddd;
 }
+.seealso-table td:first-child {
+	width: 1%;
+	white-space: nowrap;
+}
 .seealso-table td:last-child {
-	width: 70px;
+	width: 30px;
 	text-align: center;
 }
 .seealso-table button {
@@ -2790,10 +2824,10 @@ document.addEventListener('DOMContentLoaded', function() {
 .field-row:last-of-type {
 	border-bottom: none;
 }
-.field-row:nth-child(odd) {
+.field-row:nth-child(odd of .field-row) {
 	background: #fff;
 }
-.field-row:nth-child(even) {
+.field-row:nth-child(even of .field-row) {
 	background: #f0f4f8;
 }
 .field-row label {
@@ -2815,6 +2849,8 @@ document.addEventListener('DOMContentLoaded', function() {
 .field-row-split .field-half {
 	flex: 1;
 	padding: 14px 20px;
+	display: flex;
+	flex-direction: column;
 }
 .field-row-split .field-half:first-child {
 	border-right: 1px solid #eee;
@@ -2829,6 +2865,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	align-items: center;
 	justify-content: flex-start;
 	gap: 10px;
+	min-height: 34px;
 }
 .field-row-split .field-half .inline-label-field label {
 	display: inline-block;
@@ -2838,7 +2875,8 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 .field-row-split .field-half small {
 	display: block;
-	margin-top: 4px;
+	margin-top: auto;
+	padding-top: 4px;
 }
 /* Section title spacing - use high specificity to override #ascl_body h3 */
 .form-section h3.section-title,
@@ -2848,7 +2886,7 @@ h3.section-title {
 	color: #fff !important;
 	background: #5d6d7e !important;
 	margin: 0 !important;
-	padding: 14px 20px !important;
+	padding: 6px 20px !important;
 	border-bottom: 1px solid #4a5a6a !important;
 	max-width: none !important;
 	display: block !important;

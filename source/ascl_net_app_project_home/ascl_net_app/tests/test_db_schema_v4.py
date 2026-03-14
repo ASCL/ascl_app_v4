@@ -641,7 +641,7 @@ class TestLinkTypes:
         ('Code Site', 'code-site'),
         ('Described In', 'described-in'),
         ('Used In', 'used-in'),
-        ('Reference', 'reference'),
+        ('Refereed', 'refereed'),
     ]
 
     def test_link_type_columns_exist(self, inspector):

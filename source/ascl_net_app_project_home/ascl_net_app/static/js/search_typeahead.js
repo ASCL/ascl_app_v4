@@ -34,7 +34,8 @@
       activeIndex = -1;
       menu.innerHTML = suggestions
         .map(function (s, i) {
-          var title = String(s.title || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          var title = String(s.title || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/&lt;(\/?(?:sup|sub|i|em|b))&gt;/gi, "<$1>");
           var ascl = String(s.ascl_id || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
           // snippet is pre-formatted HTML from Typesense with <mark> tags
           var snippet = s.snippet || "";

@@ -96,7 +96,7 @@
 		<div class="abstract">{{ code.abstract | link_ascl_ids }}</div>
 		{% endif %}
 
-		{% if site_links or code.site_url or code.code_site or described_in_links or used_in_links or emac_links %}
+		{% if site_links or code.site_url or code.code_site or described_in_links or used_in_links or emac_links or zenodo_links %}
 		<dl class="sites">
 			{% if site_links or code.site_url or code.code_site %}
 			<dt>Code site:</dt>
@@ -138,6 +138,7 @@
 					{% endfor %}
 				</dd>
 				{% endif %}
+
 			<div class="clear"></div>
 		</dl>
 		{% endif %}
@@ -167,6 +168,17 @@
 		</dl>
 		{% endif %}
 
+		{% if keywords %}
+		<dl class="sites keywords">
+			<dt>Keywords:</dt>
+			<dd>
+				{% for kw in keywords %}
+				<a href="/code/keywords/{{ kw | urlencode }}">{{ kw }}</a>{% if not loop.last %},{% endif %}
+				{% endfor %}
+			</dd>
+			<div class="clear"></div>
+		</dl>
+		{% endif %}
 
 		<div class="explain"><a href="/explain">Explain these fields?</a> | <a href="/{{ code.ascl_id }}/suggest-edit">Suggest a correction</a></div>
 
@@ -224,6 +236,15 @@
 }
 .code-record-detail dl.sites {
 	margin-bottom: 14px;
+}
+.code-record-detail dl.sites dt {
+	font-weight: bold;
+}
+.code-record-detail dl.keywords dd a {
+	display: inline;
+}
+.code-record-detail dl.keywords dd a:hover {
+	text-decoration: underline;
 }
 .code-record-detail dl.untyped-links {
 	border-left: 3px solid #ccc;

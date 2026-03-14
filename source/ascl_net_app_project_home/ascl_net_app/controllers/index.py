@@ -58,7 +58,7 @@ def index():
 @index_page.route('/favicon.ico')
 def favicon():
 	static_images_dir = directory=os.path.join(current_app.root_path, 'static', 'images')
-	return send_from_directory(static_images_dir, filename='favicon.ico')#, mimetype='image/vnd.microsoft.icon')
+	return send_from_directory(static_images_dir, 'favicon.ico')
 
 @index_page.route('/robots.txt')
 def robots():

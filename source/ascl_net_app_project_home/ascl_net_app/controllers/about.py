@@ -74,14 +74,17 @@ def _fetch_subpages(parent_id: int):
 		return conn.execute(sql, {"parent": parent_id}).mappings().all()
 
 
-def _render_wp_page(page_id: int, back: str = None):
+def _render_wp_page(page_id: int, back: str = None, show_subpages: bool = True):
 	page = _fetch_wp_page(page_id)
 	if not page:
 		abort(404)
 
 	parent_id = page["post_parent"] or page["ID"]
-	subpages_raw = _fetch_subpages(parent_id) if parent_id else []
-	subpages = [{"ID": sp["ID"], "post_title": _title_case(sp["post_title"])} for sp in subpages_raw]
+	if show_subpages:
+		subpages_raw = _fetch_subpages(parent_id) if parent_id else []
+		subpages = [{"ID": sp["ID"], "post_title": _title_case(sp["post_title"])} for sp in subpages_raw]
+	else:
+		subpages = []
 	content_html = Markup(wpautop(page["post_content"] or ""))
 	back_link = (back or "").strip().lstrip("/")
 
@@ -109,7 +112,7 @@ def submissions():
 
 @about_page.route("/resources", methods=['GET'])
 def resources():
-	return _render_wp_page(_RESOURCES_PAGE_ID)
+	return _render_wp_page(_RESOURCES_PAGE_ID, show_subpages=False)
 
 
 @about_page.route("/explain", methods=['GET'])

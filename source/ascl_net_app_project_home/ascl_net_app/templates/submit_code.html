@@ -4,34 +4,390 @@
 
 {% block extra_css %}
 <style>
-.submit-sticky-action-bar {
-	background: linear-gradient(135deg, rgba(44, 62, 80, 0.92) 0%, rgba(52, 73, 94, 0.92) 100%);
-	backdrop-filter: blur(8px);
-	-webkit-backdrop-filter: blur(8px);
-	padding: 12px 20px;
-	margin: 12px 0 20px 0;
-	border-radius: 6px;
+/* Sticky submit bar */
+.submit-sticky-bar {
+	background: #262255;
+	padding: 10px 20px;
+	margin: 0 0 24px 0;
 	position: sticky;
 	top: 0;
 	z-index: 100;
-	box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+	box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 	display: flex;
-	justify-content: flex-end;
+	justify-content: space-between;
+	align-items: center;
 }
-.submit-sticky-action-bar .button {
+.submit-sticky-bar .bar-title {
+	color: rgba(255,255,255,0.7);
+	font-size: 16px;
+	font-family: 'Merriweather Sans', sans-serif;
+}
+.submit-sticky-bar .submit-btn {
 	display: inline-block;
-	padding: 8px 16px;
+	padding: 8px 24px;
 	text-decoration: none;
 	border: none;
 	border-radius: 4px;
 	background: #27ae60;
 	color: white;
 	cursor: pointer;
-	font-size: 13px;
-	font-weight: 500;
+	font-size: 14px;
+	font-weight: 600;
+	font-family: 'Merriweather Sans', sans-serif;
+	letter-spacing: 0.02em;
 }
-.submit-sticky-action-bar .button:hover {
+.submit-sticky-bar .submit-btn:hover {
 	background: #219a52;
+}
+
+/* Form sections */
+.submit-section {
+	border: 1px solid #e0e4e8;
+	background: #fcfcfd;
+	border-radius: 6px;
+	padding: 20px 24px;
+	margin-bottom: 32px;
+	max-width: 800px;
+}
+#ascl_body .submit-section h3 {
+	font-family: 'Merriweather', serif;
+	font-size: 16px;
+	color: #262255;
+	margin: 0 0 18px 0;
+	padding: 0 0 4px 0;
+	border-bottom: 2px solid #e0e4e8;
+	max-width: none;
+}
+
+/* Field groups */
+.field-group {
+	margin-bottom: 18px;
+}
+.field-group:last-child {
+	margin-bottom: 0;
+}
+.field-group:nth-child(odd) {
+	background: rgba(0, 0, 0, 0.035);
+	margin-left: -24px;
+	margin-right: -24px;
+	padding: 12px 24px;
+}
+.field-group label {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-weight: 600;
+	color: #262255;
+	margin-bottom: 4px;
+	font-size: 14px;
+	max-width: 700px;
+}
+.field-group label .field-badge {
+	font-weight: 500;
+	font-size: 10px;
+	padding: 1px 7px;
+	border-radius: 10px;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+}
+.field-group label .field-badge.req {
+	background: #6058c4;
+	color: #fff;
+}
+.field-group .field-help {
+	color: #777;
+	font-size: 12px;
+	margin-top: 4px;
+	line-height: 1.4;
+	max-width: 700px;
+}
+.field-group .field-help a {
+	color: #352bb3;
+}
+
+/* Inputs */
+.field-group input[type="text"],
+.field-group input[type="email"],
+.field-group textarea {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 700px;
+	padding: 8px 10px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-family: inherit;
+	font-size: 15px;
+	color: #333;
+}
+.field-group input[type="text"]:focus,
+.field-group input[type="email"]:focus,
+.field-group textarea:focus {
+	outline: none;
+	border-color: #6058c4;
+	box-shadow: 0 0 0 2px rgba(96, 88, 196, 0.15);
+}
+.field-group textarea {
+	resize: vertical;
+}
+
+/* Entry manager (authors, links) */
+.entry-manager {
+	margin: 0;
+	max-width: 700px;
+}
+/* Tighten spacing for field-groups that contain entry-manager widgets */
+.field-group:has(.entry-manager) {
+	margin-bottom: 14px;
+}
+.field-group:has(.entry-manager) .field-help {
+	margin-top: 2px;
+}
+.entry-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+.entry-table:has(tbody tr) {
+	margin-bottom: 8px;
+}
+.entry-table th {
+	text-align: left;
+	background: #eef0f5;
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+	color: #555;
+	font-weight: 600;
+}
+.entry-table td {
+	padding: 5px 8px;
+	border: 1px solid #ddd;
+	background: #fff;
+}
+.entry-table td:last-child {
+	width: 70px;
+	text-align: center;
+}
+.entry-table td a {
+	color: #352bb3;
+}
+.entry-table .orcid-cell {
+	font-size: 12px;
+	color: #777;
+	white-space: nowrap;
+}
+.entry-table .orcid-cell a {
+	color: #a6ce39;
+	text-decoration: none;
+}
+.entry-table .orcid-cell a:hover {
+	text-decoration: underline;
+}
+.entry-table .orcid-input {
+	width: 160px;
+	padding: 2px 5px;
+	font-size: 12px;
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	color: #555;
+}
+.entry-table .orcid-input:focus {
+	border-color: #a6ce39;
+	outline: none;
+}
+.entry-table .remove-btn {
+	padding: 3px 8px;
+	cursor: pointer;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+	background: #fff;
+	color: #999;
+	font-size: 12px;
+}
+.entry-table .remove-btn:hover {
+	color: #c0392b;
+	border-color: #c0392b;
+}
+.entry-table thead {
+	display: none;
+}
+.entry-table:has(tbody tr) thead {
+	display: table-header-group;
+}
+
+.entry-input-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.entry-input-row input[type="text"] {
+	flex: 1;
+	max-width: 500px;
+	padding: 6px 10px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-size: 14px;
+	font-family: inherit;
+}
+.entry-input-row input[type="text"]:focus {
+	outline: none;
+	border-color: #6058c4;
+	box-shadow: 0 0 0 2px rgba(96, 88, 196, 0.15);
+}
+.entry-input-row .add-btn {
+	padding: 6px 16px;
+	cursor: pointer;
+	border: 1px solid #352bb3;
+	border-radius: 4px;
+	background: #352bb3;
+	color: #fff;
+	font-size: 13px;
+	font-family: inherit;
+}
+.entry-input-row .add-btn:hover {
+	background: #2a2290;
+}
+.entry-input-row .add-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.entry-status {
+	font-size: 12px;
+}
+.entry-status.invalid {
+	color: #c0392b;
+}
+
+/* Bibcode import row */
+.bibcode-import-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid #eee;
+}
+.bibcode-import-row input[type="text"] {
+	padding: 6px 10px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-size: 14px;
+	font-family: inherit;
+	width: 220px;
+}
+.bibcode-import-row input[type="text"]:focus {
+	outline: none;
+	border-color: #6058c4;
+	box-shadow: 0 0 0 2px rgba(96, 88, 196, 0.15);
+}
+.bibcode-import-row .import-btn {
+	padding: 6px 14px;
+	cursor: pointer;
+	border: 1px solid #4b5066;
+	border-radius: 4px;
+	background: #4b5066;
+	color: #fff;
+	font-size: 13px;
+	font-family: inherit;
+	white-space: nowrap;
+	width: 180px;
+	text-align: center;
+	box-sizing: border-box;
+}
+.bibcode-import-row .import-btn:hover {
+	background: #3a3f51;
+}
+.bibcode-import-row .import-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.bibcode-import-status {
+	font-size: 12px;
+	color: #777;
+}
+.bibcode-import-status.error {
+	color: #c0392b;
+}
+.bibcode-import-status.success {
+	color: #27ae60;
+}
+
+/* Error/success messages */
+.submit-error {
+	background: #fdedec;
+	border: 1px solid #f5b7b1;
+	border-left: 4px solid #e74c3c;
+	color: #922b21;
+	padding: 12px 16px;
+	margin-bottom: 20px;
+	border-radius: 4px;
+	max-width: 800px;
+	font-size: 14px;
+	line-height: 1.5;
+}
+.submit-error p {
+	margin: 4px 0;
+	color: inherit;
+}
+.submit-success {
+	background: #e8f6ef;
+	border: 1px solid #a9dfbf;
+	border-left: 4px solid #27ae60;
+	color: #1e8449;
+	padding: 12px 16px;
+	margin-bottom: 20px;
+	border-radius: 4px;
+	max-width: 800px;
+	font-size: 14px;
+}
+.submit-success p {
+	margin: 4px 0;
+	color: inherit;
+}
+.submit-success a {
+	color: #1e8449;
+	font-weight: 600;
+}
+
+/* Split field row (name + orcid side by side) */
+.field-row-split {
+	display: flex;
+	gap: 16px;
+}
+.field-row-split .field-half {
+	flex: 1;
+}
+.field-row-split .field-half label {
+	margin-bottom: 4px;
+}
+.field-row-split .field-half input[type="text"] {
+	box-sizing: border-box;
+	width: 100%;
+	padding: 8px 10px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-family: inherit;
+	font-size: 15px;
+	color: #333;
+}
+.field-row-split .field-half input[type="text"]:focus {
+	outline: none;
+	border-color: #6058c4;
+	box-shadow: 0 0 0 2px rgba(96, 88, 196, 0.15);
+}
+
+/* Responsive */
+@media only screen and (max-width: 700px) {
+	.submit-section {
+		padding: 14px 16px;
+	}
+	.entry-input-row,
+	.bibcode-import-row {
+		flex-wrap: wrap;
+	}
+	.field-row-split {
+		flex-direction: column;
+		gap: 12px;
+	}
 }
 </style>
 {% endblock %}
@@ -42,13 +398,13 @@
 		<h1>{{ page_title }}</h1>
 
 		{% if err %}
-		<div class="err" style="background-color: #ffcccc; border: 1px solid #cc0000; padding: 10px; margin-bottom: 15px;">
+		<div class="submit-error">
 			{{ err|safe }}
 		</div>
 		{% endif %}
 
 		{% if msg %}
-		<div class="msg" style="background-color: #ccffcc; border: 1px solid #00cc00; padding: 10px; margin-bottom: 15px;">
+		<div class="submit-success">
 			{{ msg|safe }}
 		</div>
 		{% endif %}
@@ -56,84 +412,485 @@
 		{% if not hide_form %}
 			<p>The ASCL gladly accepts submitted codes meeting our criteria. Your code will show up immediately for public viewing but will be subject to moderation. Code entries are examined by an editor for completion and suitability and may be edited; entries meeting our criteria will be assigned an ASCL ID and indexed by ADS.</p>
 
-			<div class="submit-sticky-action-bar">
-				<button type="submit" form="submit-code-form" class="button">Submit Code</button>
+			<div class="submit-sticky-bar">
+				<span class="bar-title">Submit a New Code Entry</span>
+				<button type="submit" form="submit-code-form" class="submit-btn">Submit Code</button>
 			</div>
 
-			<div class="forms">
-				<form action="/code/submit" method="post" accept-charset="utf-8" id="submit-code-form">
+			<form action="/code/submit" method="post" accept-charset="utf-8" id="submit-code-form">
 
-				<p>
-					<label for="title"><strong>Title</strong></label><br>
-					<input type="text" name="title" id="title" value="{{ form_data.title or '' }}" size="60" maxlength="255" required>
-					<br><small>Plain text.</small>
-				</p>
+			<!-- SECTION: Code Information -->
+			<div class="submit-section">
+				<h3>Code Information</h3>
 
-				<p>
-					<label for="credit"><strong>Credit (Authors)</strong></label><br>
-					<textarea name="credit" id="credit" rows="3" cols="60" required>{{ form_data.credit or '' }}</textarea>
-					<br><small>Names should follow the format Surname, Firstname I. Separate additional names with semicolons. Plain text.</small>
-				</p>
+				<div class="field-group">
+					<label for="title">Title <span class="field-badge req">required</span></label>
+					<input type="text" name="title" id="title" value="{{ form_data.title or '' }}" maxlength="255" required>
+					<div class="field-help">Plain text, LaTeX math mode accepted.</div>
+				</div>
 
-				<p>
-					<label for="abstract"><strong>Abstract</strong></label><br>
-					<textarea name="abstract" id="abstract" rows="6" cols="60" required>{{ form_data.abstract or '' }}</textarea>
-					<br><small>Plain text.</small>
-				</p>
+				<div class="field-group">
+					<label>Credit / Authors <span class="field-badge req">required</span></label>
+					<div class="field-help" style="margin-bottom:6px">Names are auto-normalized to "Surname, Firstname I." format. ORCID IDs are optional.<br>You can type one name at a time, paste multiple names separated by semicolons, or import from SciX (ADS) or ORCID.</div>
+					<div class="entry-manager" id="credit-manager">
+						<table class="entry-table" id="credit-table">
+							<thead><tr><th>Name</th><th>ORCID ID</th><th></th></tr></thead>
+							<tbody></tbody>
+						</table>
+						<div class="entry-input-row">
+							<input type="text" id="credit-input" placeholder="Surname, First I. (or paste many with semicolons)" onkeydown="if(event.key==='Enter'){event.preventDefault();addAuthor();}">
+							<button type="button" class="add-btn" onclick="addAuthor()" id="credit-add-btn">Add</button>
+							<span id="credit-status" class="entry-status"></span>
+						</div>
+						<div class="bibcode-import-row">
+							<input type="text" id="bibcode-import-input" placeholder="SciX/ADS bibcode" onkeydown="if(event.key==='Enter'){event.preventDefault();importFromBibcode();}">
+							<button type="button" class="import-btn" onclick="importFromBibcode()" id="bibcode-import-btn">Import from SciX Bibcode</button>
+							<span id="bibcode-import-status" class="bibcode-import-status"></span>
+						</div>
+						<div class="bibcode-import-row">
+							<input type="text" id="orcid-import-input" placeholder="0000-0000-0000-000X" onkeydown="if(event.key==='Enter'){event.preventDefault();importFromOrcid();}">
+							<button type="button" class="import-btn" onclick="importFromOrcid()" id="orcid-import-btn">Import from ORCID</button>
+							<span id="orcid-import-status" class="bibcode-import-status"></span>
+						</div>
+					</div>
+					<input type="hidden" name="credit" id="credit_hidden" value="{{ form_data.credit or '' }}">
+					<input type="hidden" name="authors_json" id="authors_json_hidden" value="{{ form_data.authors_json or '' }}">
+				</div>
 
-				<p>
-					<label for="site_urls"><strong>Code Site URL or URLs</strong></label><br>
-					<textarea name="site_urls" id="site_urls" rows="3" cols="60" required>{{ form_data.site_urls or '' }}</textarea>
-					<br><small>One link per line. This should be the URL to a site from where your code can be downloaded or copied.</small>
-				</p>
+				<div class="field-group">
+					<label for="abstract">Abstract <span class="field-badge req">required</span></label>
+					<textarea name="abstract" id="abstract" rows="6" required>{{ form_data.abstract or '' }}</textarea>
+					<div class="field-help">Plain text, LaTeX math mode accepted. Please see the <a href="https://ascl.net/home/getwp/999" target="_blank">ASCL style guide</a> for guidance on writing abstracts.</div>
+				</div>
+			</div>
 
-				<p>
-					<label for="reference_urls"><strong>Reference Paper URL or URLs</strong></label><br>
-					<textarea name="reference_urls" id="reference_urls" rows="3" cols="60">{{ form_data.reference_urls or '' }}</textarea>
-					<br><small>(Not required if paper has been submitted but not yet published.) One link per line. Papers that reference your code.</small>
-				</p>
+			<!-- SECTION: Links & References -->
+			<div class="submit-section">
+				<h3>Links &amp; References</h3>
 
-				<p>
-					<label for="citation_method"><strong>Preferred Citation Method</strong></label><br>
-					<input type="text" name="citation_method" id="citation_method" value="{{ form_data.citation_method or '' }}" size="60" maxlength="255">
-					<br><small>(Not required) Bibcode for ASCL or paper entry; if using another method, please describe it in the notes field. Plain text.</small>
-				</p>
+				<div class="field-group">
+					<label for="citation_method">Preferred Citation Method</label>
+					<input type="text" name="citation_method" id="citation_method" value="{{ form_data.citation_method or '' }}" maxlength="255">
+					<div class="field-help">Bibcode for ASCL or paper entry; if using another method, please describe it in the notes field below. Plain text.</div>
+				</div>
+
+				<div class="field-group">
+					<label>Code Site URL(s) <span class="field-badge req">required</span></label>
+					<div class="entry-manager">
+						<table class="entry-table" id="code-site-table">
+							<thead><tr><th>URL</th><th></th></tr></thead>
+							<tbody></tbody>
+						</table>
+						<div class="entry-input-row">
+							<input type="text" id="code-site-input" placeholder="https://..." onkeydown="if(event.key==='Enter'){event.preventDefault();addLink('code-site');}">
+							<button type="button" class="add-btn" onclick="addLink('code-site')">Add</button>
+							<span id="code-site-status" class="entry-status"></span>
+						</div>
+					</div>
+					<div class="field-help">URL to a site from where your code can be downloaded or copied. At least one is required.</div>
+					<input type="hidden" name="site_urls" id="site_urls_hidden" value="{{ form_data.site_urls or '' }}">
+				</div>
+
+				<div class="field-group">
+					<label>Described In</label>
+					<div class="entry-manager">
+						<table class="entry-table" id="described-in-table">
+							<thead><tr><th>URL</th><th></th></tr></thead>
+							<tbody></tbody>
+						</table>
+						<div class="entry-input-row">
+							<input type="text" id="described-in-input" placeholder="https://..." onkeydown="if(event.key==='Enter'){event.preventDefault();addLink('described-in');}">
+							<button type="button" class="add-btn" onclick="addLink('described-in')">Add</button>
+							<span id="described-in-status" class="entry-status"></span>
+						</div>
+					</div>
+					<div class="field-help">SciX (ADS) link to a paper that <em>describes</em> the software. <br>If no SciX link is available, enter a DOI or other link. No HTML.</div>
+					<input type="hidden" name="described_in_urls" id="described_in_urls_hidden" value="{{ form_data.described_in_urls or '' }}">
+				</div>
+
+				<div class="field-group">
+					<label>Used In</label>
+					<div class="entry-manager">
+						<table class="entry-table" id="used-in-table">
+							<thead><tr><th>URL</th><th></th></tr></thead>
+							<tbody></tbody>
+						</table>
+						<div class="entry-input-row">
+							<input type="text" id="used-in-input" placeholder="https://..." onkeydown="if(event.key==='Enter'){event.preventDefault();addLink('used-in');}">
+							<button type="button" class="add-btn" onclick="addLink('used-in')">Add</button>
+							<span id="used-in-status" class="entry-status"></span>
+						</div>
+					</div>
+					<div class="field-help">SciX (ADS) link to a paper that <em>uses</em> the software. <br>If no SciX link is available, enter a DOI or other link. No HTML.</div>
+					<input type="hidden" name="used_in_urls" id="used_in_urls_hidden" value="{{ form_data.used_in_urls or '' }}">
+				</div>
+			</div>
+
+			<!-- SECTION: Contact Information -->
+			<div class="submit-section">
+				<h3>Your Information</h3>
 
 				{% if mode == 'insert' %}
-				<p>
-					<label for="name"><strong>Your Name</strong></label><br>
-					<input type="text" name="name" id="name" value="{{ form_data.name or '' }}" size="60" maxlength="255" required>
-					<br><small>This will be hidden from public view. It is required so an editor can contact you upon assignment of the ASCL ID.</small>
-				</p>
+				<div class="field-group">
+					<label for="name">Your Name <span class="field-badge req">required</span></label>
+					<input type="text" name="name" id="name" value="{{ form_data.name or '' }}" maxlength="255" required>
+					<div class="field-help">Hidden from public view. Required so an editor can contact you upon assignment of the ASCL ID.</div>
+				</div>
 				{% endif %}
 
-				<p>
-					<label for="email"><strong>Email Address</strong></label><br>
-					<input type="email" name="email" id="email" value="{{ form_data.email or '' }}" size="60" maxlength="255" required>
-					<br><small>This will be hidden from public view. It is required so an editor can contact you upon assignment of the ASCL ID.</small>
-				</p>
+				<div class="field-group">
+					<label for="email">Email Address <span class="field-badge req">required</span></label>
+					<input type="email" name="email" id="email" value="{{ form_data.email or '' }}" maxlength="255" required>
+					<div class="field-help">Hidden from public view. Required so an editor can contact you upon assignment of the ASCL ID.</div>
+				</div>
 
-				<p>
-					<label for="notes"><strong>Notes for Editors</strong></label><br>
-					<textarea name="notes" id="notes" rows="4" cols="60">{{ form_data.notes or '' }}</textarea>
-					<br><small style="display: block; max-width: 1000px;">Any further information you would like to provide the editors. This will also not be displayed publicly. Note that some HTML is allowed in titles and abstracts, for instance a super or subscript in the title or some formatting within the abstract such as an anchor. Please mention that here without using HTML, eg "the 2 in emc2 should be a superscript". Alternatively, correspondence with the editor may be required for more complex requests.</small>
-				</p>
+				<div class="field-group">
+					<label for="notes">Notes to the Editors</label>
+					<textarea name="notes" id="notes" rows="4">{{ form_data.notes or '' }}</textarea>
+					<div class="field-help">Any further information you would like to provide the editors. This will not be displayed publicly. Note that some HTML is allowed in titles and abstracts, for instance a super or subscript in the title or some formatting within the abstract such as an anchor. Please mention that here without using HTML, e.g. "the 2 in emc2 should be a superscript". Alternatively, correspondence with the editor may be required for more complex requests.</div>
+				</div>
+			</div>
 
-				{% if mode == 'insert' %}
-				<p>
-					<img src="/static/images/challenge.jpg" alt="Bot challenge image">
-				</p>
+			{% if mode == 'insert' %}
+			<!-- SECTION: Bot Challenge -->
+			<div class="submit-section">
+				<h3>Verification</h3>
 
-				<p>
-					<label for="challenge"><strong>Bot Challenge</strong></label><br>
-					<input type="text" name="challenge" id="challenge" value="" size="30" maxlength="50" required>
-					<br><small>Bot challenge: Type what the galaxies say.</small>
-				</p>
-				{% endif %}
-
-				</form>
+				<div class="field-group">
+					<img src="/static/images/challenge.jpg" alt="Bot challenge image" style="border-radius:4px; border:1px solid #ddd; display:block; margin-bottom:10px;">
+					<label for="challenge">Bot Challenge <span class="field-badge req">required</span></label>
+					<input type="text" name="challenge" id="challenge" value="" maxlength="50" required>
+					<div class="field-help">Type what the galaxies say.</div>
+				</div>
 			</div>
 			{% endif %}
-		</div>
+
+			</form>
+		{% endif %}
+	</div>
 </div>
+
+<script>
+// ============================================================
+// Authors / Credit widget
+// ============================================================
+var authors = [];  // [{name, orcid, orcid_provenance}, ...]
+
+// Initialize from hidden field (repopulate after validation error)
+(function() {
+	var jsonVal = document.getElementById('authors_json_hidden').value.trim();
+	if (jsonVal) {
+		try {
+			var parsed = JSON.parse(jsonVal);
+			if (Array.isArray(parsed)) { authors = parsed; return; }
+		} catch(e) {}
+	}
+	// Fall back to credit string
+	var creditVal = document.getElementById('credit_hidden').value.trim();
+	if (creditVal) {
+		authors = creditVal.split(/;\s*/).map(function(s) { return {name: s.trim()}; }).filter(function(a) { return a.name; });
+	}
+})();
+
+function renderAuthorTable() {
+	var tbody = document.getElementById('credit-table').getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+
+	authors.forEach(function(author, index) {
+		var row = tbody.insertRow();
+
+		// Name cell
+		var cellName = row.insertCell(0);
+		cellName.textContent = author.name;
+
+		// ORCID cell
+		var cellOrcid = row.insertCell(1);
+		cellOrcid.className = 'orcid-cell';
+		if (author.orcid) {
+			cellOrcid.innerHTML = '<a href="https://orcid.org/' + author.orcid + '" target="_blank" title="ORCID">' + author.orcid + '</a>';
+		} else {
+			cellOrcid.innerHTML = '<input type="text" class="orcid-input" placeholder="0000-0000-0000-000X" value="" onchange="updateOrcid(' + index + ', this.value)" onblur="updateOrcid(' + index + ', this.value)">';
+		}
+
+		// Remove cell
+		var cellAction = row.insertCell(2);
+		cellAction.innerHTML = '<button type="button" class="remove-btn" onclick="removeAuthor(' + index + ')">Remove</button>';
+	});
+
+	syncAuthorHiddenFields();
+}
+
+function syncAuthorHiddenFields() {
+	// credit: semicolon-delimited names (for codes.credit column)
+	document.getElementById('credit_hidden').value = authors.map(function(a) { return a.name; }).join('; ');
+	// authors_json: full data with orcid for author table
+	document.getElementById('authors_json_hidden').value = JSON.stringify(authors);
+}
+
+function normalizeAndAdd(nameStr) {
+	// Split on semicolons for paste support
+	var names = nameStr.split(/;\s*/).map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+	if (names.length === 0) return;
+
+	var input = document.getElementById('credit-input');
+	var btn = document.getElementById('credit-add-btn');
+	input.disabled = true;
+	btn.disabled = true;
+	btn.textContent = '...';
+
+	var pending = names.length;
+	var done = 0;
+
+	names.forEach(function(name) {
+		fetch('/api/normalize_name', {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({name: name})
+		})
+		.then(function(r) { return r.json(); })
+		.then(function(data) {
+			var normalized = data.normalized || name;
+			// Skip duplicates
+			if (!authors.some(function(a) { return a.name === normalized; })) {
+				authors.push({name: normalized, orcid: '', orcid_provenance: ''});
+			}
+		})
+		.catch(function() {
+			if (!authors.some(function(a) { return a.name === name; })) {
+				authors.push({name: name, orcid: '', orcid_provenance: ''});
+			}
+		})
+		.finally(function() {
+			done++;
+			if (done >= pending) {
+				renderAuthorTable();
+				input.disabled = false;
+				btn.disabled = false;
+				btn.textContent = 'Add';
+				input.value = '';
+				input.focus();
+			}
+		});
+	});
+}
+
+function addAuthor() {
+	var input = document.getElementById('credit-input');
+	var name = input.value.trim();
+	if (!name) return;
+	normalizeAndAdd(name);
+}
+
+function removeAuthor(index) {
+	authors.splice(index, 1);
+	renderAuthorTable();
+}
+
+function updateOrcid(index, value) {
+	value = value.trim();
+	if (value && !/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(value)) {
+		return; // Invalid format, ignore
+	}
+	authors[index].orcid = value;
+	if (value) {
+		authors[index].orcid_provenance = 'user-submitted';
+	} else {
+		authors[index].orcid_provenance = '';
+	}
+	syncAuthorHiddenFields();
+}
+
+function importFromBibcode() {
+	var input = document.getElementById('bibcode-import-input');
+	var btn = document.getElementById('bibcode-import-btn');
+	var status = document.getElementById('bibcode-import-status');
+	var bibcode = input.value.trim();
+
+	if (!bibcode) return;
+
+	btn.disabled = true;
+	btn.textContent = 'Importing...';
+	status.textContent = '';
+	status.className = 'bibcode-import-status';
+
+	fetch('/api/bibcode_authors/' + encodeURIComponent(bibcode))
+	.then(function(r) { return r.json(); })
+	.then(function(data) {
+		if (!data.found) {
+			status.textContent = data.error || 'Bibcode not found';
+			status.className = 'bibcode-import-status error';
+			return;
+		}
+
+		var imported = data.authors || [];
+		var added = 0;
+		imported.forEach(function(a) {
+			var name = (a.name || '').trim();
+			if (!name) return;
+			if (authors.some(function(existing) { return existing.name === name; })) return;
+			authors.push({
+				name: name,
+				orcid: a.orcid || '',
+				orcid_provenance: a.orcid_provenance || '',
+			});
+			added++;
+		});
+
+		renderAuthorTable();
+		var orcidCount = imported.filter(function(a) { return a.orcid; }).length;
+		var msg = 'Added ' + added + ' author' + (added === 1 ? '' : 's');
+		if (orcidCount > 0) {
+			msg += ' (' + orcidCount + ' with ORCID)';
+		}
+		status.textContent = msg;
+		status.className = 'bibcode-import-status success';
+		input.value = '';
+	})
+	.catch(function(err) {
+		status.textContent = 'Import failed';
+		status.className = 'bibcode-import-status error';
+	})
+	.finally(function() {
+		btn.disabled = false;
+		btn.textContent = 'Import from SciX Bibcode';
+	});
+}
+
+function importFromOrcid() {
+	var input = document.getElementById('orcid-import-input');
+	var btn = document.getElementById('orcid-import-btn');
+	var status = document.getElementById('orcid-import-status');
+	var orcid = input.value.trim();
+
+	if (!orcid) return;
+
+	btn.disabled = true;
+	btn.textContent = 'Looking up...';
+	status.textContent = '';
+	status.className = 'bibcode-import-status';
+
+	fetch('/api/orcid_lookup/' + encodeURIComponent(orcid))
+	.then(function(r) { return r.json(); })
+	.then(function(data) {
+		if (!data.found) {
+			status.textContent = data.error || 'ORCID not found';
+			status.className = 'bibcode-import-status error';
+			return;
+		}
+
+		var name = data.name;
+		if (authors.some(function(a) { return a.name === name; })) {
+			status.textContent = name + ' is already in the list';
+			status.className = 'bibcode-import-status error';
+			return;
+		}
+
+		authors.push({
+			name: name,
+			orcid: orcid,
+			orcid_provenance: 'user-submitted',
+		});
+		renderAuthorTable();
+		status.textContent = 'Added ' + name;
+		status.className = 'bibcode-import-status success';
+		input.value = '';
+	})
+	.catch(function() {
+		status.textContent = 'Lookup failed';
+		status.className = 'bibcode-import-status error';
+	})
+	.finally(function() {
+		btn.disabled = false;
+		btn.textContent = 'Import from ORCID';
+	});
+}
+
+// ============================================================
+// Links widget (Described In, Used In)
+// ============================================================
+var linkData = {
+	'code-site': [],
+	'described-in': [],
+	'used-in': []
+};
+
+function renderLinkTable(type) {
+	var tableId = type + '-table';
+	var hiddenMap = {'code-site': 'site_urls_hidden', 'described-in': 'described_in_urls_hidden', 'used-in': 'used_in_urls_hidden'};
+	var hiddenId = hiddenMap[type];
+	var tbody = document.getElementById(tableId).getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+
+	linkData[type].forEach(function(url, index) {
+		var row = tbody.insertRow();
+		var cellUrl = row.insertCell(0);
+		var cellAction = row.insertCell(1);
+
+		if (url.match(/^https?:\/\//i)) {
+			cellUrl.innerHTML = '<a href="' + url + '" target="_blank">' + url + '</a>';
+		} else {
+			cellUrl.textContent = url;
+		}
+
+		cellAction.innerHTML = '<button type="button" class="remove-btn" onclick="removeLink(\'' + type + '\',' + index + ')">Remove</button>';
+	});
+
+	document.getElementById(hiddenId).value = linkData[type].join('\n');
+}
+
+function addLink(type) {
+	var input = document.getElementById(type + '-input');
+	var statusSpan = document.getElementById(type + '-status');
+	var url = input.value.trim();
+
+	if (!url) return;
+
+	// Auto-prepend https:// if it looks like a domain (not a DOI)
+	if (!url.match(/^https?:\/\//i) && !url.match(/^10\.\d{4,}/)) {
+		if (url.match(/\./)) {
+			url = 'https://' + url;
+		} else {
+			statusSpan.textContent = 'Enter a valid URL or DOI';
+			statusSpan.className = 'entry-status invalid';
+			return;
+		}
+	}
+
+	if (linkData[type].indexOf(url) !== -1) {
+		statusSpan.textContent = 'Already added';
+		statusSpan.className = 'entry-status invalid';
+		return;
+	}
+
+	linkData[type].push(url);
+	renderLinkTable(type);
+	input.value = '';
+	statusSpan.textContent = '';
+	statusSpan.className = 'entry-status';
+}
+
+function removeLink(type, index) {
+	linkData[type].splice(index, 1);
+	renderLinkTable(type);
+}
+
+// ============================================================
+// Initialize on page load
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+	// Render author table
+	renderAuthorTable();
+
+	// Initialize link tables from hidden fields
+	['code-site', 'described-in', 'used-in'].forEach(function(type) {
+		var hiddenMap = {'code-site': 'site_urls_hidden', 'described-in': 'described_in_urls_hidden', 'used-in': 'used_in_urls_hidden'};
+		var hiddenId = hiddenMap[type];
+		var val = document.getElementById(hiddenId).value.trim();
+		if (val) {
+			linkData[type] = val.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+		}
+		renderLinkTable(type);
+	});
+});
+</script>
 {% endblock %}

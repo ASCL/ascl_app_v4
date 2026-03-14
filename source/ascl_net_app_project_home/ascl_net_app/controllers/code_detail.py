@@ -57,7 +57,7 @@ def code_detail_alt(ascl_id):
 			described_in_links.append(url)
 		elif link_type == 'used-in':
 			used_in_links.append(url)
-		elif link_type == 'reference':
+		elif link_type == 'refereed':
 			ref_links.append(url)
 		elif link_type == 'emac':
 			emac_links.append(url)
@@ -170,7 +170,7 @@ def code_detail(ascl_id):
 			described_in_links.append(url)
 		elif link_type == 'used-in':
 			used_in_links.append(url)
-		elif link_type == 'reference':
+		elif link_type == 'refereed':
 			ref_links.append(url)
 		elif link_type == 'emac':
 			emac_links.append(url)
@@ -376,6 +376,8 @@ def code_detail(ascl_id):
 
 	random.shuffle(code_languages)
 
+	keywords = [row.label for row in keyword_rows]
+
 	templateDict = {
 		'code': code,
 		'site_links': site_links,
@@ -384,6 +386,7 @@ def code_detail(ascl_id):
 		'ref_links': ref_links,
 		'emac_links': emac_links,
 		'untyped_links': untyped_links,
+		'keywords': keywords,
 		'has_keywords': has_keywords,
 		'author_count': author_count,
 		'author_has_other_codes': author_has_other_codes,

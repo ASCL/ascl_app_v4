@@ -32,13 +32,16 @@
 				{% else %}
 					<a href="/{{ code.ascl_id }}">{{ code.title | safe }}</a>
 				{% endif %}
+				{% if is_admin_logged_in %}
+				<a href="/admin/update_code/{{ code.pk }}" class="admin-edit-btn">Update</a>
+				{% endif %}
 			</span>
 
 			{% if code.credit %}
 			<div class="credit">{{ code.credit | link_author_credit }}</div>
 			{% endif %}
 
-			<div class="abstract">{{ code.abstract if code.abstract else 'No description available.' }}</div>
+			<div class="abstract">{{ code.abstract | link_ascl_ids if code.abstract else 'No description available.' }}</div>
 		</div>
 		{% endfor %}
 	{% endfor %}

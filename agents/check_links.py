@@ -303,7 +303,7 @@ def main():
     parser = argparse.ArgumentParser(description='Check ASCL database links')
     parser.add_argument('--limit', type=int, help='Check only N links')
     parser.add_argument('--code', type=str, help='Check links only for specific ASCL ID')
-    parser.add_argument('--type', type=str, choices=['code-site', 'described-in', 'used-in', 'reference'],
+    parser.add_argument('--type', type=str, choices=['code-site', 'described-in', 'used-in', 'refereed'],
                        help='Check only links of specific type')
     parser.add_argument('--recheck-working', action='store_true',
                        help='Also recheck links that are currently marked as working')

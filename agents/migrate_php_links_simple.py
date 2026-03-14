@@ -31,7 +31,7 @@ FIELD_TO_LINK_TYPE = {
     'site_list': 'code-site',
     'described_in': 'described-in',
     'used_in': 'used-in',
-    'ref_list': 'reference'
+    'ref_list': 'refereed'
 }
 
 # MySQL connection parameters
