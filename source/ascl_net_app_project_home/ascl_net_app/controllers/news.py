@@ -8,14 +8,9 @@ from markupsafe import Markup
 from sqlalchemy import text
 
 from ascl_net_app.model.database import Database
-from ascl_net_app.utilities.wordpress import wpautop, strip_tags, fetch_comments, insert_comment
+from ascl_net_app.utilities.wordpress import wpautop, strip_tags, fetch_comments, insert_comment, wp_table
 
 news_page = Blueprint("news_page", __name__)
-_WP_POSTS_TABLE = "ascl_wordpress.0hjpDo4yM_posts"
-_WP_USERS_TABLE = "ascl_wordpress.0hjpDo4yM_users"
-_WP_TERMS_TABLE = "ascl_wordpress.0hjpDo4yM_terms"
-_WP_TERM_TAX_TABLE = "ascl_wordpress.0hjpDo4yM_term_taxonomy"
-_WP_TERM_REL_TABLE = "ascl_wordpress.0hjpDo4yM_term_relationships"
 
 
 def _excerpt(content: str, length: int = 220) -> str:
@@ -53,9 +48,9 @@ def _build_post_filter_sql(search_query: str = "", category_slug: str = "", arch
 	params = {}
 
 	if category_slug:
-		joins.append(f"JOIN {_WP_TERM_REL_TABLE} tr ON tr.object_id = p.ID")
-		joins.append(f"JOIN {_WP_TERM_TAX_TABLE} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id")
-		joins.append(f"JOIN {_WP_TERMS_TABLE} t ON t.term_id = tt.term_id")
+		joins.append(f"JOIN {wp_table('term_relationships')} tr ON tr.object_id = p.ID")
+		joins.append(f"JOIN {wp_table('term_taxonomy')} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id")
+		joins.append(f"JOIN {wp_table('terms')} t ON t.term_id = tt.term_id")
 		where.append("tt.taxonomy = 'category'")
 		where.append("t.slug = :category_slug")
 		params["category_slug"] = category_slug
@@ -65,7 +60,7 @@ def _build_post_filter_sql(search_query: str = "", category_slug: str = "", arch
 		params["archive_month"] = archive_month
 
 	if author_slug:
-		joins.append(f"JOIN {_WP_USERS_TABLE} au ON au.ID = p.post_author")
+		joins.append(f"JOIN {wp_table('users')} au ON au.ID = p.post_author")
 		where.append("au.user_nicename = :author_slug")
 		params["author_slug"] = author_slug
 
@@ -86,11 +81,11 @@ def _fetch_posts(limit: int, offset: int = 0, search_query: str = "", category_s
 		FROM (
 			SELECT DISTINCT p.ID, p.post_title, p.post_date, p.post_name AS slug,
 				p.post_content, p.post_excerpt, p.post_author
-			FROM {_WP_POSTS_TABLE} p
+			FROM {wp_table('posts')} p
 			{join_sql}
 			WHERE {where_sql}
 		) filtered
-		LEFT JOIN {_WP_USERS_TABLE} u ON u.ID = filtered.post_author
+		LEFT JOIN {wp_table('users')} u ON u.ID = filtered.post_author
 		ORDER BY filtered.post_date DESC
 		LIMIT :limit OFFSET :offset
 		"""
@@ -108,7 +103,7 @@ def _count_posts(search_query: str = "", category_slug: str = "", archive_month:
 	sql = text(
 		f"""
 		SELECT COUNT(DISTINCT p.ID) AS cnt
-		FROM {_WP_POSTS_TABLE} p
+		FROM {wp_table('posts')} p
 		{join_sql}
 		WHERE {where_sql}
 		"""
@@ -123,8 +118,8 @@ def _fetch_post_by_slug(slug: str):
 		f"""
 		SELECT p.ID, p.post_title, p.post_date, p.post_name AS slug, p.post_content,
 			u.display_name AS author_name, u.user_nicename AS author_slug
-		FROM {_WP_POSTS_TABLE} p
-		LEFT JOIN {_WP_USERS_TABLE} u ON u.ID = p.post_author
+		FROM {wp_table('posts')} p
+		LEFT JOIN {wp_table('users')} u ON u.ID = p.post_author
 		WHERE p.post_type = 'post' AND p.post_status = 'publish' AND p.post_name = :slug
 		LIMIT 1
 		"""
@@ -142,9 +137,9 @@ def _fetch_categories_for_posts(post_ids):
 	sql = text(
 		f"""
 		SELECT tr.object_id AS post_id, t.name, t.slug
-		FROM {_WP_TERM_REL_TABLE} tr
-		JOIN {_WP_TERM_TAX_TABLE} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
-		JOIN {_WP_TERMS_TABLE} t ON t.term_id = tt.term_id
+		FROM {wp_table('term_relationships')} tr
+		JOIN {wp_table('term_taxonomy')} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
+		JOIN {wp_table('terms')} t ON t.term_id = tt.term_id
 		WHERE tt.taxonomy = 'category' AND tr.object_id IN ({placeholders})
 		ORDER BY t.name
 		"""
@@ -165,7 +160,7 @@ def _fetch_recent_posts(limit: int = 8):
 	sql = text(
 		f"""
 		SELECT post_title AS title, post_name AS slug, post_date AS date
-		FROM {_WP_POSTS_TABLE}
+		FROM {wp_table('posts')}
 		WHERE post_type = 'post' AND post_status = 'publish'
 		ORDER BY post_date DESC
 		LIMIT :limit
@@ -179,10 +174,10 @@ def _fetch_categories(limit: int = 20):
 	sql = text(
 		f"""
 		SELECT t.name, t.slug, COUNT(DISTINCT p.ID) AS post_count
-		FROM {_WP_TERM_TAX_TABLE} tt
-		JOIN {_WP_TERMS_TABLE} t ON t.term_id = tt.term_id
-		JOIN {_WP_TERM_REL_TABLE} tr ON tr.term_taxonomy_id = tt.term_taxonomy_id
-		JOIN {_WP_POSTS_TABLE} p ON p.ID = tr.object_id
+		FROM {wp_table('term_taxonomy')} tt
+		JOIN {wp_table('terms')} t ON t.term_id = tt.term_id
+		JOIN {wp_table('term_relationships')} tr ON tr.term_taxonomy_id = tt.term_taxonomy_id
+		JOIN {wp_table('posts')} p ON p.ID = tr.object_id
 		WHERE tt.taxonomy = 'category'
 		  AND p.post_type = 'post'
 		  AND p.post_status = 'publish'
@@ -203,7 +198,7 @@ def _fetch_archives(limit: int = 24):
 			DATE_FORMAT(MIN(post_date), '%Y-%m') AS archive_key,
 			DATE_FORMAT(MIN(post_date), '%M %Y') AS archive_label,
 			COUNT(*) AS post_count
-		FROM {_WP_POSTS_TABLE}
+		FROM {wp_table('posts')}
 		WHERE post_type = 'post' AND post_status = 'publish'
 		GROUP BY YEAR(post_date), MONTH(post_date)
 		ORDER BY MIN(post_date) DESC
@@ -219,12 +214,12 @@ def _fetch_archive_posts_by_month(limit: int = 24):
 	sql = text(
 		f"""
 		SELECT DATE_FORMAT(post_date, '%Y-%m') AS month_key, post_title, post_name AS slug
-		FROM {_WP_POSTS_TABLE}
+		FROM {wp_table('posts')}
 		WHERE post_type = 'post' AND post_status = 'publish'
 		  AND post_date >= (
 		    SELECT MIN(post_date) FROM (
 		      SELECT MIN(post_date) AS post_date
-		      FROM {_WP_POSTS_TABLE}
+		      FROM {wp_table('posts')}
 		      WHERE post_type = 'post' AND post_status = 'publish'
 		      GROUP BY YEAR(post_date), MONTH(post_date)
 		      ORDER BY post_date DESC

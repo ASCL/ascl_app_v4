@@ -6,12 +6,9 @@ from markupsafe import Markup
 from sqlalchemy import text
 
 from ascl_net_app.model.database import Database
-from ascl_net_app.utilities.wordpress import wpautop
+from ascl_net_app.utilities.wordpress import wpautop, wp_table
 
 about_page = flask.Blueprint("about_page", __name__)
-
-# WordPress posts table; used to pull static pages like About/Resources.
-_WP_POSTS_TABLE = "ascl_wordpress.0hjpDo4yM_posts"
 _ABOUT_PAGE_ID = 2
 _SUBMISSIONS_PAGE_ID = 29
 _RESOURCES_PAGE_ID = 697
@@ -32,7 +29,7 @@ def _fetch_wp_page(page_id: int):
 	sql = text(
 		f"""
 		SELECT ID, post_title, post_content, post_parent
-		FROM {_WP_POSTS_TABLE}
+		FROM {wp_table('posts')}
 		WHERE ID = :id AND post_type = 'page' AND post_status = 'publish'
 		LIMIT 1
 		"""
@@ -62,7 +59,7 @@ def _fetch_subpages(parent_id: int):
 	sql = text(
 		f"""
 		SELECT ID, post_title
-		FROM {_WP_POSTS_TABLE}
+		FROM {wp_table('posts')}
 		WHERE (post_parent = :parent OR ID = :parent) AND post_type = 'page' AND post_status = 'publish'
 		ORDER BY
 			CASE WHEN ID = :parent THEN -1 ELSE menu_order END ASC,

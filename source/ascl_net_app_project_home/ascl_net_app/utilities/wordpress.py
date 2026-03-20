@@ -13,8 +13,17 @@ from sqlalchemy import text
 
 from ascl_net_app.model.database import Database
 
-# WordPress table names
-_WP_COMMENTS_TABLE = "ascl_wordpress.0hjpDo4yM_comments"
+
+def wp_table(table_name: str) -> str:
+	"""Return a fully qualified WordPress table name using Flask config.
+
+	Reads WP_DB_DATABASE and WP_TABLE_PREFIX from the app config so that
+	table references work across environments (dev, production, cPanel).
+	"""
+	from flask import current_app
+	db = current_app.config.get('WP_DB_DATABASE', 'ascl_wordpress')
+	prefix = current_app.config.get('WP_TABLE_PREFIX', '0hjpDo4yM_')
+	return f"{db}.{prefix}{table_name}"
 
 # ---------------------------------------------------------------------------
 # Shortcodes
@@ -312,7 +321,7 @@ def fetch_comments(post_id):
 		f"""
 		SELECT comment_ID, comment_author, comment_author_url, comment_date,
 			comment_content, comment_parent
-		FROM {_WP_COMMENTS_TABLE}
+		FROM {wp_table('comments')}
 		WHERE comment_post_ID = :post_id AND comment_approved = '1' AND comment_type IN ('comment', '')
 		ORDER BY comment_date ASC
 		"""
@@ -347,7 +356,7 @@ def insert_comment(post_id, author, email, url, content, ip="", user_agent=""):
 	"""
 	sql = text(
 		f"""
-		INSERT INTO {_WP_COMMENTS_TABLE}
+		INSERT INTO {wp_table('comments')}
 			(comment_post_ID, comment_author, comment_author_email, comment_author_url,
 			 comment_author_IP, comment_date, comment_date_gmt, comment_content,
 			 comment_karma, comment_approved, comment_agent, comment_type, comment_parent, user_id)
