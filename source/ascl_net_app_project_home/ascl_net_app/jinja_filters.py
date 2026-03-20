@@ -140,6 +140,83 @@ def link_ascl_ids(text_value):
 	return Markup(linked)
 
 
+def _strip_html(text):
+	"""Remove HTML tags from text."""
+	return re.sub(r'<[^>]+>', '', text)
+
+
+@blueprint.app_template_filter()
+def search_excerpt(text_value, query, context_chars=250):
+	"""Create an excerpt around the first occurrence of the search term with highlighting.
+
+	Returns a Markup string with the search term wrapped in <mark> tags.
+	If the text is short enough, returns the full text with highlighting.
+	"""
+	if not text_value or not query:
+		return text_value or ""
+
+	text = _strip_html(str(text_value))
+	query_lower = query.lower()
+	text_lower = text.lower()
+
+	# Find first occurrence
+	pos = text_lower.find(query_lower)
+	if pos == -1:
+		# Term not found in plain text — show beginning with no highlight
+		snippet = text[:context_chars * 2]
+		if len(text) > context_chars * 2:
+			snippet += "..."
+		# Escape HTML in the snippet
+		from markupsafe import escape
+		return Markup(str(escape(snippet)))
+
+	# Build excerpt window around the match
+	start = max(0, pos - context_chars)
+	end = min(len(text), pos + len(query) + context_chars)
+
+	snippet = text[start:end]
+
+	# Add ellipsis if we trimmed
+	prefix = "..." if start > 0 else ""
+	suffix = "..." if end < len(text) else ""
+
+	# Escape HTML in the snippet, then highlight the search term
+	from markupsafe import escape
+	escaped = str(escape(snippet))
+
+	# Case-insensitive replacement with <mark> tags
+	highlighted = re.sub(
+		re.escape(query),
+		lambda m: f'<mark>{m.group(0)}</mark>',
+		escaped,
+		flags=re.IGNORECASE
+	)
+
+	return Markup(f'{prefix}{highlighted}{suffix}')
+
+
+@blueprint.app_template_filter()
+def highlight_search(text_value, query):
+	"""Highlight all occurrences of the search term in the text with <mark> tags.
+
+	Strips HTML from the input, then highlights.
+	"""
+	if not text_value or not query:
+		return text_value or ""
+
+	text = _strip_html(str(text_value))
+	from markupsafe import escape
+	escaped = str(escape(text))
+
+	highlighted = re.sub(
+		re.escape(query),
+		lambda m: f'<mark>{m.group(0)}</mark>',
+		escaped,
+		flags=re.IGNORECASE
+	)
+	return Markup(highlighted)
+
+
 @blueprint.app_template_filter()
 def number_format(value):
 	"""Format a number with thousands separators (e.g., 1234567 -> 1,234,567)"""

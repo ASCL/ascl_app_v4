@@ -80,7 +80,7 @@
 			</span>
 
 			<span class="title">
-				<a href="{% if code.ascl_id == '0000.000' %}/code/v/{{ code.pk }}{% else %}/{{ code.ascl_id }}{% endif %}">{{ code.title | safe }}</a>
+				<a href="{% if code.ascl_id == '0000.000' %}/code/v/{{ code.pk }}{% else %}/{{ code.ascl_id }}{% endif %}">{{ code.title | highlight_search(query) }}</a>
 				{% if is_admin_logged_in %}
 				<a href="/admin/update_code/{{ code.pk }}" class="admin-edit-btn">Edit</a>
 				{% endif %}
@@ -91,31 +91,7 @@
 			{% endif %}
 
 			<div class="abstract">
-				{% if code.abstract and code.abstract|length > 500 %}
-				<span class="abstract-short">
-					{% if search_method == 'typesense' and typesense_hits %}
-					{% set hit = typesense_hits[loop.index0] %}
-					{% if hit.highlights %}
-					{% for highlight in hit.highlights %}
-					{% if highlight.field == 'abstract' %}
-					{{ highlight.snippet | safe }}...
-					{% endif %}
-					{% endfor %}
-					{% else %}
-					{{ code.abstract[:500] }}...
-					{% endif %}
-					{% else %}
-					{{ code.abstract[:500] }}...
-					{% endif %}
-					<a href="#" class="expand-link" onclick="toggleAbstract(this, event)">expand</a>
-				</span>
-				<span class="abstract-full" style="display: none;">
-					{{ code.abstract }}
-					<a href="#" class="expand-link" onclick="toggleAbstract(this, event)">less</a>
-				</span>
-				{% else %}
-				{{ code.abstract if code.abstract else 'No description available.' }}
-				{% endif %}
+				{{ code.abstract | search_excerpt(query) | link_ascl_ids }}
 			</div>
 		</div>
 		{% endfor %}
@@ -339,30 +315,10 @@
 	font-size: 14px;
 	color: #888;
 }
-.expand-link {
-	color: #352bb3;
-	font-size: 13px;
-	margin-left: 4px;
-	text-decoration: none;
-}
-.expand-link:hover {
-	text-decoration: underline;
+.search-page mark {
+	background-color: #fff3cd;
+	padding: 1px 2px;
+	border-radius: 2px;
 }
 </style>
-<script>
-function toggleAbstract(link, event) {
-	event.preventDefault();
-	var container = link.closest('.result-abstract');
-	var shortText = container.querySelector('.abstract-short');
-	var fullText = container.querySelector('.abstract-full');
-
-	if (shortText.style.display === 'none') {
-		shortText.style.display = 'inline';
-		fullText.style.display = 'none';
-	} else {
-		shortText.style.display = 'none';
-		fullText.style.display = 'inline';
-	}
-}
-</script>
 {% endblock %}

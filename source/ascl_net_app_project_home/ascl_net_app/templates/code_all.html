@@ -6,7 +6,10 @@
 <h1>Browsing Codes</h1>
 
 {# --- Reusable pagination macro --- #}
+{# Shows: Prev [1] [2] … [current-2]…[current+2] … [last-1] [last] Next #}
 {% macro pagination_bar() %}
+{% set wing = 3 %}
+{% set edge = 2 %}
 <div class="ascl_pagination">
 {% if page > 1 %}
 <a href="?page={{ page - 1 }}&limit={{ per_page }}&order={{ sort_by }}&dir={{ sort_order }}&listmode={{ view_mode }}">Previous</a>
@@ -14,12 +17,19 @@
 <div>Previous</div>
 {% endif %}
 
-{% set max_display = 40 %}
-{% for p in range(1, total_pages + 1 if total_pages < max_display else max_display + 1) %}
-    {% if p == page %}
-    <strong>{{ p }}</strong>
-    {% else %}
-    <a href="?page={{ p }}&limit={{ per_page }}&order={{ sort_by }}&dir={{ sort_order }}&listmode={{ view_mode }}">{{ p }}</a>
+{% set _prev = [0] %}
+{% for p in range(1, total_pages + 1) %}
+    {% set show = (p <= edge) or (p > total_pages - edge) or ((p >= page - wing) and (p <= page + wing)) %}
+    {% if show %}
+        {% if _prev[-1] and p - _prev[-1] > 1 %}
+        <span class="pg-gap">…</span>
+        {% endif %}
+        {% if p == page %}
+        <strong>{{ p }}</strong>
+        {% else %}
+        <a href="?page={{ p }}&limit={{ per_page }}&order={{ sort_by }}&dir={{ sort_order }}&listmode={{ view_mode }}">{{ p }}</a>
+        {% endif %}
+        {% if _prev.append(p) %}{% endif %}
     {% endif %}
 {% endfor %}
 
@@ -145,11 +155,12 @@
 	background: #fff;
 	padding: 6px 0 2px;
 	border-bottom: 1px solid transparent;
-	transition: border-color 0.2s, box-shadow 0.2s;
+	transition: border-color 0.2s, box-shadow 0.2s, padding 0.25s;
 }
 .browse-controls.stuck {
 	border-bottom-color: #ddd;
 	box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+	padding: 4px 8px 4px;
 }
 .random-code-btn {
 	background-color: #59549c !important;
@@ -159,6 +170,124 @@
 }
 .random-code-btn:hover {
 	background-color: #6e68b3 !important;
+}
+
+/* Pagination ellipsis gaps */
+.pg-gap {
+	display: inline-block;
+	padding: 1px 4px;
+	color: #999;
+	font-size: 14px;
+}
+
+/* --- Smooth collapse transitions --- */
+.ascl_pagination_wrap > p {
+	max-height: 2em;
+	overflow: hidden;
+	transition: max-height 0.2s ease, opacity 0.15s ease, margin 0.2s ease;
+	opacity: 1;
+}
+.switches .col > div:first-child {
+	max-height: 1.5em;
+	overflow: hidden;
+	transition: max-height 0.2s ease, opacity 0.15s ease;
+	opacity: 1;
+}
+
+/* --- Collapsed sticky toolbar --- */
+.browse-controls.stuck {
+	display: flex;
+	align-items: center;
+}
+.browse-controls.stuck .clear { display: none; }
+
+/* Pagination: flush left, shrink to content */
+.browse-controls.stuck .ascl_pagination_wrap {
+	float: none;
+	width: auto;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	flex: 0 0 auto;
+}
+.browse-controls.stuck .ascl_pagination_wrap > p {
+	display: none;
+}
+.browse-controls.stuck .ascl_pagination {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+/* Switches: right-aligned, single row, no headers */
+.browse-controls.stuck .switches {
+	float: none;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: auto;
+	min-width: 0;
+	margin-left: auto;
+	flex-shrink: 0;
+}
+.browse-controls.stuck .switches .col {
+	float: none;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	height: auto;
+	width: auto;
+	margin-right: 0;
+}
+.browse-controls.stuck .switches .col > div:first-child {
+	max-height: 0;
+	opacity: 0;
+	overflow: hidden;
+}
+.browse-controls.stuck .switches .mini { margin-left: 0; }
+
+/* Uniform compact buttons — same size for pagination and switches */
+.browse-controls.stuck .ascl_pagination div,
+.browse-controls.stuck .ascl_pagination a,
+.browse-controls.stuck .ascl_pagination strong,
+.browse-controls.stuck .switches a,
+.browse-controls.stuck .switches strong,
+.browse-controls.stuck .pg-gap {
+	display: inline-block;
+	width: auto;
+	padding: 2px 6px;
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.4;
+}
+.browse-controls.stuck .pg-gap {
+	border: none;
+	background: none;
+	padding: 2px 2px;
+	color: #999;
+}
+.browse-controls.stuck .switches .limits a,
+.browse-controls.stuck .switches .limits strong {
+	width: auto;
+	float: none;
+}
+
+/* Dividers between control groups */
+.browse-controls.stuck .switches .col + .col::before {
+	content: '';
+	display: inline-block;
+	width: 1px;
+	height: 14px;
+	background: #ccc;
+	margin-right: 6px;
+}
+.browse-controls.stuck .switches .col.mini + .col::before,
+.browse-controls.stuck .switches .col + .col.mini::before { display: none; }
+
+/* Compact random button */
+.browse-controls.stuck .random-code-btn {
+	padding: 2px 10px !important;
+	font-size: 12px;
 }
 </style>
 <script>

@@ -31,11 +31,28 @@ This directory contains documentation for AI agents working on the ASCL.net v3 �
 **"How do I set up Typesense?"**
 → See `active/TYPESENSE_SETUP_GUIDE.md`
 
+**"How do I rebuild the search index?"**
+→ Run `ascl typesense reset` (see Typesense Management section below)
+
 **"How was the database upgraded?"**
 → See `completed/database_upgrade/DB_UPGRADE_SUMMARY.md`
 
 **"What logging work was done?"**
 → See `completed/logging/LOGGING_FINAL_STATUS.md`
+
+## 🔎 Typesense Management
+
+Typesense search index management has moved to the `ascl` CLI (`bin/ascl`):
+
+```
+ascl typesense reset     # Drop collection, recreate schema, re-index all codes
+ascl typesense index     # (Re-)index all published codes (idempotent upsert)
+ascl typesense status    # Show collection health, document count
+```
+
+Requires `TYPESENSE_API_KEY` env var. URL and collection name come from `~/.config/ascl/config.toml`.
+
+The standalone scripts `typesense_setup_collection.py` and `typesense_import_data.py` in this directory are **superseded** by the CLI commands above.
 
 ## 🔬 Discovery Bar (Random Code Browser)
 
@@ -60,4 +77,4 @@ See `CONSOLIDATION_PLAN.md` for details on the reorganization.
 
 ---
 
-**Last Updated**: 2026-01-01
+**Last Updated**: 2026-03-20

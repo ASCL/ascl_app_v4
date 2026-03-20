@@ -100,6 +100,7 @@ DROP TABLE IF EXISTS codes_backup2;
 DROP TABLE IF EXISTS ascl_for_zenodo_matching;
 DROP TABLE IF EXISTS ascl_for_zenodo_matching2;
 DROP TABLE IF EXISTS ascl_for_zenodo_matching_two;
+DROP TABLE IF EXISTS temp;
 
 -- Extend password column for bcrypt hashes (60 chars)
 ALTER TABLE users MODIFY COLUMN password VARCHAR(60) NOT NULL;

@@ -7,6 +7,10 @@ Usage:
     ascl redeploy TARGET       Full redeploy (sync code, install deps, restart)
     ascl status [TARGET]       Show app/service status
     ascl config                Show resolved config for a target
+    ascl typesense reset       Drop collection, recreate schema, re-index
+    ascl typesense index       (Re-)index all published codes into Typesense
+    ascl typesense status      Show collection info and document count
+    ascl dumpdb <DATABASE>     Dump MySQL database to {name}_yyyy-mm-dd.sql
     ascl init                  Create default config at ~/.config/ascl/config.toml
     ascl completions bash      Print bash completion script
     ascl completions zsh       Print zsh completion script
@@ -392,6 +396,83 @@ def cmd_init(args):
     print(f"Edit it to match your environment, then run: ascl status")
 
 
+def cmd_dumpdb(args):
+    import shutil
+    import tempfile
+    from datetime import date
+
+    db_name = args.database
+    outfile = args.output or f"{db_name}_{date.today().isoformat()}.sql"
+    host = args.host
+    port = args.port
+    suffix = "_ascl_root"
+
+    # mysqldump chokes on client-only variables (e.g. "database=") in
+    # [client_*] groups.  Work around by extracting just user/password
+    # from the defaults-group-suffix via the mysql client, then writing
+    # a minimal temporary options file for mysqldump.
+    mycnf = pathlib.Path.home() / ".my.cnf"
+    tmp_cnf = None
+    cred_args = f"--defaults-group-suffix={suffix}"
+
+    if mycnf.exists():
+        import configparser
+        cp = configparser.ConfigParser(interpolation=None)
+        cp.read(str(mycnf))
+        section = f"client{suffix}"
+        if cp.has_section(section):
+            user = cp.get(section, "user", fallback=None)
+            password = cp.get(section, "password", fallback=None)
+            h = cp.get(section, "host", fallback=None)
+            p = cp.get(section, "port", fallback=None)
+            if h:
+                host = host or h
+            if p:
+                port = port or p
+
+            if user:
+                # Write a temp defaults file with only user+password
+                tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".cnf", delete=False)
+                tmp.write("[mysqldump]\n")
+                tmp.write(f"user={user}\n")
+                if password:
+                    tmp.write(f"password={password}\n")
+                tmp.close()
+                os.chmod(tmp.name, 0o600)
+                tmp_cnf = tmp.name
+                cred_args = f"--defaults-file={tmp_cnf}"
+
+    _step(f"Dumping {db_name} → {outfile}")
+
+    # --databases  => includes CREATE DATABASE IF NOT EXISTS + USE
+    # --skip-add-drop-table => don't DROP TABLE before CREATE
+    # Post-process to add IF NOT EXISTS to CREATE TABLE statements
+    cmd = (
+        f"mysqldump {cred_args}"
+        f" -h {host or '127.0.0.1'} -P {port or '3307'}"
+        f" --databases {db_name}"
+        f" --skip-add-drop-table"
+        f" --set-gtid-purged=OFF"
+        f" > {outfile}"
+    )
+    try:
+        _run(cmd)
+
+        # mysqldump has no flag for CREATE TABLE IF NOT EXISTS;
+        # patch it in-place.
+        with open(outfile, "r") as f:
+            sql = f.read()
+        sql = sql.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ")
+        with open(outfile, "w") as f:
+            f.write(sql)
+
+        size = os.path.getsize(outfile)
+        print(f"\n{_green('Done.')}  {outfile}  ({size:,} bytes)")
+    finally:
+        if tmp_cnf and os.path.exists(tmp_cnf):
+            os.unlink(tmp_cnf)
+
+
 def cmd_completions(args):
     if args.shell == "bash":
         print(BASH_COMPLETION)
@@ -415,7 +496,7 @@ _ascl_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="restart redeploy status config init completions"
+    commands="restart redeploy status config dumpdb init completions typesense"
     targets="vps cpanel"
 
     case "$prev" in
@@ -435,6 +516,10 @@ _ascl_completions() {
             COMPREPLY=( $(compgen -W "--force" -- "$cur") )
             return 0
             ;;
+        typesense)
+            COMPREPLY=( $(compgen -W "reset index status" -- "$cur") )
+            return 0
+            ;;
     esac
 }
 complete -F _ascl_completions ascl
@@ -451,7 +536,9 @@ _ascl() {
         'status:Show app/service status'
         'config:Show resolved config for a target'
         'init:Create default config'
+        'dumpdb:Dump MySQL database to dated .sql file'
         'completions:Print shell completion script'
+        'typesense:Manage Typesense search index'
     )
     targets=('vps:Nginx + Uvicorn + systemd' 'cpanel:Phusion Passenger')
     shells=('bash' 'zsh')
@@ -468,6 +555,11 @@ _ascl() {
                 ;;
             init)
                 _arguments '--force[Overwrite existing config]'
+                ;;
+            typesense)
+                local -a ts_cmds
+                ts_cmds=('reset:Drop, recreate, and re-index' 'index:Re-index all codes' 'status:Show collection info')
+                _describe 'typesense command' ts_cmds
                 ;;
         esac
     fi
@@ -507,6 +599,14 @@ def main():
     p.add_argument("target", nargs="?", choices=TARGETS, help="Deployment target")
     p.set_defaults(func=cmd_config)
 
+    # ascl dumpdb <database>
+    p = sub.add_parser("dumpdb", help="Dump a MySQL database to a dated .sql file")
+    p.add_argument("database", help="Database name (e.g. ascl_db_v4)")
+    p.add_argument("-o", "--output", help="Output filename (default: {db}_yyyy-mm-dd.sql)")
+    p.add_argument("--host", help="MySQL host (default: from ~/.my.cnf or 127.0.0.1)")
+    p.add_argument("--port", help="MySQL port (default: from ~/.my.cnf or 3307)")
+    p.set_defaults(func=cmd_dumpdb)
+
     # ascl init
     p = sub.add_parser("init", help="Create default config at ~/.config/ascl/config.toml")
     p.add_argument("--force", action="store_true", help="Overwrite existing config")
@@ -516,6 +616,10 @@ def main():
     p = sub.add_parser("completions", help="Print shell completion script")
     p.add_argument("shell", choices=("bash", "zsh"), help="Shell type")
     p.set_defaults(func=cmd_completions)
+
+    # ascl typesense {reset,index,status}
+    from ascl_typesense import register_subcommands as _register_ts
+    _register_ts(sub, _load_config)
 
     args = parser.parse_args()
     if not args.command:

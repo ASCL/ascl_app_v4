@@ -135,6 +135,119 @@ typesense_collection = "codes"
 
 **cPanel (Passenger):** rsync app (local or over SSH), `pip install -r requirements.txt`, touch `tmp/restart.txt`.
 
+## cPanel Deployment
+
+### Prerequisites
+
+- cPanel account with **Setup Python App** and **MySQL Databases** access
+- SSH access to the cPanel server
+
+### 1. Import the Database
+
+Create a database and user via cPanel's **MySQL Databases** interface. cPanel will prefix both names (e.g. `devascl_ascl_db_v4`, `devascl_dbuser`).
+
+Before importing the dump, strip the `CREATE DATABASE` and `USE` lines (cPanel manages the database name):
+
+```bash
+sed -e '/^CREATE DATABASE/d' -e '/^USE /d' ascl_db_v4.sql > ascl_db_v4_cpanel.sql
+mysql -u devascl_dbuser -p devascl_ascl_db_v4 < ascl_db_v4_cpanel.sql
+```
+
+### 2. Create the Python App in cPanel
+
+In **Setup Python App**, create a new application:
+
+- **Python version**: 3.13
+- **Application root**: `ascl_app_v4`
+- **Application URL**: your domain
+- **Application startup file**: `passenger_wsgi.py`
+- **Application Entry point**: `application`
+
+cPanel creates a virtualenv at `/itss/home/devascl/virtualenv/ascl_app_v4/3.13/`.
+
+Activate it via SSH:
+
+```bash
+source /itss/home/devascl/virtualenv/ascl_app_v4/3.13/bin/activate && cd /itss/home/devascl/ascl_app_v4
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install flask pymysql bcrypt requests nameparser phpserialize python-dotenv
+```
+
+The `ascl_core` and `dm-dbcore` packages must also be installed — see step 4.
+
+### 4. Deploy Application Files
+
+Copy the Flask application to the cPanel app directory:
+
+```bash
+# From the app directory on the server:
+# ascl_app_v4/
+#   ├── passenger_wsgi.py
+#   ├── ascl_net_app/          (copy of source/ascl_net_app_project_home/ascl_net_app/)
+#   ├── run_ascl_net_app.py    (optional, for CLI debugging)
+#   └── tmp/
+#       └── restart.txt        (touch to restart Passenger)
+```
+
+### 5. Create `passenger_wsgi.py`
+
+```python
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Pure-Python MySQL driver (no C compilation needed on shared hosting)
+import pymysql
+pymysql.install_as_MySQLdb()
+
+os.environ['FLASK_CONFIG'] = 'ascl_net.cfg'
+
+from ascl_net_app import create_app
+
+application = create_app(debug=False)
+```
+
+### 6. Configure `ascl_net.cfg`
+
+Update `ascl_net_app/configuration_files/ascl_net.cfg` with the cPanel-prefixed database credentials:
+
+```ini
+DB_DATABASE = 'devascl_ascl_db_v4'
+DB_USER = 'devascl_dbuser'
+DB_PASSWORD = 'your_password'
+DB_HOST = 'localhost'
+DB_PORT = '3306'
+```
+
+### 7. Secrets
+
+On shared hosting you typically cannot write to `/etc/ascl/`. Instead, point to a file in your home directory by adding this to `passenger_wsgi.py` before the import:
+
+```python
+os.environ['ASCL_SECRETS_FILE'] = '/itss/home/devascl/secrets/secrets.cfg'
+```
+
+Or add the secrets directly to `ascl_net.cfg`:
+
+```ini
+SECRET_KEY = 'generate-a-real-random-key'
+ADS_API_TOKEN = 'your-ads-token'
+TYPESENSE_API_KEY = 'your-typesense-key'
+```
+
+### 8. Restart
+
+```bash
+touch /itss/home/devascl/ascl_app_v4/tmp/restart.txt
+```
+
+Or use the **Restart** button in cPanel's Python App interface.
+
 ## Documentation
 
 - [ENDPOINT_MAPPING.md](ENDPOINT_MAPPING.md) — v3 → v4 endpoint migration status
@@ -143,4 +256,4 @@ typesense_collection = "codes"
 
 ---
 
-*Last Updated: 2026-03-10*
+*Last Updated: 2026-03-20*

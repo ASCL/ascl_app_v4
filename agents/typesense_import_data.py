@@ -9,6 +9,7 @@ Usage:
 
 import sys
 import os
+import re
 import requests
 import json
 import argparse
@@ -99,8 +100,9 @@ def prepare_document(code, keywords_dict):
     # Convert time_added to Unix timestamp
     time_added_unix = convert_timestamp_to_unix(code.time_added)
 
-    # Build document
+    # Build document — use pk as Typesense document id so upserts are idempotent
     doc = {
+        'id': str(code.pk),
         'pk': code.pk,
         'ascl_id': code.ascl_id,
         'title': code.title or '',
@@ -110,7 +112,8 @@ def prepare_document(code, keywords_dict):
 
     # Add optional fields only if they have values
     if code.abstract:
-        doc['abstract'] = code.abstract
+        # Strip HTML tags so text inside tags (e.g. <a>NEMO</a>) is searchable
+        doc['abstract'] = re.sub(r'<[^>]+>', '', code.abstract)
 
     if code.credit:
         doc['credit'] = code.credit

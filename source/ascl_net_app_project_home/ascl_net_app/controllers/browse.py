@@ -45,6 +45,8 @@ def code_all():
 		.count())
 
 	# Apply sorting
+	# For title sort, strip HTML tags so e.g. "<i>realfast</i>" sorts as "realfast"
+	stripped_title = func.regexp_replace(ascldb.ASCLCode.title, '<[^>]+>', '')
 	if sort_by == 'date':
 		if sort_order == 'desc':
 			query = query.order_by(ascldb.ASCLCode.time_added.desc())
@@ -52,9 +54,9 @@ def code_all():
 			query = query.order_by(ascldb.ASCLCode.time_added.asc())
 	else:  # sort by title
 		if sort_order == 'desc':
-			query = query.order_by(ascldb.ASCLCode.title.desc())
+			query = query.order_by(stripped_title.desc())
 		else:
-			query = query.order_by(ascldb.ASCLCode.title.asc())
+			query = query.order_by(stripped_title.asc())
 
 	# Apply pagination
 	total_pages = max(1, (total_codes + per_page - 1) // per_page) if per_page > 0 else 1
