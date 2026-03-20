@@ -144,13 +144,37 @@ typesense_collection = "codes"
 
 ### 1. Import the Database
 
-Create a database and user via cPanel's **MySQL Databases** interface. cPanel will prefix both names (e.g. `devascl_ascl_db_v4`, `devascl_dbuser`).
+Via cPanel's **MySQL Databases** interface:
 
-Before importing the dump, strip the `CREATE DATABASE` and `USE` lines (cPanel manages the database name):
+1. **Create a database** (e.g. `ascl_db_v4`; cPanel will prefix it, e.g. `devascl_db_v4`)
+2. **Create a database user** (e.g. `user`; cPanel will prefix it, e.g. `devascl_user`)
+3. **Add the user to the database** — scroll to "Add User to Database", select the user and database, and grant **All Privileges**
+
+Generate a portable dump from the source server (strips `CREATE DATABASE`/`USE`/`DEFINER` clauses and rewrites the database name):
 
 ```bash
-sed -e '/^CREATE DATABASE/d' -e '/^USE /d' ascl_db_v4.sql > ascl_db_v4_cpanel.sql
-mysql -u devascl_dbuser -p devascl_ascl_db_v4 < ascl_db_v4_cpanel.sql
+# On the source server (e.g. trillian2)
+bin/ascl_db_dump.sh -o ascl_db_v4_cpanel.sql -t devascl_db_v4
+```
+
+Transfer to the cPanel server and import:
+
+```bash
+mysql --defaults-file=~/.my.cnf devascl_db_v4 < ascl_db_v4_cpanel.sql
+```
+
+Create `~/.my.cnf` for password-less CLI access:
+
+```ini
+[client]
+user=devascl_user
+password=YOUR_DB_PASSWORD
+host=localhost
+port=3306
+```
+
+```bash
+chmod 600 ~/.my.cnf
 ```
 
 ### 2. Create the Python App in cPanel
@@ -174,7 +198,7 @@ source /itss/home/devascl/virtualenv/ascl_app_v4/3.13/bin/activate && cd /itss/h
 ### 3. Install Dependencies
 
 ```bash
-pip install flask pymysql bcrypt requests nameparser phpserialize python-dotenv
+pip install flask pymysql bcrypt requests nameparser phpserialize python-dotenv termcolor cryptography
 ```
 
 The `ascl_core` and `dm-dbcore` packages must also be installed — see step 4.
@@ -247,6 +271,14 @@ touch /itss/home/devascl/ascl_app_v4/tmp/restart.txt
 ```
 
 Or use the **Restart** button in cPanel's Python App interface.
+
+### Logging
+
+Flask application errors are logged to `~/ascl_app_v4/logs/app.log`.
+
+## TODO
+
+- [ ] Log rotation and reporting plan for `~/ascl_app_v4/logs/app.log`
 
 ## Documentation
 
