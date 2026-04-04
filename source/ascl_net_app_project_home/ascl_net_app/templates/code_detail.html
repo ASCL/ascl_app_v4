@@ -13,9 +13,11 @@
          class="discovery-pill"
          onclick="sessionStorage.setItem('discoveryMode','1')">Similar</a>
       {% endif %}
+      {% if show_referenced_by %}
       <a href="/discover/mentioned/{{ code.ascl_id }}"
          class="discovery-pill"
          onclick="sessionStorage.setItem('discoveryMode','1')">Referenced by</a>
+      {% endif %}
       {% for dm in domain_matches %}
       <a href="/discover/domain/{{ dm.term | urlencode }}?from={{ code.ascl_id }}"
          class="discovery-pill"

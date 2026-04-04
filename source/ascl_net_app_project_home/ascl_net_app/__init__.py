@@ -32,6 +32,7 @@ def register_blueprints(app=None):
 	from .controllers.exports import exports_page
 	from .controllers.codemeta import codemeta_page
 	from .controllers.suggest_edit import suggest_edit_page
+	from .controllers.icecave import icecave_page
 
 	app.register_blueprint(index_page)
 	app.register_blueprint(code_page)
@@ -46,6 +47,7 @@ def register_blueprints(app=None):
 	# (catch-all) so their more specific routes match first.
 	app.register_blueprint(codemeta_page)
 	app.register_blueprint(suggest_edit_page)
+	app.register_blueprint(icecave_page)
 	# Register code_detail_page LAST - it has a catch-all route
 	app.register_blueprint(code_detail_page)
 

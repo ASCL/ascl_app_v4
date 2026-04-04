@@ -2087,3 +2087,197 @@ def save_curator_note(pk):
 	db_session.commit()
 	flash("Curator note added.", "info")
 	return redirect(url_for("admin_page.corrections"))
+
+
+# ==========================================
+# Broken Links
+# ==========================================
+
+@admin_page.route("/broken-links", methods=["GET"])
+@_login_required
+def broken_links():
+	"""Link check results page — shows all checked links with status filters."""
+	from sqlalchemy import text
+
+	db_session = _get_db_session()
+
+	# Deduplicate by URL: same URL may be linked from multiple codes.
+	# Group ASCL IDs per unique URL, keep one representative link_check row.
+	raw_rows = db_session.execute(text("""
+		SELECT c.ascl_id, c.title AS code_title,
+		       l.url,
+		       lc.http_status, lc.message, lc.is_working,
+		       lc.page_title, lc.title_ok,
+		       lc.final_url, lc.final_url_ok,
+		       lc.domain_changed, lc.fail_count,
+		       lc.last_working, lc.checked_at, lc.note
+		FROM link_check lc
+		JOIN link l ON l.pk = lc.link_pk
+		JOIN codes c ON c.pk = l.code_pk
+		ORDER BY lc.is_working ASC, lc.fail_count DESC, lc.checked_at DESC
+	""")).fetchall()
+
+	seen_urls = {}
+	rows = []
+	for row in raw_rows:
+		if row.url in seen_urls:
+			# Add this ASCL ID to the existing entry
+			seen_urls[row.url]["ascl_ids"].append(row.ascl_id)
+		else:
+			entry = {col: getattr(row, col) for col in row._fields}
+			entry["ascl_ids"] = [row.ascl_id]
+			seen_urls[row.url] = entry
+			rows.append(entry)
+
+	# Academic/department domain suffixes
+	_ACADEMIC_SUFFIXES = (
+		'.edu', '.ac.uk', '.ac.il', '.ac.jp', '.ac.kr', '.ac.za', '.ac.nz',
+		'.ac.in', '.ac.at', '.ac.be', '.ac.cn', '.ac.ir', '.ac.th',
+		'.edu.au', '.edu.cn', '.edu.tw', '.edu.br', '.edu.mx',
+		'.uni-', '.u-', '.univ-',
+	)
+	_GITHUB_DOMAINS = ('github.com', 'github.io', 'raw.githubusercontent.com')
+
+	def _classify_domain(url):
+		"""Return domain tags for a URL: 'github', 'academic', or empty."""
+		from urllib.parse import urlparse
+		try:
+			host = urlparse(url).netloc.lower()
+		except Exception:
+			return ""
+		tags = []
+		if any(host.endswith(d) or host == d for d in _GITHUB_DOMAINS):
+			tags.append("github")
+		if any(s in host for s in _ACADEMIC_SUFFIXES):
+			tags.append("academic")
+		return " ".join(tags)
+
+	# Classify domains, detect changes, and compute counts
+	counts = {"all": 0, "broken": 0, "timeout": 0, "ssl": 0, "ok": 0, "noted": 0}
+	domain_counts = {"academic": 0, "not-github": 0, "github": 0}
+	signal_counts = {"title-changed": 0, "domain-changed": 0}
+	for row in rows:
+		row["domain_tags"] = _classify_domain(row["url"])
+
+		# Detect title/domain changes
+		row["title_changed"] = bool(
+			row["title_ok"] and row["page_title"]
+			and row["title_ok"] != row["page_title"]
+		)
+		# domain_changed is already in the DB row
+
+		counts["all"] += 1
+		if "academic" in row["domain_tags"]:
+			domain_counts["academic"] += 1
+		if "github" not in row["domain_tags"]:
+			domain_counts["not-github"] += 1
+		else:
+			domain_counts["github"] += 1
+		if row["title_changed"]:
+			signal_counts["title-changed"] += 1
+		if row["domain_changed"]:
+			signal_counts["domain-changed"] += 1
+		if row["is_working"]:
+			counts["ok"] += 1
+			if row["note"]:
+				counts["noted"] += 1
+		elif row["http_status"] == 0:
+			counts["timeout"] += 1
+			counts["broken"] += 1
+		elif row["http_status"] == -1:
+			counts["ssl"] += 1
+			counts["broken"] += 1
+		else:
+			counts["broken"] += 1
+
+	# Summary stats
+	summary = db_session.execute(text("""
+		SELECT COUNT(*) AS total_checked,
+		       SUM(lc.is_working) AS working,
+		       MAX(lc.checked_at) AS last_checked
+		FROM link_check lc
+		JOIN link l ON l.pk = lc.link_pk
+		WHERE l.link_type_pk = 2
+	""")).one()
+
+	db_session.close()
+
+	return render_template("admin/broken_links.html",
+		link_checks=rows,
+		counts=counts,
+		domain_counts=domain_counts,
+		signal_counts=signal_counts,
+		summary=summary,
+	)
+
+
+@admin_page.route("/check-link", methods=["POST"])
+@_login_required
+def check_single_link():
+	"""Re-check a single URL and return the updated result as JSON."""
+	import asyncio
+	import json as _json
+	import sys
+	import os
+	from flask import jsonify
+	from sqlalchemy import text
+
+	url = request.form.get("url", "").strip()
+	if not url:
+		return jsonify({"error": "No URL provided"}), 400
+
+	# Import the checker module
+	bin_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+		os.path.abspath(__file__)))), '..', '..', 'bin')
+	sys.path.insert(0, os.path.abspath(bin_dir))
+	from ascl_link_checker import (
+		check_url, write_result, read_db_config, get_connection,
+		MAX_PER_DOMAIN, USER_AGENT,
+	)
+	import httpx
+
+	# Find all link_pks for this URL
+	db_session = _get_db_session()
+	rows = db_session.execute(text(
+		"SELECT pk FROM link WHERE url = :url"
+	), {"url": url}).fetchall()
+	db_session.close()
+
+	if not rows:
+		return jsonify({"error": "URL not found in link table"}), 404
+
+	link_pks = [r.pk for r in rows]
+
+	# Run the check
+	async def _check():
+		sem = asyncio.Semaphore(1)
+		domain_sems = {}
+		domain_last_request = {}
+		timeout = httpx.Timeout(connect=10, read=20, write=10, pool=10)
+		async with httpx.AsyncClient(
+			timeout=timeout,
+			headers={"User-Agent": USER_AGENT},
+			follow_redirects=True,
+		) as client:
+			return await check_url(
+				client, sem, domain_sems, domain_last_request,
+				{"url": url, "link_pks": link_pks},
+			)
+
+	result = asyncio.run(_check())
+
+	# Write to DB
+	db_cfg = read_db_config()
+	connection = get_connection(db_cfg, flask.current_app.config.get("DB_DATABASE", "ascl_db_v4"))
+	write_result(connection, result)
+	connection.commit()
+	connection.close()
+
+	return jsonify({
+		"url": result["url"],
+		"http_status": result["http_status"],
+		"is_working": result["is_working"],
+		"page_title": result.get("page_title"),
+		"note": result.get("note"),
+		"message": result["message"],
+	})

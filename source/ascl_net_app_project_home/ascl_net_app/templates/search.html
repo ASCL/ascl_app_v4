@@ -91,7 +91,7 @@
 			{% endif %}
 
 			<div class="abstract">
-				{{ code.abstract | search_excerpt(query) | link_ascl_ids }}
+				{{ code.abstract | highlight_search(query) | link_ascl_ids }}
 			</div>
 		</div>
 		{% endfor %}

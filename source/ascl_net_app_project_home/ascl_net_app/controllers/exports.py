@@ -117,15 +117,16 @@ def _published_codes_query():
 
 # ---------------------------------------------------------------------------
 # /code/json — All published codes as JSON
+# /code/prettyjson — Same, pretty-printed
 # ---------------------------------------------------------------------------
 
-@exports_page.route("/code/json")
-def code_json():
+def _build_json_export():
+    """Build the JSON dict for all published codes."""
     db_session = _get_session()
 
     codes = db_session.execute(text(
         f"SELECT pk, ascl_id, title, credit, abstract, topic_id, bibcode, "
-        f"views, citation_method, century "
+        f"citation_method, century "
         f"FROM codes WHERE {_published_codes_query()} ORDER BY pk"
     )).mappings().all()
 
@@ -135,14 +136,13 @@ def code_json():
         links = _links_by_type(db_session, code_pk)
         keywords = _keywords_for_code(db_session, code_pk)
 
-        result[str(code_pk)] = {
+        entry = {
             "ascl_id": row["ascl_id"],
             "title": row["title"],
             "credit": row["credit"],
             "abstract": row["abstract"],
             "topic_id": row["topic_id"],
             "bibcode": row["bibcode"] or "",
-            "views": row["views"],
             "preferred_citation": row["citation_method"] or "",
             "site_list": links.get("code-site", []),
             "used_in": links.get("used-in", []),
@@ -150,8 +150,27 @@ def code_json():
             "keywords": keywords,
         }
 
+        emac_links = links.get("emac", [])
+        if emac_links:
+            entry["emac_link"] = emac_links[0] if len(emac_links) == 1 else emac_links
+
+        result[str(code_pk)] = entry
+
+    return result
+
+
+@exports_page.route("/code/json")
+def code_json():
     return Response(
-        flask.json.dumps(result),
+        flask.json.dumps(_build_json_export()),
+        mimetype="application/json",
+    )
+
+
+@exports_page.route("/code/prettyjson")
+def code_prettyjson():
+    return Response(
+        flask.json.dumps(_build_json_export(), indent=4, ensure_ascii=False),
         mimetype="application/json",
     )
 

@@ -1,0 +1,509 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Icecave Archive{% endblock %}
+
+{% block admin_content %}
+<h2>Icecave Archive Status</h2>
+
+{% if api_error %}
+<div class="admin-notice notice-warning">
+	<span class="notice-badge">ERROR</span>
+	<span>{{ api_error }}</span>
+</div>
+{% endif %}
+
+{% if health %}
+<!-- Health & Disk -->
+<div class="icecave-cards">
+	<div class="icecave-card">
+		<div class="card-label">VPS Status</div>
+		<div class="card-value {% if health.status == 'ok' %}text-green{% else %}text-red{% endif %}">
+			{{ health.status|upper }}
+		</div>
+	</div>
+	<div class="icecave-card">
+		<div class="card-label">VPS Disk</div>
+		<div class="card-value">{{ health.disk.used_gb }} / {{ health.disk.total_gb }} GB</div>
+		<div class="card-sub">{{ health.disk.percent_used }}% used &middot; {{ health.disk.free_gb }} GB free</div>
+	</div>
+	{% if health.last_sync %}
+	<div class="icecave-card">
+		<div class="card-label">Last Sync</div>
+		<div class="card-value card-value-sm">{{ health.last_sync.started_at[:16] }}</div>
+		<div class="card-sub">
+			{{ health.last_sync.updated }} updated,
+			{{ health.last_sync.errors }} errors
+		</div>
+	</div>
+	{% endif %}
+</div>
+{% endif %}
+
+{% if status %}
+<!-- Summary Stats -->
+<div class="icecave-cards">
+	<div class="icecave-card">
+		<div class="card-label">Total Codes</div>
+		<div class="card-value">{{ status.summary.total_codes }}</div>
+	</div>
+	<div class="icecave-card">
+		<div class="card-label">Archive Size</div>
+		<div class="card-value">{{ status.summary.total_size_gb }} GB</div>
+	</div>
+	<div class="icecave-card">
+		<div class="card-label">Active</div>
+		<div class="card-value text-green">{{ status.summary.by_status.get('active', 0) }}</div>
+	</div>
+	<div class="icecave-card">
+		<div class="card-label">Pending</div>
+		<div class="card-value text-orange">{{ status.summary.by_status.get('pending', 0) }}</div>
+		<div class="card-sub">Waiting to be archived</div>
+	</div>
+	<div class="icecave-card">
+		<div class="card-label">Errors</div>
+		<div class="card-value text-red">{{ status.summary.by_status.get('error', 0) }}</div>
+	</div>
+	<div class="icecave-card">
+		<div class="card-label">Missing</div>
+		<div class="card-value">{{ status.summary.by_status.get('missing', 0) }}</div>
+	</div>
+</div>
+
+<!-- Sync Action -->
+<div style="margin-bottom: 16px;">
+	<form method="POST" action="{{ url_for('icecave_page.icecave_trigger_sync') }}" style="display: inline;">
+		<button type="submit" class="btn btn-primary"
+			onclick="return confirm('Start a full sync of all active git mirrors?')">
+			Trigger Full Sync
+		</button>
+	</form>
+</div>
+
+<!-- Filters -->
+<div class="icecave-filters">
+	<div class="filter-row">
+		<div class="filter-group">
+			<span class="filter-label">Type:</span>
+			<button class="filter-btn active" data-filter="type" data-value="">All</button>
+			<button class="filter-btn" data-filter="type" data-value="git">Git <span class="filter-count">{{ status.summary.by_type.get('git', 0) }}</span></button>
+			<button class="filter-btn" data-filter="type" data-value="download">Download <span class="filter-count">{{ status.summary.by_type.get('download', 0) }}</span></button>
+			<button class="filter-btn" data-filter="type" data-value="webonly">Web-only <span class="filter-count">{{ status.summary.by_type.get('webonly', 0) }}</span></button>
+		</div>
+	</div>
+	<div class="filter-row">
+		<div class="filter-group">
+			<span class="filter-label">Status:</span>
+			<button class="filter-btn active" data-filter="status" data-value="">All</button>
+			<button class="filter-btn" data-filter="status" data-value="active">Active</button>
+			<button class="filter-btn" data-filter="status" data-value="pending">Pending</button>
+			<button class="filter-btn" data-filter="status" data-value="error">Errors</button>
+			<button class="filter-btn" data-filter="status" data-value="stale">Stale</button>
+			<button class="filter-btn" data-filter="status" data-value="missing">Missing</button>
+		</div>
+	</div>
+	<div class="filter-row">
+		<input type="text" id="search-input" placeholder="Search ASCL ID, title, or short name..." autocomplete="off">
+		<span id="result-count" class="result-count"></span>
+	</div>
+</div>
+
+<!-- Code Table -->
+<table class="icecave-table" id="code-table">
+	<thead>
+		<tr>
+			<th class="sortable" data-sort="ascl_id">ASCL ID</th>
+			<th>Title</th>
+			<th>Type</th>
+			<th>Status</th>
+			<th class="sortable td-right" data-sort="size_bytes">Size</th>
+			<th class="sortable" data-sort="last_updated">Last Updated</th>
+			<th class="sortable" data-sort="last_checked">Last Checked</th>
+		</tr>
+	</thead>
+	<tbody id="code-tbody">
+	</tbody>
+</table>
+
+<!-- Pagination -->
+<div class="icecave-pagination" id="pagination"></div>
+
+{% endif %} {# status #}
+
+{% if sync_log and sync_log.runs %}
+<!-- Recent Sync Runs -->
+<h3 style="margin-top: 30px;">Recent Sync Runs</h3>
+<table class="icecave-table">
+	<thead>
+		<tr>
+			<th>Started</th>
+			<th>Finished</th>
+			<th>Trigger</th>
+			<th>Total</th>
+			<th>Updated</th>
+			<th>Unchanged</th>
+			<th>Errors</th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for run in sync_log.runs %}
+		<tr>
+			<td>{{ run.started_at[:16] if run.started_at else '&mdash;'|safe }}</td>
+			<td>{{ run.finished_at[:16] if run.finished_at else 'running...' }}</td>
+			<td>{{ run.trigger }}</td>
+			<td>{{ run.total_repos or '&mdash;'|safe }}</td>
+			<td class="text-green">{{ run.updated }}</td>
+			<td>{{ run.unchanged }}</td>
+			<td class="{% if run.errors > 0 %}text-red{% endif %}">{{ run.errors }}</td>
+		</tr>
+		{% endfor %}
+	</tbody>
+</table>
+{% endif %}
+
+<style>
+/* Cards */
+.icecave-cards {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-bottom: 15px;
+}
+.icecave-card {
+	background: #f8f9fa;
+	border: 1px solid #e9ecef;
+	border-radius: 6px;
+	padding: 14px 18px;
+	min-width: 120px;
+}
+.card-label {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	color: #6c757d;
+	margin-bottom: 4px;
+}
+.card-value {
+	font-size: 24px;
+	font-weight: 700;
+	color: #212529;
+}
+.card-value-sm { font-size: 16px; }
+.card-sub {
+	font-size: 12px;
+	color: #6c757d;
+	margin-top: 2px;
+}
+
+/* Colors */
+.text-green { color: #28a745; }
+.text-red { color: #dc3545; }
+.text-orange { color: #fd7e14; }
+
+/* Filters */
+.icecave-filters {
+	margin-bottom: 15px;
+	padding: 12px 14px;
+	background: #f8f9fa;
+	border-radius: 6px;
+}
+.filter-row {
+	margin-bottom: 8px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.filter-row:last-child { margin-bottom: 0; }
+.filter-group {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-wrap: wrap;
+}
+.filter-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: #6c757d;
+	text-transform: uppercase;
+	min-width: 55px;
+}
+.filter-btn {
+	padding: 4px 10px;
+	border: 1px solid #ced4da;
+	border-radius: 4px;
+	background: #fff;
+	font-size: 12px;
+	cursor: pointer;
+	color: #495057;
+	transition: all 0.1s;
+}
+.filter-btn:hover { border-color: #3498db; color: #3498db; }
+.filter-btn.active {
+	background: #3498db;
+	color: #fff;
+	border-color: #3498db;
+}
+.filter-count {
+	font-size: 10px;
+	opacity: 0.7;
+}
+#search-input {
+	flex: 1;
+	max-width: 400px;
+	padding: 6px 10px;
+	border: 1px solid #ced4da;
+	border-radius: 4px;
+	font-size: 13px;
+}
+.result-count {
+	font-size: 12px;
+	color: #6c757d;
+}
+
+/* Table */
+.icecave-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+.icecave-table th {
+	background: #f8f9fa;
+	border-bottom: 2px solid #dee2e6;
+	padding: 8px 10px;
+	text-align: left;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	color: #6c757d;
+	user-select: none;
+}
+.icecave-table th.sortable {
+	cursor: pointer;
+}
+.icecave-table th.sortable:hover {
+	color: #3498db;
+}
+.icecave-table th.sort-asc::after { content: ' \25B2'; font-size: 9px; }
+.icecave-table th.sort-desc::after { content: ' \25BC'; font-size: 9px; }
+.icecave-table td {
+	padding: 7px 10px;
+	border-bottom: 1px solid #f0f0f0;
+}
+.icecave-table tbody tr:hover {
+	background: #f8f9fa;
+}
+.td-title {
+	max-width: 280px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.td-right { text-align: right; }
+tr.status-error td:first-child { border-left: 3px solid #dc3545; }
+tr.status-pending td:first-child { border-left: 3px solid #fd7e14; }
+
+/* Badges */
+.badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 10px;
+	font-size: 11px;
+	font-weight: 600;
+}
+.badge-git { background: #e8f5e9; color: #2e7d32; }
+.badge-download { background: #e3f2fd; color: #1565c0; }
+.badge-webonly { background: #fce4ec; color: #c62828; }
+.badge-active { background: #e8f5e9; color: #2e7d32; }
+.badge-pending { background: #fff3e0; color: #e65100; }
+.badge-error { background: #ffebee; color: #c62828; }
+.badge-stale { background: #f3e5f5; color: #6a1b9a; }
+.badge-missing { background: #eceff1; color: #546e7a; }
+
+/* Pagination */
+.icecave-pagination {
+	margin-top: 12px;
+	font-size: 13px;
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.icecave-pagination a {
+	color: #2980b9;
+	text-decoration: none;
+	font-weight: 500;
+	cursor: pointer;
+}
+.icecave-pagination a.disabled {
+	color: #adb5bd;
+	pointer-events: none;
+}
+
+/* Buttons */
+.btn {
+	display: inline-block;
+	padding: 6px 14px;
+	border: none;
+	border-radius: 4px;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	text-decoration: none;
+}
+.btn-primary { background: #3498db; color: #fff; }
+.btn-primary:hover { background: #2980b9; }
+</style>
+
+<script>
+(function() {
+	var allCodes = {{ status.codes | tojson }};
+	var PER_PAGE = 50;
+	var currentPage = 1;
+	var currentSort = 'ascl_id';
+	var currentOrder = 'asc';
+	var filters = { type: '', status: '' };
+	var searchTerm = '';
+
+	var detailUrlBase = "{{ url_for('icecave_page.icecave_code_detail', ascl_id='__ASCL_ID__') }}";
+
+	function filterCodes() {
+		var result = allCodes;
+		if (filters.type) {
+			result = result.filter(function(c) { return c.archive_type === filters.type; });
+		}
+		if (filters.status) {
+			result = result.filter(function(c) { return c.status === filters.status; });
+		}
+		if (searchTerm) {
+			var q = searchTerm.toLowerCase();
+			result = result.filter(function(c) {
+				return (c.ascl_id && c.ascl_id.toLowerCase().indexOf(q) !== -1) ||
+					   (c.code_title && c.code_title.toLowerCase().indexOf(q) !== -1) ||
+					   (c.short_name && c.short_name.toLowerCase().indexOf(q) !== -1);
+			});
+		}
+		return result;
+	}
+
+	function sortCodes(codes) {
+		var field = currentSort;
+		var asc = currentOrder === 'asc';
+		return codes.slice().sort(function(a, b) {
+			var va = a[field], vb = b[field];
+			if (va == null) va = '';
+			if (vb == null) vb = '';
+			if (typeof va === 'number' && typeof vb === 'number') {
+				return asc ? va - vb : vb - va;
+			}
+			va = String(va); vb = String(vb);
+			return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+		});
+	}
+
+	function formatSize(bytes) {
+		if (!bytes) return '\u2014';
+		var mb = bytes / 1048576;
+		return mb < 1000 ? mb.toFixed(1) + ' MB' : (mb / 1024).toFixed(2) + ' GB';
+	}
+
+	function formatDate(s) {
+		return s ? s.substring(0, 10) : '\u2014';
+	}
+
+	function render() {
+		var filtered = sortCodes(filterCodes());
+		var totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+		if (currentPage > totalPages) currentPage = totalPages;
+		var start = (currentPage - 1) * PER_PAGE;
+		var page = filtered.slice(start, start + PER_PAGE);
+
+		// Table body
+		var tbody = document.getElementById('code-tbody');
+		var html = '';
+		for (var i = 0; i < page.length; i++) {
+			var c = page[i];
+			var url = detailUrlBase.replace('__ASCL_ID__', c.ascl_id);
+			html += '<tr class="status-' + c.status + '">' +
+				'<td><a href="' + url + '">' + c.ascl_id + '</a></td>' +
+				'<td class="td-title">' + (c.short_name || c.code_title.substring(0, 50)) + '</td>' +
+				'<td><span class="badge badge-' + c.archive_type + '">' + c.archive_type + '</span></td>' +
+				'<td><span class="badge badge-' + c.status + '">' + c.status + '</span></td>' +
+				'<td class="td-right">' + formatSize(c.size_bytes) + '</td>' +
+				'<td>' + formatDate(c.last_updated) + '</td>' +
+				'<td>' + formatDate(c.last_checked) + '</td>' +
+				'</tr>';
+		}
+		tbody.innerHTML = html;
+
+		// Result count
+		document.getElementById('result-count').textContent = filtered.length + ' codes';
+
+		// Sort headers
+		var ths = document.querySelectorAll('.sortable');
+		for (var j = 0; j < ths.length; j++) {
+			ths[j].classList.remove('sort-asc', 'sort-desc');
+			if (ths[j].getAttribute('data-sort') === currentSort) {
+				ths[j].classList.add(currentOrder === 'asc' ? 'sort-asc' : 'sort-desc');
+			}
+		}
+
+		// Pagination
+		var pag = document.getElementById('pagination');
+		if (totalPages <= 1) {
+			pag.innerHTML = '<span>' + filtered.length + ' codes</span>';
+		} else {
+			pag.innerHTML =
+				'<a' + (currentPage <= 1 ? ' class="disabled"' : '') + ' onclick="window._icePage(' + (currentPage - 1) + ')">&laquo; Prev</a>' +
+				'<span>Page ' + currentPage + ' of ' + totalPages + ' (' + filtered.length + ' codes)</span>' +
+				'<a' + (currentPage >= totalPages ? ' class="disabled"' : '') + ' onclick="window._icePage(' + (currentPage + 1) + ')">Next &raquo;</a>';
+		}
+	}
+
+	// Expose pagination to global scope for onclick
+	window._icePage = function(p) { currentPage = p; render(); };
+
+	// Filter buttons
+	document.querySelectorAll('.filter-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var group = this.getAttribute('data-filter');
+			var value = this.getAttribute('data-value');
+			filters[group] = value;
+			// Update active state within group
+			this.parentElement.querySelectorAll('.filter-btn').forEach(function(b) {
+				b.classList.remove('active');
+			});
+			this.classList.add('active');
+			currentPage = 1;
+			render();
+		});
+	});
+
+	// Search
+	var searchInput = document.getElementById('search-input');
+	var debounceTimer;
+	searchInput.addEventListener('input', function() {
+		clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(function() {
+			searchTerm = searchInput.value.trim();
+			currentPage = 1;
+			render();
+		}, 150);
+	});
+
+	// Sort headers
+	document.querySelectorAll('.sortable').forEach(function(th) {
+		th.addEventListener('click', function() {
+			var field = this.getAttribute('data-sort');
+			if (currentSort === field) {
+				currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+			} else {
+				currentSort = field;
+				currentOrder = field === 'ascl_id' ? 'asc' : 'desc';
+			}
+			render();
+		});
+	});
+
+	// Initial render
+	render();
+})();
+</script>
+{% endblock %}

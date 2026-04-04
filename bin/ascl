@@ -4,7 +4,7 @@ ascl — management CLI for the ASCL Flask application.
 
 Usage:
     ascl restart [TARGET]      Restart the app (default target from config)
-    ascl redeploy TARGET       Full redeploy (sync code, install deps, restart)
+    ascl redeploy TARGET [-f]  Full redeploy (sync code, install deps, restart)
     ascl status [TARGET]       Show app/service status
     ascl config                Show resolved config for a target
     ascl typesense reset       Drop collection, recreate schema, re-index
@@ -69,6 +69,17 @@ secrets_file = "/etc/ascl/secrets.cfg"
 # Typesense
 typesense_url        = "http://127.0.0.1:8108"
 typesense_collection = "codes"
+
+# Library dependencies to sync and install during redeploy.
+# Each [[vps.libs]] entry has repo (source) and deploy (destination) paths.
+# Uncomment and set paths to enable:
+# [[vps.libs]]
+# repo   = "/path/to/ascl_core"
+# deploy = "/var/www/ascl_core"
+#
+# [[vps.libs]]
+# repo   = "/path/to/dm-dbcore"
+# deploy = "/var/www/dm-dbcore"
 
 # ---------------------------------------------------------------------------
 # cPanel target — Phusion Passenger
@@ -244,6 +255,57 @@ def _status_passenger(cfg):
 # Redeploy strategies
 # ---------------------------------------------------------------------------
 
+def _check_uncommitted(dirs, force=False):
+    """Abort if any of the given directories have uncommitted git changes.
+
+    Pass force=True to downgrade the error to a warning.
+    """
+    dirty = []
+    for d in dirs:
+        d = os.path.expanduser(d)
+        if not os.path.isdir(os.path.join(d, ".git")):
+            continue
+        result = subprocess.run(
+            ["git", "-C", d, "status", "--porcelain"],
+            capture_output=True, text=True,
+        )
+        if result.stdout.strip():
+            dirty.append(d)
+
+    if not dirty:
+        return
+
+    for d in dirty:
+        print(_yellow(f"  Uncommitted changes in {d}"))
+
+    if force:
+        print(_yellow("  --force: continuing anyway\n"))
+    else:
+        print(_red("\nAborting. Commit or stash changes first, or pass --force to override."))
+        sys.exit(1)
+
+
+def _sync_libs(cfg):
+    """Rsync library dependencies listed in cfg['libs'] to their deploy paths."""
+    libs = cfg.get("libs", [])
+    if not libs:
+        return
+    excludes = _rsync_excludes()
+
+    ssh_host = cfg.get("ssh_host", "")
+    ssh_user = cfg.get("ssh_user", "")
+    remote_prefix = ""
+    if ssh_host:
+        remote_prefix = f"{ssh_user}@{ssh_host}:" if ssh_user else f"{ssh_host}:"
+
+    _step("Syncing library dependencies")
+    for lib in libs:
+        src = os.path.expanduser(lib["repo"])
+        dst = os.path.expanduser(lib["deploy"])
+        print(f"  {src} → {dst}")
+        _run(f"rsync -a --delete {excludes} {src}/ {remote_prefix}{dst}/")
+
+
 def _sync_app(cfg):
     """Rsync the app source to the deploy path."""
     src = cfg.get("repo_app", "")
@@ -270,15 +332,23 @@ def _set_ownership(cfg):
     if not user:
         return
 
+    dirs = []
     deploy = os.path.expanduser(cfg.get("deploy_app", ""))
     if deploy:
+        dirs.append(deploy)
+    for lib in cfg.get("libs", []):
+        dirs.append(os.path.expanduser(lib["deploy"]))
+
+    if dirs:
         _step("Setting ownership")
-        _run(f"chown -R {user}:{user} {deploy}")
+        for d in dirs:
+            _run(f"chown -R {user}:{user} {d}")
 
 
 def _install_deps(cfg, use_ssh=False):
     _step("Installing dependencies")
     deploy = os.path.expanduser(cfg["deploy_app"])
+    libs = cfg.get("libs", [])
 
     ssh_host = cfg.get("ssh_host", "")
     if use_ssh and ssh_host:
@@ -292,12 +362,19 @@ def _install_deps(cfg, use_ssh=False):
         venv = os.path.join(deploy, ".venv")
         env_vars = f"UV_CACHE_DIR=/var/cache/uv VIRTUAL_ENV={venv}"
         prefix = f"runuser -u {user} -- env {env_vars}"
+        # Install library dependencies from their deploy paths
+        for lib in libs:
+            dst = os.path.expanduser(lib["deploy"])
+            _run(f"{prefix} uv pip install {dst}")
         _run(f"{prefix} uv pip install -r {deploy}/requirements.txt")
     else:
+        for lib in libs:
+            dst = os.path.expanduser(lib["deploy"])
+            _run(f"cd {dst} && pip install .")
         _run(f"cd {deploy} && pip install -r requirements.txt")
 
 
-def _redeploy_vps(target_name, cfg):
+def _redeploy_vps(target_name, cfg, force=False):
     _require_root()
 
     secrets = cfg.get("secrets_file", "")
@@ -305,11 +382,17 @@ def _redeploy_vps(target_name, cfg):
         print(_red(f"Error: {secrets} not found."))
         sys.exit(1)
 
+    # Block on uncommitted changes unless --force
+    repo_dirs = [cfg.get("repo_app", "")]
+    repo_dirs += [lib["repo"] for lib in cfg.get("libs", [])]
+    _check_uncommitted([d for d in repo_dirs if d], force=force)
+
     service = cfg["service_name"]
 
     _step("Stopping service")
     _run(f"systemctl stop {service}")
 
+    _sync_libs(cfg)
     _sync_app(cfg)
     _set_ownership(cfg)
     _install_deps(cfg)
@@ -347,10 +430,11 @@ def cmd_restart(args):
 def cmd_redeploy(args):
     config = _load_config()
     target_name, cfg = _resolve_target(args, config)
+    force = getattr(args, "force", False)
 
     method = cfg.get("restart_method", "systemd")
     if method == "systemd":
-        _redeploy_vps(target_name, cfg)
+        _redeploy_vps(target_name, cfg, force=force)
     elif method == "passenger":
         _redeploy_cpanel(target_name, cfg)
     else:
@@ -587,6 +671,8 @@ def main():
     # ascl redeploy <target>
     p = sub.add_parser("redeploy", help="Full redeploy (sync, install, restart)")
     p.add_argument("target", nargs="?", choices=TARGETS, help="Deployment target")
+    p.add_argument("--force", "-f", action="store_true",
+                   help="Deploy even if repos have uncommitted changes")
     p.set_defaults(func=cmd_redeploy)
 
     # ascl status [target]
@@ -620,6 +706,10 @@ def main():
     # ascl typesense {reset,index,status}
     from ascl_typesense import register_subcommands as _register_ts
     _register_ts(sub, _load_config)
+
+    # ascl linkcheck [options]
+    from ascl_link_checker import register_subcommands as _register_lc
+    _register_lc(sub, _load_config)
 
     args = parser.parse_args()
     if not args.command:

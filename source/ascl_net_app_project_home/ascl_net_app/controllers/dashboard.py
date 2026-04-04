@@ -2,8 +2,7 @@
 
 import flask
 from flask import render_template, session
-from sqlalchemy import func, extract, desc, text, distinct
-from datetime import datetime
+from sqlalchemy import func, desc, text, distinct
 
 dashboard_page = flask.Blueprint("dashboard_page", __name__, url_prefix="/dashboard")
 
@@ -241,17 +240,6 @@ def _build_dashboard_context():
 		.scalar() or 0
 	)
 
-	# Total keywords
-	stats["total_keywords"] = (
-		db_session.query(func.count(ascldb.Keyword.pk))
-		.scalar() or 0
-	)
-
-	# Total links
-	stats["total_links"] = (
-		db_session.query(func.count(ascldb.Link.pk))
-		.scalar() or 0
-	)
 
 	# Codes indexed in ADS (have a bibcode)
 	ads_indexed = (
@@ -274,15 +262,6 @@ def _build_dashboard_context():
 	stats["codes_with_citations"] = codes_with_citations
 	stats["codes_with_citations_pct"] = round(100.0 * int(codes_with_citations) / int(stats["published_codes"])) if stats["published_codes"] else 0
 
-	# Pending submissions (unpublished, not archived)
-	pending = (
-		db_session.query(func.count(ascldb.ASCLCode.pk))
-		.filter(ascldb.ASCLCode.published == 0)
-		.filter(ascldb.ASCLCode.ascl_id != '0000.000')
-		.filter((ascldb.ASCLCode.archived == 0) | (ascldb.ASCLCode.archived == None))
-		.scalar() or 0
-	)
-	stats["pending_submissions"] = pending
 
 	# === Codes Added by Year (from ascl_id, most recent 5 years with data) ===
 	# Matches production PHP: concat(century, substring(ascl_id, 1, 2))
@@ -338,9 +317,10 @@ def _build_dashboard_context():
 		j["full_name"] = _JOURNAL_NAMES.get(j["journal"], "")
 		j["pct"] = round(100.0 * j["count"] / total_journal_citations, 1) if total_journal_citations else 0
 
-	# Pie chart: top 10 + Other
-	top_journals = list(journal_rows[:10])
-	other_count = sum(r["count"] for r in journal_rows[10:])
+	# Pie chart: group any journal <5% into "Other"
+	top_journals = [j for j in journal_rows if j["pct"] >= 5.0]
+	small_journals = [j for j in journal_rows if j["pct"] < 5.0]
+	other_count = sum(r["count"] for r in small_journals)
 	if other_count:
 		other_pct = round(100.0 * other_count / total_journal_citations, 1) if total_journal_citations else 0
 		top_journals.append({"journal": "Other", "full_name": "", "count": other_count, "pct": other_pct})
@@ -384,15 +364,6 @@ def _build_dashboard_context():
 		"bibcode": missing_bibcode,
 	}
 
-	# === Current Year Stats ===
-	current_year = datetime.now().year
-	codes_this_year = (
-		db_session.query(func.count(ascldb.ASCLCode.pk))
-		.filter(extract("year", ascldb.ASCLCode.time_added) == current_year)
-		.filter(ascldb.ASCLCode.published == 1)
-		.scalar() or 0
-	)
-	stats["codes_this_year"] = codes_this_year
 
 	# === Admin-Only Stats (only when logged in) ===
 	is_admin = bool(session.get("user_id"))
@@ -454,6 +425,30 @@ def _build_dashboard_context():
 			.filter(ascldb.ASCLCode.ascl_id != '0000.000')
 			.scalar() or 0
 		)
+
+	# === Link Check Summary (code-site links) ===
+	# Use strict counting (HTTP 200/202 only) for the headline number,
+	# matching the production site's methodology.
+	link_check_row = db_session.execute(text("""
+		SELECT COUNT(*) AS total_links,
+		       SUM(lc.http_status IN (200, 202)) AS working_links,
+		       MAX(lc.checked_at) AS last_checked
+		FROM link_check lc
+		JOIN link l ON l.pk = lc.link_pk
+		WHERE l.link_type_pk = 2
+	""")).one()
+
+	if link_check_row.total_links and link_check_row.total_links > 0:
+		wl = int(link_check_row.working_links or 0)
+		tl = int(link_check_row.total_links)
+		stats["link_check"] = {
+			"working_links": wl,
+			"total_links": tl,
+			"pct": round(100.0 * wl / tl, 2),
+			"last_checked": link_check_row.last_checked,
+		}
+	else:
+		stats["link_check"] = None
 
 	db_session.close()
 

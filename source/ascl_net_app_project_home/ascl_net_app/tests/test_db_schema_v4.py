@@ -717,4 +717,4 @@ class TestMigrationSummary:
         # Should have at least the core tables
         assert len(tables) >= 10, f"Expected at least 10 tables, got {len(tables)}"
         # Should not have too many (legacy cleanup)
-        assert len(tables) <= 20, f"Too many tables ({len(tables)}), check legacy cleanup"
+        assert len(tables) <= 21, f"Too many tables ({len(tables)}), check legacy cleanup"

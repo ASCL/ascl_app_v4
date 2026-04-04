@@ -1,16 +1,21 @@
 <div class="dashboard-container">
 	<h1>ASCL Statistics Dashboard</h1>
 
+	{% if stats.link_check %}
+	<p class="link-check-summary">
+		{{ stats.link_check.working_links|number_format }} site links
+		({{ stats.link_check.pct }}%) are working
+		as of <span class="toggleable-time" data-utc="{{ stats.link_check.last_checked.strftime('%Y-%m-%dT%H:%M:%S') }}">{{ stats.link_check.last_checked.strftime('%b %-d, %Y %H:%M') }} UTC</span>.*
+		{% if is_admin %}<a href="{{ url_for('admin_page.broken_links') }}">Link check page.</a>{% endif %}
+	</p>
+	{% endif %}
+
 	<!-- Overall Statistics -->
 	<div class="stats-grid-bar">
-		<span><strong>{{ stats.published_codes|number_format }}</strong> codes in the ASCL</span>
-		<span><strong>{{ stats.total_citations|number_format }}</strong> citations in ADS</span>
-		<span><strong>{{ stats.codes_this_year|number_format }}</strong> added this year</span>
-		<span><strong>{{ stats.pending_submissions|number_format }}</strong> pending</span>
-		<span><strong>{{ stats.ads_indexed|number_format }}</strong> indexed in ADS ({{ stats.ads_indexed_pct }}%)</span>
-		<span><strong>{{ stats.codes_with_citations|number_format }}</strong> with citations ({{ stats.codes_with_citations_pct }}%)</span>
-		<span class="stat-muted"><strong>{{ stats.total_keywords|number_format }}</strong> keywords</span>
-		<span><strong>{{ stats.total_links|number_format }}</strong> external links</span>
+		<div><strong>{{ stats.published_codes|number_format }}</strong> codes in the ASCL</div>
+		<div><strong>{{ stats.total_citations|number_format }}</strong> citations in ADS</div>
+		<div><strong>{{ stats.ads_indexed|number_format }}</strong> indexed in ADS ({{ stats.ads_indexed_pct }}%)</div>
+		<div><strong>{{ stats.codes_with_citations|number_format }}</strong> with citations ({{ stats.codes_with_citations_pct }}%)</div>
 	</div>
 
 	{% if is_admin and admin_stats %}
@@ -131,6 +136,10 @@
 		</div>
 	</section>
 
+	{% if stats.link_check %}
+	<p class="dashboard-footnote">* The scripts to build the information on this page are run twice a week; the date and time of the most recent run is at the top of the page. The percentage of working site links is lowered artificially by links that do not respond to checking and FTP sites the link checker reports as bad but are working.</p>
+	{% endif %}
+
 </div>
 
 <style>
@@ -143,6 +152,24 @@
 .dashboard-container > h1 {
 	margin: 0 0 12px 0;
 	font-size: 24px;
+}
+
+.link-check-summary {
+	margin: 0 0 12px 0;
+	font-size: 14px;
+	color: #444;
+}
+
+.toggleable-time {
+	cursor: pointer;
+	border-bottom: 1px dotted #aaa;
+}
+
+.dashboard-footnote {
+	font-size: 11px;
+	color: #888;
+	margin-top: 8px;
+	line-height: 1.4;
 }
 
 .dashboard-section {
@@ -162,13 +189,10 @@
 }
 
 .stats-grid-bar {
-	display: grid;
-	grid-template-columns: repeat(4, 1fr);
-	gap: 0 24px;
 	font-size: 14px;
 	color: #444;
 	margin-bottom: 16px;
-	line-height: 1.5;
+	line-height: 1.8;
 }
 
 .stats-grid-bar strong {
@@ -659,6 +683,24 @@ document.addEventListener('DOMContentLoaded', function() {
 			}
 		});
 		if (btn) btn.style.display = q ? 'none' : '';
+	});
+
+	// Toggleable UTC/EST timestamps
+	document.querySelectorAll('.toggleable-time').forEach(function(el) {
+		var utcStr = el.getAttribute('data-utc');
+		var utcDate = new Date(utcStr + 'Z');
+		var estStr = utcDate.toLocaleString('en-US', {
+			timeZone: 'America/New_York',
+			year: 'numeric', month: 'short', day: 'numeric',
+			hour: '2-digit', minute: '2-digit', hour12: false,
+		});
+		var showingUTC = true;
+		var utcFormatted = el.textContent;
+
+		el.addEventListener('click', function() {
+			showingUTC = !showingUTC;
+			el.textContent = showingUTC ? utcFormatted : estStr + ' EST';
+		});
 	});
 });
 </script>

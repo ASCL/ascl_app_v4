@@ -34,6 +34,9 @@
 				<a href="{{ url_for('admin_page.corrections') }}" class="nav-link {% if request.endpoint == 'admin_page.corrections' %}active{% endif %}">
 					<span class="nav-icon">&#9998;</span><span class="nav-text">Corrections</span>
 				</a>
+				<a href="{{ url_for('admin_page.broken_links') }}" class="nav-link {% if request.endpoint == 'admin_page.broken_links' %}active{% endif %}">
+					<span class="nav-icon">&#128279;</span><span class="nav-text">Broken Links</span>
+				</a>
 			</div>
 			<div class="nav-section">
 				<div class="nav-section-title">Utilities</div>

@@ -1,0 +1,516 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Link Check Results — ASCL Admin{% endblock %}
+
+{% block admin_content %}
+<h1>Link Check Results</h1>
+
+{% if summary.total_checked and summary.total_checked > 0 %}
+<p class="broken-links-summary">
+	{{ summary.working|int }} / {{ summary.total_checked }} site links working
+	({{ (100.0 * (summary.working|int) / (summary.total_checked|int))|round(1) }}%)
+	&mdash; last checked <span class="toggleable-time" data-utc="{{ summary.last_checked.strftime('%Y-%m-%dT%H:%M:%S') }}">{{ summary.last_checked.strftime('%b %-d, %Y %H:%M') }} UTC</span>
+</p>
+{% endif %}
+
+<!-- Filter buttons -->
+<div class="filter-groups">
+<div class="status-filters" id="status-filters">
+	<span class="filter-label">Status:</span>
+	<button class="filter-btn active" data-filter="broken" data-group="status" onclick="setFilter(this)">
+		Broken <span class="filter-count">{{ counts.broken }}</span>
+	</button>
+	<button class="filter-btn" data-filter="timeout" data-group="status" onclick="setFilter(this)">
+		Timeout/Conn <span class="filter-count">{{ counts.timeout }}</span>
+	</button>
+	<button class="filter-btn" data-filter="ssl" data-group="status" onclick="setFilter(this)">
+		SSL <span class="filter-count">{{ counts.ssl }}</span>
+	</button>
+	<button class="filter-btn" data-filter="noted" data-group="status" onclick="setFilter(this)">
+		Noted <span class="filter-count">{{ counts.noted }}</span>
+	</button>
+	<button class="filter-btn" data-filter="ok" data-group="status" onclick="setFilter(this)">
+		OK <span class="filter-count">{{ counts.ok }}</span>
+	</button>
+	<button class="filter-btn" data-filter="all" data-group="status" onclick="setFilter(this)">
+		All <span class="filter-count">{{ counts.all }}</span>
+	</button>
+</div>
+<div class="status-filters" id="domain-filters">
+	<span class="filter-label">Domain:</span>
+	<button class="filter-btn active" data-filter="any" data-group="domain" onclick="setFilter(this)">
+		Any
+	</button>
+	<button class="filter-btn" data-filter="academic" data-group="domain" onclick="setFilter(this)">
+		Department Links <span class="filter-count">{{ domain_counts.academic }}</span>
+	</button>
+	<button class="filter-btn" data-filter="github" data-group="domain" onclick="setFilter(this)">
+		GitHub <span class="filter-count">{{ domain_counts.github }}</span>
+	</button>
+	<button class="filter-btn" data-filter="not-github" data-group="domain" onclick="setFilter(this)">
+		Not GitHub <span class="filter-count">{{ domain_counts['not-github'] }}</span>
+	</button>
+</div>
+<div class="status-filters" id="signal-filters">
+	<span class="filter-label">Signals:</span>
+	<button class="filter-btn active" data-filter="any" data-group="signal" onclick="setFilter(this)">
+		Any
+	</button>
+	<button class="filter-btn" data-filter="title-changed" data-group="signal" onclick="setFilter(this)">
+		Title Changed <span class="filter-count">{{ signal_counts['title-changed'] }}</span>
+	</button>
+	<button class="filter-btn" data-filter="domain-changed" data-group="signal" onclick="setFilter(this)">
+		Domain Changed <span class="filter-count">{{ signal_counts['domain-changed'] }}</span>
+	</button>
+</div>
+</div>
+
+<div class="broken-links-toolbar">
+	<input type="text" id="broken-filter" class="broken-filter" placeholder="Filter by ASCL ID, URL, or note...">
+	<span class="broken-count" id="broken-count"></span>
+</div>
+
+{% if link_checks %}
+<div class="broken-links-wrap">
+<table class="data-table compact-table" id="broken-links-table">
+	<thead>
+		<tr>
+			<th>ASCL ID</th>
+			<th>URL</th>
+			<th>Status</th>
+			<th>Title</th>
+			<th>Note</th>
+			<th>Fails</th>
+			<th>Last Worked</th>
+			<th></th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for row in link_checks %}
+		<tr class="broken-row"
+		    data-status="{% if row.is_working %}{% if row.note %}noted ok{% else %}ok{% endif %}{% elif row.http_status == 0 %}timeout broken{% elif row.http_status == -1 %}ssl broken{% else %}broken{% endif %}"
+		    data-domain="{{ row.domain_tags }}"
+		    data-signal="{% if row.title_changed %}title-changed {% endif %}{% if row.domain_changed %}domain-changed {% endif %}">
+			<td>
+				{% for aid in row.ascl_ids %}
+				<a href="/{{ aid }}">{{ aid }}</a>{% if not loop.last %}<br>{% endif %}
+				{% endfor %}
+			</td>
+			<td class="url-cell">
+				<a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.url|truncate(60) }}</a>
+				<span class="copy-btn" title="Copy URL" onclick="copyUrl(this, '{{ row.url|e }}')">&#x29C9;</span>
+				{% if row.domain_changed and row.final_url %}
+				<br><span class="signal-badge domain-changed">redirects to {{ row.final_url|truncate(50) }}</span>
+				{% endif %}
+			</td>
+			<td>
+				{% if row.http_status == 0 %}
+				<span class="status-code status-err">&empty;</span><br><span class="status-msg">Could not connect</span>
+				{% elif row.http_status == -1 %}
+				<span class="status-code status-err">&empty;</span><br><span class="status-msg">SSL error</span>
+				{% elif row.http_status == -2 %}
+				<span class="status-code status-err">&empty;</span><br><span class="status-msg">Request error</span>
+				{% else %}
+				<span class="status-code status-{{ 'ok' if row.is_working else ('4xx' if row.http_status >= 400 and row.http_status < 500 else ('5xx' if row.http_status >= 500 else 'other')) }}">{{ row.http_status }}</span>
+				{% if row.message and row.message.strip() %}<br><span class="status-msg">{{ row.message|truncate(40) }}</span>{% endif %}
+				{% endif %}
+			</td>
+			<td class="title-cell">
+				{% if row.page_title %}
+				{{ row.page_title|truncate(50) }}
+				{% endif %}
+				{% if row.title_ok and row.title_ok != row.page_title %}
+				<br><span class="signal-badge title-changed">was: {{ row.title_ok|truncate(40) }}</span>
+				{% endif %}
+			</td>
+			<td>
+				{% if row.note %}
+				<span class="signal-badge note-badge">{{ row.note }}</span>
+				{% endif %}
+			</td>
+			<td class="fail-count {% if row.fail_count >= 6 %}fail-high{% elif row.fail_count >= 3 %}fail-med{% endif %}">
+				{{ row.fail_count }}
+			</td>
+			<td class="date-cell">
+				{% if row.last_working %}{{ row.last_working.strftime('%Y-%m-%d') }}{% else %}&mdash;{% endif %}
+			</td>
+			<td class="action-cell">
+				<button class="check-btn" title="Re-check this URL" onclick="checkLink(this, '{{ row.url|e }}')">Check</button>
+			</td>
+		</tr>
+		{% endfor %}
+	</tbody>
+</table>
+</div>
+{% else %}
+<p>No link check results found. Run the link checker first: <code>ascl linkcheck</code></p>
+{% endif %}
+
+<style>
+.broken-links-summary {
+	font-size: 14px;
+	color: #555;
+	margin-bottom: 12px;
+}
+
+.toggleable-time {
+	cursor: pointer;
+	border-bottom: 1px dotted #aaa;
+}
+
+.filter-groups {
+	margin-bottom: 10px;
+}
+
+.status-filters {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 4px;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+.filter-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: #888;
+	text-transform: uppercase;
+	letter-spacing: 0.3px;
+	width: 60px;
+	flex-shrink: 0;
+	text-align: right;
+	margin-right: 4px;
+}
+
+.filter-btn {
+	padding: 5px 12px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	background: #f8f8f8;
+	cursor: pointer;
+	font-size: 13px;
+	color: #555;
+	transition: all 0.15s;
+}
+
+.filter-btn:hover {
+	background: #e8e8e8;
+}
+
+.filter-btn.active {
+	background: #262255;
+	color: #fff;
+	border-color: #262255;
+}
+
+.filter-count {
+	font-weight: 600;
+	margin-left: 2px;
+}
+
+.broken-links-toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 10px;
+}
+
+.broken-filter {
+	width: 350px;
+	padding: 6px 10px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-size: 14px;
+}
+
+.broken-count {
+	font-size: 13px;
+	color: #888;
+}
+
+.broken-links-wrap {
+	overflow-x: auto;
+}
+
+#broken-links-table th,
+#broken-links-table td {
+	padding: 5px 8px;
+	font-size: 12px;
+	line-height: 1.3;
+	vertical-align: top;
+}
+
+.url-cell {
+	max-width: 300px;
+	word-break: break-all;
+}
+
+.url-cell a {
+	color: #2980b9;
+}
+
+.title-cell {
+	max-width: 200px;
+}
+
+.date-cell {
+	white-space: nowrap;
+	font-size: 11px;
+	color: #888;
+}
+
+.status-code {
+	font-weight: 600;
+	font-size: 12px;
+	padding: 1px 5px;
+	border-radius: 3px;
+}
+
+.status-4xx { background: #fdecea; color: #c0392b; }
+.status-5xx { background: #fef3cd; color: #856404; }
+.status-err { background: #e2e3e5; color: #495057; }
+.status-ok  { background: #d4edda; color: #155724; }
+.status-other { background: #f0f0f0; color: #555; }
+
+.status-msg {
+	font-size: 11px;
+	color: #999;
+}
+
+.signal-badge {
+	display: inline-block;
+	font-size: 10px;
+	padding: 1px 5px;
+	border-radius: 3px;
+	margin-top: 2px;
+}
+
+.domain-changed {
+	background: #fff3cd;
+	color: #856404;
+}
+
+.title-changed {
+	background: #e8f4fd;
+	color: #31708f;
+}
+
+.note-badge {
+	background: #f5e6ff;
+	color: #6f42c1;
+}
+
+.fail-count {
+	text-align: center;
+	font-weight: 600;
+}
+
+.fail-high {
+	color: #c0392b;
+}
+
+.fail-med {
+	color: #e67e22;
+}
+
+.broken-row.row-alt {
+	background: #f8f9fa;
+}
+
+.copy-btn {
+	cursor: pointer;
+	color: #aaa;
+	font-size: 13px;
+	margin-left: 4px;
+	vertical-align: middle;
+}
+
+.copy-btn:hover {
+	color: #352bb3;
+}
+
+.copy-btn.copied {
+	color: #27ae60;
+}
+
+.action-cell {
+	white-space: nowrap;
+}
+
+.check-btn {
+	padding: 2px 8px;
+	font-size: 11px;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+	background: #f8f8f8;
+	cursor: pointer;
+	color: #555;
+}
+
+.check-btn:hover {
+	background: #e8e8e8;
+}
+
+.check-btn.checking {
+	opacity: 0.5;
+	cursor: wait;
+}
+
+.check-btn.check-ok {
+	background: #d4edda;
+	border-color: #27ae60;
+	color: #155724;
+}
+
+.check-btn.check-fail {
+	background: #fdecea;
+	border-color: #c0392b;
+	color: #c0392b;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+	var filterInput = document.getElementById('broken-filter');
+	var countEl = document.getElementById('broken-count');
+	var rows = document.querySelectorAll('#broken-links-table .broken-row');
+	var activeStatus = 'broken';
+	var activeDomain = 'any';
+	var activeSignal = 'any';
+
+	function applyFilters() {
+		var q = filterInput.value.toLowerCase();
+		var visible = 0;
+		var matched = 0;
+		var stripe = 0;
+
+		rows.forEach(function(row) {
+			var statuses = row.getAttribute('data-status');
+			var domains = row.getAttribute('data-domain') || '';
+			var signals = row.getAttribute('data-signal') || '';
+
+			var matchesStatus = (activeStatus === 'all') || statuses.indexOf(activeStatus) >= 0;
+
+			var matchesDomain = true;
+			if (activeDomain === 'academic') {
+				matchesDomain = domains.indexOf('academic') >= 0;
+			} else if (activeDomain === 'github') {
+				matchesDomain = domains.indexOf('github') >= 0;
+			} else if (activeDomain === 'not-github') {
+				matchesDomain = domains.indexOf('github') < 0;
+			}
+
+			var matchesSignal = (activeSignal === 'any') || signals.indexOf(activeSignal) >= 0;
+
+			var matchesText = !q || row.textContent.toLowerCase().indexOf(q) >= 0;
+			var show = matchesStatus && matchesDomain && matchesSignal && matchesText;
+			row.style.display = show ? '' : 'none';
+
+			if (matchesStatus && matchesDomain) matched++;
+			if (show) {
+				visible++;
+				row.classList.toggle('row-alt', stripe % 2 === 1);
+				stripe++;
+			}
+		});
+
+		if (q) {
+			countEl.textContent = visible + ' / ' + matched + ' shown';
+		} else {
+			countEl.textContent = matched + ' links';
+		}
+	}
+
+	window.setFilter = function(btn) {
+		var group = btn.getAttribute('data-group');
+		// Deactivate siblings in same group
+		btn.parentNode.querySelectorAll('.filter-btn').forEach(function(b) {
+			b.classList.remove('active');
+		});
+		btn.classList.add('active');
+
+		if (group === 'status') {
+			activeStatus = btn.getAttribute('data-filter');
+		} else if (group === 'domain') {
+			activeDomain = btn.getAttribute('data-filter');
+		} else if (group === 'signal') {
+			activeSignal = btn.getAttribute('data-filter');
+		}
+		applyFilters();
+	};
+
+	filterInput.addEventListener('input', applyFilters);
+
+	// Apply initial filter
+	applyFilters();
+
+	// Toggleable UTC/EST timestamps
+	document.querySelectorAll('.toggleable-time').forEach(function(el) {
+		var utcStr = el.getAttribute('data-utc');
+		var utcDate = new Date(utcStr + 'Z');
+		var estStr = utcDate.toLocaleString('en-US', {
+			timeZone: 'America/New_York',
+			year: 'numeric', month: 'short', day: 'numeric',
+			hour: '2-digit', minute: '2-digit', hour12: false,
+		});
+		var showingUTC = true;
+		var utcFormatted = el.textContent;
+
+		el.addEventListener('click', function() {
+			showingUTC = !showingUTC;
+			el.textContent = showingUTC ? utcFormatted : estStr + ' EST';
+		});
+	});
+
+	// Copy URL to clipboard
+	window.copyUrl = function(el, url) {
+		navigator.clipboard.writeText(url).then(function() {
+			el.classList.add('copied');
+			var orig = el.innerHTML;
+			el.innerHTML = '&#x2713;';
+			setTimeout(function() {
+				el.classList.remove('copied');
+				el.innerHTML = orig;
+			}, 1500);
+		});
+	};
+
+	// Re-check a single URL
+	window.checkLink = function(btn, url) {
+		if (btn.classList.contains('checking')) return;
+		btn.classList.add('checking');
+		btn.textContent = '...';
+
+		var form = new FormData();
+		form.append('url', url);
+
+		fetch('{{ url_for("admin_page.check_single_link") }}', {
+			method: 'POST',
+			body: form,
+		})
+		.then(function(r) { return r.json(); })
+		.then(function(data) {
+			btn.classList.remove('checking');
+			if (data.is_working) {
+				btn.classList.add('check-ok');
+				btn.textContent = data.http_status + ' OK';
+			} else {
+				btn.classList.add('check-fail');
+				btn.textContent = data.http_status || 'Fail';
+			}
+			// Update the status cell in the same row
+			var row = btn.closest('tr');
+			if (data.note) {
+				var noteCell = row.cells[4];
+				noteCell.innerHTML = '<span class="signal-badge note-badge">' + data.note + '</span>';
+			}
+		})
+		.catch(function() {
+			btn.classList.remove('checking');
+			btn.classList.add('check-fail');
+			btn.textContent = 'Error';
+		});
+	};
+});
+</script>
+{% endblock %}

@@ -378,6 +378,10 @@ def code_detail(ascl_id):
 
 	keywords = [row.label for row in keyword_rows]
 
+	# Discovery bar: check if "Referenced by" pill should appear
+	from ascl_net_app.controllers.browse import has_referenced_by
+	show_referenced_by = has_referenced_by(session, code.ascl_id, code.pk, code.title)
+
 	templateDict = {
 		'code': code,
 		'site_links': site_links,
@@ -388,6 +392,7 @@ def code_detail(ascl_id):
 		'untyped_links': untyped_links,
 		'keywords': keywords,
 		'has_keywords': has_keywords,
+		'show_referenced_by': show_referenced_by,
 		'author_count': author_count,
 		'author_has_other_codes': author_has_other_codes,
 		'domain_matches': domain_matches,

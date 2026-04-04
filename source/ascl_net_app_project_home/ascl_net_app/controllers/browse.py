@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+import re
+
 import flask
 from flask import request, render_template, redirect
 from sqlalchemy import func, text
@@ -230,9 +232,48 @@ def discover_similar(ascl_id):
 	return redirect(request.referrer or "/code/all")
 
 
+_COMMON_WORDS = frozenset({
+	'a', 'an', 'and', 'are', 'as', 'at', 'be', 'body', 'by', 'can', 'code',
+	'data', 'for', 'from', 'has', 'in', 'is', 'it', 'its', 'new', 'not',
+	'of', 'on', 'or', 'set', 'software', 'that', 'the', 'this', 'to',
+	'tool', 'use', 'used', 'using', 'was', 'which', 'with',
+})
+
+def has_referenced_by(session, ascl_id, code_pk, title):
+	''' Return True if at least one other published code references this code
+	    (by ASCL ID in abstract, or by significant title words via fulltext).
+	'''
+	# Tier 1: another code's abstract contains this code's ASCL ID
+	if session.execute(text("""
+		SELECT 1 FROM public_codes
+		WHERE abstract LIKE :id_pattern
+		  AND pk != :code_pk
+		LIMIT 1
+	"""), {"id_pattern": f"%{ascl_id}%", "code_pk": code_pk}).first():
+		return True
+
+	# Tier 2: fulltext match on significant title words
+	words = re.findall(r'[A-Za-z0-9][\w-]*', title)
+	significant = [w for w in words if w.lower() not in _COMMON_WORDS and len(w) > 2]
+	if significant:
+		search_expr = ' '.join(f'+{w}' for w in significant)
+		if session.execute(text("""
+			SELECT 1 FROM public_codes
+			WHERE MATCH(abstract) AGAINST(:terms IN BOOLEAN MODE)
+			  AND pk != :code_pk
+			LIMIT 1
+		"""), {"terms": search_expr, "code_pk": code_pk}).first():
+			return True
+
+	return False
+
 @code_page.route("/discover/mentioned/<ascl_id>", methods=['GET'])
 def discover_mentioned(ascl_id):
-	''' Redirect to a random published code that mentions this code's title in its abstract. '''
+	''' Redirect to a random published code that references this code.
+
+	Priority: 1) codes whose abstract contains this code's ASCL ID,
+	          2) codes whose abstract matches significant words from the title.
+	'''
 	from ascl_net_app.model.database import Database
 	db = Database()
 
@@ -240,16 +281,36 @@ def discover_mentioned(ascl_id):
 
 	# Get the source code's title
 	source = session.execute(text("""
-		SELECT pk, title FROM codes WHERE ascl_id = :ascl_id
+		SELECT pk, ascl_id, title FROM codes WHERE ascl_id = :ascl_id
 	"""), {"ascl_id": ascl_id}).first()
 
-	if source:
+	if not source:
+		return redirect(request.referrer or "/code/all")
+
+	# Tier 1: another code's abstract contains this code's ASCL ID
+	row = session.execute(text("""
+		SELECT ascl_id FROM public_codes
+		WHERE abstract LIKE :id_pattern
+		  AND pk != :source_pk
+		ORDER BY RAND() LIMIT 1
+	"""), {"id_pattern": f"%{source.ascl_id}%", "source_pk": source.pk}).first()
+
+	if row:
+		return redirect(f"/{row.ascl_id}")
+
+	# Tier 2: fulltext match on significant title words
+	words = re.findall(r'[A-Za-z0-9][\w-]*', source.title)
+	significant = [w for w in words if w.lower() not in _COMMON_WORDS and len(w) > 2]
+
+	if significant:
+		# Boolean mode: all significant words required
+		search_expr = ' '.join(f'+{w}' for w in significant)
 		row = session.execute(text("""
 			SELECT ascl_id FROM public_codes
-			WHERE MATCH(abstract) AGAINST(:title IN NATURAL LANGUAGE MODE)
+			WHERE MATCH(abstract) AGAINST(:terms IN BOOLEAN MODE)
 			  AND pk != :source_pk
 			ORDER BY RAND() LIMIT 1
-		"""), {"title": source.title, "source_pk": source.pk}).first()
+		"""), {"terms": search_expr, "source_pk": source.pk}).first()
 
 		if row:
 			return redirect(f"/{row.ascl_id}")
