@@ -91,14 +91,6 @@ def test_submit_rejects_missing_abstract(client):
 	assert b"Abstract is required" in resp.data
 
 
-def test_submit_rejects_missing_site_url(client):
-	data = _valid_submit_form()
-	data["site_urls"] = ""
-	resp = client.post("/code/submit", data=data)
-	assert resp.status_code == 200
-	assert b"code site URL" in resp.data
-
-
 def test_submit_rejects_missing_name(client):
 	data = _valid_submit_form()
 	data["name"] = ""

@@ -289,8 +289,6 @@
 	font-size: 13px;
 	font-family: inherit;
 	white-space: nowrap;
-	width: 180px;
-	text-align: center;
 	box-sizing: border-box;
 }
 .bibcode-import-row .import-btn:hover {
@@ -431,7 +429,7 @@
 
 				<div class="field-group">
 					<label>Credit / Authors <span class="field-badge req">required</span></label>
-					<div class="field-help" style="margin-bottom:6px">Names are auto-normalized to "Surname, Firstname I." format. ORCID IDs are optional.<br>You can type one name at a time, paste multiple names separated by semicolons, or import from SciX (ADS) or ORCID.</div>
+					<div class="field-help" style="margin-bottom:6px">Names are auto-normalized to "Surname, Firstname I." format.<br>You can type one name at a time, paste multiple names separated by semicolons, or import from SciX (ADS).</div>
 					<div class="entry-manager" id="credit-manager">
 						<table class="entry-table" id="credit-table">
 							<thead><tr><th>Name</th><th>ORCID ID</th><th></th></tr></thead>
@@ -444,10 +442,10 @@
 						</div>
 						<div class="bibcode-import-row">
 							<input type="text" id="bibcode-import-input" placeholder="SciX/ADS bibcode" onkeydown="if(event.key==='Enter'){event.preventDefault();importFromBibcode();}">
-							<button type="button" class="import-btn" onclick="importFromBibcode()" id="bibcode-import-btn">Import from SciX Bibcode</button>
+							<button type="button" class="import-btn" onclick="importFromBibcode()" id="bibcode-import-btn">Import Authors From SciX Bibcode</button>
 							<span id="bibcode-import-status" class="bibcode-import-status"></span>
 						</div>
-						<div class="bibcode-import-row">
+						<div class="bibcode-import-row" style="display:none;">
 							<input type="text" id="orcid-import-input" placeholder="0000-0000-0000-000X" onkeydown="if(event.key==='Enter'){event.preventDefault();importFromOrcid();}">
 							<button type="button" class="import-btn" onclick="importFromOrcid()" id="orcid-import-btn">Import from ORCID</button>
 							<span id="orcid-import-status" class="bibcode-import-status"></span>
@@ -466,16 +464,10 @@
 
 			<!-- SECTION: Links & References -->
 			<div class="submit-section">
-				<h3>Links &amp; References</h3>
+				<h3>Links &amp; Citation</h3>
 
 				<div class="field-group">
-					<label for="citation_method">Preferred Citation Method</label>
-					<input type="text" name="citation_method" id="citation_method" value="{{ form_data.citation_method or '' }}" maxlength="255">
-					<div class="field-help">Bibcode for ASCL or paper entry; if using another method, please describe it in the notes field below. Plain text.</div>
-				</div>
-
-				<div class="field-group">
-					<label>Code Site URL(s) <span class="field-badge req">required</span></label>
+					<label>Code Site URL(s)</label>
 					<div class="entry-manager">
 						<table class="entry-table" id="code-site-table">
 							<thead><tr><th>URL</th><th></th></tr></thead>
@@ -487,7 +479,7 @@
 							<span id="code-site-status" class="entry-status"></span>
 						</div>
 					</div>
-					<div class="field-help">URL to a site from where your code can be downloaded or copied. At least one is required.</div>
+					<div class="field-help">URL to a site from where your code can be downloaded or copied.</div>
 					<input type="hidden" name="site_urls" id="site_urls_hidden" value="{{ form_data.site_urls or '' }}">
 				</div>
 
@@ -523,6 +515,12 @@
 					</div>
 					<div class="field-help">SciX (ADS) link to a paper that <em>uses</em> the software. <br>If no SciX link is available, enter a DOI or other link. No HTML.</div>
 					<input type="hidden" name="used_in_urls" id="used_in_urls_hidden" value="{{ form_data.used_in_urls or '' }}">
+				</div>
+
+				<div class="field-group">
+					<label for="citation_method">Preferred Citation Method</label>
+					<input type="text" name="citation_method" id="citation_method" value="{{ form_data.citation_method or '' }}" maxlength="255">
+					<div class="field-help">Bibcode for ASCL or paper entry; if using another method, please describe it in the notes field below. Plain text.</div>
 				</div>
 			</div>
 
@@ -752,7 +750,7 @@ function importFromBibcode() {
 	})
 	.finally(function() {
 		btn.disabled = false;
-		btn.textContent = 'Import from SciX Bibcode';
+		btn.textContent = 'Import Authors From SciX Bibcode';
 	});
 }
 

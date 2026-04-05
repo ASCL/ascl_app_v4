@@ -327,8 +327,7 @@ def submit_code():
 			errors.append("Credit (author names) is required.")
 		if not form_data['abstract']:
 			errors.append("Abstract is required.")
-		if not form_data['site_urls']:
-			errors.append("At least one code site URL is required.")
+
 		if not form_data['name']:
 			errors.append("Your name is required.")
 		if not form_data['email']:
@@ -364,7 +363,7 @@ def submit_code():
 				new_code.time_added = datetime.now()
 				new_code.time_updated = datetime.now()
 				new_code.ascl_id = '0000.000'  # User-submitted codes get placeholder ID
-				new_code.published = 0  # Not published until reviewed
+				new_code.published = 1  # Visible immediately; editor reviews later
 
 				db_session.add(new_code)
 				db_session.flush()  # Get the PK
