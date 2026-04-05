@@ -66,17 +66,17 @@
 	</tr>
 	<tr>
 		<th>Last Checked</th>
-		<td>{{ code.last_checked or '&mdash;'|safe }}</td>
+		<td>{% if code.last_checked %}<span class="toggleable-time" data-utc="{{ code.last_checked }}">{{ code.last_checked }}</span>{% else %}&mdash;{% endif %}</td>
 	</tr>
 	<tr>
 		<th>Last Updated</th>
-		<td>{{ code.last_updated or '&mdash;'|safe }}</td>
+		<td>{% if code.last_updated %}<span class="toggleable-time" data-utc="{{ code.last_updated }}">{{ code.last_updated }}</span>{% else %}&mdash;{% endif %}</td>
 	</tr>
 	<tr>
 		<th>Last Wayback</th>
 		<td>
 			{% if code.last_wayback %}
-				{{ code.last_wayback }}
+				<span class="toggleable-time" data-utc="{{ code.last_wayback }}">{{ code.last_wayback }}</span>
 				{% if code.wayback_url %}
 					&mdash; <a href="{{ code.wayback_url }}" target="_blank">view</a>
 				{% endif %}
@@ -94,11 +94,13 @@
 </table>
 
 <!-- Actions -->
-<div style="margin-top: 20px; display: flex; gap: 10px;">
-	{% if code.archive_type == 'git' %}
+<div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
+	{% if code.archive_type == 'git' and code.on_disk %}
 	<form method="POST" action="{{ url_for('icecave_page.icecave_trigger_sync_single', ascl_id=code.ascl_id) }}">
 		<button type="submit" class="btn btn-primary">Sync Now</button>
 	</form>
+	{% elif code.archive_type == 'git' and not code.on_disk %}
+	<span class="text-red" style="font-size: 13px;">Not on disk &mdash; initial clone failed or never ran</span>
 	{% endif %}
 
 	{% if code.source_url %}
@@ -109,12 +111,12 @@
 		</button>
 	</form>
 	<form method="POST" action="{{ url_for('icecave_page.icecave_wayback_check', ascl_id=code.ascl_id) }}">
-		<button type="submit" class="btn btn-sm">Check Wayback</button>
+		<button type="submit" class="btn btn-secondary">Check Wayback</button>
 	</form>
 	{% endif %}
 
 	<a href="{{ url_for('code_detail_page.code_detail', ascl_id=code.ascl_id) }}"
-	   class="btn btn-sm btn-secondary" target="_blank">View Code Page</a>
+	   class="btn btn-secondary" target="_blank">View Code Page</a>
 </div>
 
 {% if code.recent_events %}
@@ -131,7 +133,7 @@
 	<tbody>
 		{% for event in code.recent_events %}
 		<tr>
-			<td>{{ event.timestamp[:16] }}</td>
+			<td><span class="toggleable-time" data-utc="{{ event.timestamp }}">{{ event.timestamp[:16] }}</span></td>
 			<td><span class="badge badge-{{ event.result }}">{{ event.result }}</span></td>
 			<td>{{ event.error_message or '' }}</td>
 		</tr>
@@ -188,5 +190,72 @@
 .btn-primary:hover { background: #2980b9; }
 .btn-secondary { background: #6c757d; color: #fff; }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
+.toggleable-time {
+	cursor: pointer;
+	border-bottom: 1px dotted #6c757d;
+}
+.toggleable-time:hover {
+	color: #3498db;
+}
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+	var showingLocal = false;
+
+	document.querySelectorAll('.toggleable-time').forEach(function(el) {
+		var raw = el.getAttribute('data-utc');
+		// Parse the ISO string — append Z if no timezone info
+		var utcDate = new Date(raw.indexOf('Z') >= 0 || raw.indexOf('+') >= 0 ? raw : raw + 'Z');
+
+		if (isNaN(utcDate.getTime())) return;
+
+		var utcFormatted = utcDate.toLocaleString('en-US', {
+			timeZone: 'UTC',
+			year: 'numeric', month: 'short', day: 'numeric',
+			hour: '2-digit', minute: '2-digit', hour12: false,
+		}) + ' UTC';
+
+		var localFormatted = utcDate.toLocaleString('en-US', {
+			year: 'numeric', month: 'short', day: 'numeric',
+			hour: '2-digit', minute: '2-digit', hour12: false,
+		});
+		// Append timezone abbreviation
+		var tzName = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		var tzAbbr = utcDate.toLocaleString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+		localFormatted += ' ' + tzAbbr;
+
+		// Set initial display
+		el.textContent = utcFormatted;
+		el.title = 'Click to toggle timezone';
+	});
+
+	// Toggle all timestamps together on any click
+	document.addEventListener('click', function(e) {
+		if (!e.target.classList.contains('toggleable-time')) return;
+
+		showingLocal = !showingLocal;
+
+		document.querySelectorAll('.toggleable-time').forEach(function(el) {
+			var raw = el.getAttribute('data-utc');
+			var utcDate = new Date(raw.indexOf('Z') >= 0 || raw.indexOf('+') >= 0 ? raw : raw + 'Z');
+			if (isNaN(utcDate.getTime())) return;
+
+			if (showingLocal) {
+				var tzAbbr = utcDate.toLocaleString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+				el.textContent = utcDate.toLocaleString('en-US', {
+					year: 'numeric', month: 'short', day: 'numeric',
+					hour: '2-digit', minute: '2-digit', hour12: false,
+				}) + ' ' + tzAbbr;
+			} else {
+				el.textContent = utcDate.toLocaleString('en-US', {
+					timeZone: 'UTC',
+					year: 'numeric', month: 'short', day: 'numeric',
+					hour: '2-digit', minute: '2-digit', hour12: false,
+				}) + ' UTC';
+			}
+		});
+	});
+});
+</script>
 {% endblock %}

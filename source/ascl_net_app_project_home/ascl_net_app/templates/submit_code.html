@@ -425,7 +425,7 @@
 
 				<div class="field-group">
 					<label for="title">Title <span class="field-badge req">required</span></label>
-					<input type="text" name="title" id="title" value="{{ form_data.title or '' }}" maxlength="255" required>
+					<input type="text" name="title" id="title" value="{{ form_data.title or '' }}" maxlength="255" required autocomplete="off">
 					<div class="field-help">Plain text, LaTeX math mode accepted.</div>
 				</div>
 

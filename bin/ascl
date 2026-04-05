@@ -10,6 +10,7 @@ Usage:
     ascl typesense reset       Drop collection, recreate schema, re-index
     ascl typesense index       (Re-)index all published codes into Typesense
     ascl typesense status      Show collection info and document count
+    ascl test <URL>            Run smoke tests against a live site
     ascl dumpdb <DATABASE>     Dump MySQL database to {name}_yyyy-mm-dd.sql
     ascl init                  Create default config at ~/.config/ascl/config.toml
     ascl completions bash      Print bash completion script
@@ -653,6 +654,31 @@ compdef _ascl ascl
 
 
 # ---------------------------------------------------------------------------
+# ascl test
+# ---------------------------------------------------------------------------
+
+def cmd_test(args):
+    """Run smoke tests against a live URL."""
+    test_dir = pathlib.Path(__file__).resolve().parent.parent / "tests"
+    if not (test_dir / "test_smoke.py").exists():
+        print(f"Error: test_smoke.py not found in {test_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [sys.executable, "-m", "pytest", str(test_dir / "test_smoke.py"),
+           "--base-url", args.url, "-v"]
+
+    admin_user = args.admin_user or os.environ.get("ASCL_ADMIN_USER")
+    admin_pass = args.admin_pass or os.environ.get("ASCL_ADMIN_PASSWORD")
+    if admin_user and admin_pass:
+        cmd += ["--admin-user", admin_user, "--admin-pass", admin_pass]
+
+    if args.exitfirst:
+        cmd.append("-x")
+
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
@@ -702,6 +728,14 @@ def main():
     p = sub.add_parser("completions", help="Print shell completion script")
     p.add_argument("shell", choices=("bash", "zsh"), help="Shell type")
     p.set_defaults(func=cmd_completions)
+
+    # ascl test <url> [--admin-user X --admin-pass Y] [-x]
+    p = sub.add_parser("test", help="Run smoke tests against a live site")
+    p.add_argument("url", help="Base URL to test (e.g. https://dev.ascl.net)")
+    p.add_argument("--admin-user", help="Admin username (or set $ASCL_ADMIN_USER)")
+    p.add_argument("--admin-pass", help="Admin password (or set $ASCL_ADMIN_PASSWORD)")
+    p.add_argument("-x", "--exitfirst", action="store_true", help="Stop on first failure")
+    p.set_defaults(func=cmd_test)
 
     # ascl typesense {reset,index,status}
     from ascl_typesense import register_subcommands as _register_ts

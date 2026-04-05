@@ -234,6 +234,16 @@ def _build_dashboard_context():
 	stats["unpublished_codes"] = overall.unpublished_codes or 0
 	stats["archived_codes"] = overall.archived_codes or 0
 
+	# Published codes with ASCL IDs vs submitted (awaiting IDs)
+	codes_with_ids = (
+		db_session.query(func.count(ascldb.ASCLCode.pk))
+		.filter(ascldb.ASCLCode.published == 1)
+		.filter(ascldb.ASCLCode.ascl_id != '0000.000')
+		.scalar() or 0
+	)
+	stats["codes_with_ids"] = codes_with_ids
+	stats["codes_submitted"] = int(stats["published_codes"]) - int(codes_with_ids)
+
 	# Total citations
 	stats["total_citations"] = (
 		db_session.query(func.count(ascldb.Citation.pk))
@@ -251,7 +261,7 @@ def _build_dashboard_context():
 		.scalar() or 0
 	)
 	stats["ads_indexed"] = ads_indexed
-	stats["ads_indexed_pct"] = round(100.0 * int(ads_indexed) / int(stats["published_codes"])) if stats["published_codes"] else 0
+	stats["ads_indexed_pct"] = round(100.0 * int(ads_indexed) / int(stats["codes_with_ids"])) if stats["codes_with_ids"] else 0
 
 	# Codes with at least one citation
 	codes_with_citations = (
@@ -260,7 +270,7 @@ def _build_dashboard_context():
 		.scalar() or 0
 	)
 	stats["codes_with_citations"] = codes_with_citations
-	stats["codes_with_citations_pct"] = round(100.0 * int(codes_with_citations) / int(stats["published_codes"])) if stats["published_codes"] else 0
+	stats["codes_with_citations_pct"] = round(100.0 * int(codes_with_citations) / int(stats["codes_with_ids"])) if stats["codes_with_ids"] else 0
 
 
 	# === Codes Added by Year (from ascl_id, most recent 5 years with data) ===

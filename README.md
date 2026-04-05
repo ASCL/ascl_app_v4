@@ -73,6 +73,40 @@ Flask config files live in `ascl_net_app/configuration_files/`. The app loads `d
 
 Secrets (`SECRET_KEY`, `ADS_API_TOKEN`, `TYPESENSE_API_KEY`) are loaded from a separate file not committed to the repo. In debug mode, the app looks for `configuration_files/secrets.cfg` as a fallback. See `secrets.cfg.example` for the template.
 
+## Testing
+
+Smoke tests verify every page loads without crashing. They hit a live URL over HTTP — no Flask internals or database imports needed.
+
+```bash
+# --base-url is required
+pytest tests/test_smoke.py --base-url https://dev.ascl.net
+pytest tests/test_smoke.py --base-url https://ascl.net
+pytest tests/test_smoke.py --base-url http://localhost:5000
+
+# Stop on first failure
+pytest tests/test_smoke.py --base-url https://dev.ascl.net -x
+
+# Include admin page tests (requires credentials)
+pytest tests/test_smoke.py --base-url https://dev.ascl.net --admin-user <user> --admin-pass <pass>
+```
+
+**What's covered (100 tests):**
+
+- All public pages: index, about, submissions, resources, explain, dashboard
+- Code browsing: `/code/all`, `/code/all_by_id`, `/code/keywords`, `/code/alias_list`, `/code/random`, `/code/submit`
+- Discover routes: similar, mentioned, domain, language, author
+- Code detail, suggest-edit, alt detail
+- Search: empty, with query, suggest, author suggest, credit search, adversarial input
+- News: list, RSS feed, WordPress redirect
+- Data exports: JSON, XML, DCI, OLE, ADS (with date/auth restrictions)
+- CodeMeta and CITATION.cff generation
+- Error handling: 404 page, bad parameters, stack trace suppression
+- Static assets: favicon, robots.txt
+- Security: all admin routes reject unauthenticated users
+- **Admin pages** (with `--admin-user`/`--admin-pass`): every admin GET route renders without errors — dashboard, unpublished, archived, insert code, user CP, notes, corrections, code lists, utilities, broken links, icecave, and admin API endpoints
+
+Without credentials, admin tests are skipped (not failed).
+
 ## `ascl` Management CLI
 
 A single CLI for operating the application across deployment environments.
@@ -285,6 +319,7 @@ Flask application errors are logged to `~/ascl_app_v4/logs/app.log`.
 - [ENDPOINT_MAPPING.md](ENDPOINT_MAPPING.md) — v3 → v4 endpoint migration status
 - [CLAUDE.md](CLAUDE.md) — Architecture, database schema, configuration reference
 - [deployment/DEPLOYMENT.md](deployment/DEPLOYMENT.md) — Production deployment guide
+- [tests/test_smoke.py](tests/test_smoke.py) — Smoke tests for all public and admin pages
 
 ---
 

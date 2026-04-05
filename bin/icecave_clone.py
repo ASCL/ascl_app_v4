@@ -112,15 +112,37 @@ def resolve_github_org(url, short_name=None, title=None):
     return f"https://github.com/{org}/{repos[0]['name']}"
 
 
+def _to_clone_url(url):
+    """Convert a human-readable git hosting URL to a clonable URL.
+
+    GitHub handles both forms transparently, but most GitLab instances
+    and other git hosts require the .git suffix for clone operations.
+    The stored source_url stays as the human-readable page; this
+    transformation is applied only at clone time.
+    """
+    url = url.rstrip('/')
+    if not url.endswith('.git'):
+        url += '.git'
+    return url
+
+
 def clone_mirror(source_url, dest_path):
     """Clone a git repo as a bare mirror. Returns (success, error_msg)."""
+    clone_url = _to_clone_url(source_url)
     try:
         result = subprocess.run(
-            ['git', 'clone', '--mirror', source_url, str(dest_path)],
+            ['git', 'clone', '--mirror', clone_url, str(dest_path)],
             capture_output=True, text=True, timeout=600
         )
         if result.returncode != 0:
-            return False, result.stderr.strip()[:500]
+            # If .git suffix failed and we added it, try the original URL
+            if clone_url != source_url:
+                result = subprocess.run(
+                    ['git', 'clone', '--mirror', source_url, str(dest_path)],
+                    capture_output=True, text=True, timeout=600
+                )
+            if result.returncode != 0:
+                return False, result.stderr.strip()[:500]
         return True, None
     except subprocess.TimeoutExpired:
         return False, 'clone timed out after 600s'

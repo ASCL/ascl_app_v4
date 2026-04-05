@@ -12,7 +12,7 @@
 
 	<!-- Overall Statistics -->
 	<div class="stats-grid-bar">
-		<div><strong>{{ stats.published_codes|number_format }}</strong> codes in the ASCL</div>
+		<div><strong>{{ stats.codes_with_ids|number_format }}</strong> codes in the ASCL, and <strong>{{ stats.codes_submitted|number_format }}</strong> submitted</div>
 		<div><strong>{{ stats.total_citations|number_format }}</strong> citations in ADS</div>
 		<div><strong>{{ stats.ads_indexed|number_format }}</strong> indexed in ADS ({{ stats.ads_indexed_pct }}%)</div>
 		<div><strong>{{ stats.codes_with_citations|number_format }}</strong> with citations ({{ stats.codes_with_citations_pct }}%)</div>

@@ -20,6 +20,9 @@
 <!-- Sticky Action Bar -->
 <div class="sticky-action-bar" id="sticky-action-bar">
 	<div class="sticky-action-content">
+		<div class="sticky-left">
+			<button type="button" id="toggle-hints-btn" onclick="toggleHints()">Hide Hints</button>
+		</div>
 		<div class="sticky-buttons">
 			<button type="submit" form="code-form">{% if mode == 'insert' %}Add Code{% else %}Update Code{% endif %}</button>
 			<a href="{{ url_for('admin_page.admin_home') }}" class="button">Cancel</a>
@@ -86,7 +89,7 @@
 			</div>
 			<input type="hidden" name="credit" id="credit_hidden" value="">
 			<div class="entry-input-row" style="margin-top: 6px;">
-				<input type="text" id="credit-bibcode-input" placeholder="Bibcode" size="22" maxlength="19" style="flex: none;" oninput="checkCreditBibcode()">
+				<input type="text" id="credit-bibcode-input" placeholder="Article Bibcode" maxlength="19" style="flex: none; width:20ch;" oninput="checkCreditBibcode()">
 				<span class="validation-status" id="credit-bibcode-status"></span>
 				<button type="button" id="import-credit-btn" onclick="importCreditsFromCreditBibcode()">Import Authors from Bibcode</button>
 			</div>
@@ -104,44 +107,6 @@
 			</div>
 			<small>HTML is ok. Note: use <code>&amp;gt;</code> for &gt; and <code>&amp;lt;</code> for &lt; (or just use the buttons above). LaTeX math mode (e.g. <code>$E=mc^2$</code>) accepted.</small>
 		</div>
-		<div class="field-row">
-			<label>Links</label>
-			<div class="url-manager">
-				<table class="url-table sortable-table" id="typed-links-table">
-					<thead><tr><th class="drag-col"></th><th>Type</th><th>URL</th><th>Status</th><th></th></tr></thead>
-					<tbody></tbody>
-				</table>
-				<div class="url-input-row">
-					<input type="text" id="typed-link-input" placeholder="https://..." size="50" onkeydown="handleTypedLinkEnterKey(event)">
-					<select id="link-type-select">
-						<option value="">Type...</option>
-						{% for lt in url_link_types %}
-						<option value="{{ lt.short_name }}">{{ lt.name }}</option>
-						{% endfor %}
-					</select>
-					<span id="typed-link-status" class="url-check-status"></span>
-					<button type="button" onclick="addTypedLink()">Add</button>
-				</div>
-			</div>
-			<input type="hidden" name="typed_links" id="typed_links_hidden" value="">
-		</div>
-		<div class="field-row">
-			<label>Aliases</label>
-			<div class="alias-manager">
-				<table class="alias-table" id="alias-table">
-					<thead><tr><th>URL</th><th></th></tr></thead>
-					<tbody></tbody>
-				</table>
-				<div class="alias-input-row">
-					<input type="text" id="alias-input" placeholder="alias" size="30" oninput="checkAliasInput()" onkeydown="handleEnterKey(event, addAlias)">
-					<span id="alias-status" class="alias-status"></span>
-					<button type="button" onclick="addAlias()">Add</button>
-				</div>
-			</div>
-			<input type="hidden" name="aliases" id="aliases_hidden" value="">
-			<small>Aliases are short, alphanumeric strings to facilitate easy lookup (e.g. 'astropy'). Usually a code will only have one.</small>
-		</div>
-
 		{% if mode == 'update' %}
 		<div class="field-row">
 			<label for="time_added">Time Added</label>
@@ -151,7 +116,10 @@
 		{% endif %}
 
 		<div class="field-row">
-			<label>Email</label>
+			<div class="notes-header">
+				<label>Email</label>
+				<small><span class="private-note">Not publicly visible.</span></small>
+			</div>
 			<div class="entry-manager">
 				<table class="entry-table" id="email-table">
 					<thead><tr><th>Email Address</th><th></th></tr></thead>
@@ -164,21 +132,6 @@
 				</div>
 			</div>
 			<input type="hidden" name="email" id="email_hidden" value="">
-			<small><span class="private-note">Not publicly visible.</span></small>
-		</div>
-
-		<div class="field-row">
-			<label for="bibcode">ASCL Bibcode <span class="validation-status" id="bibcode-status"></span></label>
-			<input type="text" name="bibcode" id="bibcode" value="{{ code.bibcode or '' }}" maxlength="19" size="22" oninput="checkBibcode()">
-			<div id="bibcode-info" class="field-info"></div>
-			<small>19-character ADS bibcode (e.g., 2019ApJ...887..229S)</small>
-		</div>
-
-		<div class="field-row">
-			<label for="doi">DOI <span class="validation-status" id="doi-status"></span></label>
-			<input type="text" name="doi" id="doi" value="{{ code.doi or '' }}" maxlength="255" size="35" oninput="checkDOI()">
-			<div id="doi-info" class="field-info"></div>
-			<small>Format: 10.XXXX/suffix (e.g., 10.5281/zenodo.1234567)</small>
 		</div>
 
 		<div class="field-row">
@@ -214,10 +167,67 @@
 			<input type="hidden" name="used_in_urls" id="used_in_urls_hidden" value="">
 			<small>19-char bibcodes or URLs.</small>
 		</div>
+
 		<div class="field-row">
-			<label for="citation_method">Preferred Citation Method <span class="html-warning" id="citation-html-warning"></span></label>
+			<div class="notes-header">
+				<label for="citation_method">Preferred Citation Method <span class="html-warning" id="citation-html-warning"></span></label>
+				<small><span id="citation-char-count" class="char-count">0</span>/255 characters</small>
+			</div>
 			<input type="text" name="citation_method" id="citation_method" value="{{ code.citation_method or '' }}" maxlength="255" size="80" oninput="checkForHTML(this, 'citation-html-warning'); updateCharCount()">
-			<small><span id="citation-char-count" class="char-count">0</span>/255 characters</small>
+		</div>
+
+		<div class="field-row">
+			<label>Aliases</label>
+			<div class="alias-manager">
+				<table class="alias-table" id="alias-table">
+					<thead><tr><th>URL</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="alias-input-row">
+					<input type="text" id="alias-input" placeholder="alias" size="30" oninput="checkAliasInput()" onkeydown="handleEnterKey(event, addAlias)">
+					<span id="alias-status" class="alias-status"></span>
+					<button type="button" onclick="addAlias()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="aliases" id="aliases_hidden" value="">
+			<small>Aliases are short, alphanumeric strings to facilitate easy lookup (e.g. 'astropy'). Usually a code will only have one.</small>
+		</div>
+
+		<div class="field-row">
+			<label for="bibcode">ASCL Bibcode <span class="validation-status" id="bibcode-status"></span></label>
+			<input type="text" name="bibcode" id="bibcode" value="{{ code.bibcode or '' }}" maxlength="19" style="width:20ch;" placeholder="autopopulated" disabled>
+			<div id="bibcode-info" class="field-info"></div>
+			<small>19-character ADS bibcode (e.g., 2019ApJ...887..229S)</small>
+		</div>
+
+		<div class="field-row">
+			<label>Links</label>
+			<div class="url-manager">
+				<table class="url-table sortable-table" id="typed-links-table">
+					<thead><tr><th class="drag-col"></th><th>Type</th><th>URL</th><th>Status</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="url-input-row">
+					<input type="text" id="typed-link-input" placeholder="https://..." size="50" onkeydown="handleTypedLinkEnterKey(event)">
+					<select id="link-type-select">
+						<option value="">Type...</option>
+						{% for lt in url_link_types %}
+						<option value="{{ lt.short_name }}">{{ lt.name }}</option>
+						{% endfor %}
+					</select>
+					<span id="typed-link-status" class="url-check-status"></span>
+					<button type="button" onclick="addTypedLink()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="typed_links" id="typed_links_hidden" value="">
+		</div>
+
+		<div class="field-row">
+			<div class="notes-header">
+				<label for="notes">Notes</label>
+				<small><span class="private-note">Not publicly visible. Internal notes for editors.</span></small>
+			</div>
+			<textarea name="notes" id="notes" rows="4" style="width:100%; max-width:700px; font-family:inherit; font-size:14px;">{{ code.notes or '' }}</textarea>
 		</div>
 
 		<div class="field-row">
@@ -251,10 +261,12 @@
 			<input type="hidden" name="keywords" id="keywords_hidden" value="">
 			<small>Add keywords one at a time. Spaces are permitted in keywords.</small>
 		</div>
+
 		<div class="field-row">
-			<label for="notes">Notes</label>
-			<textarea name="notes" id="notes" rows="4" style="width:100%; max-width:700px; font-family:inherit; font-size:14px;">{{ code.notes or '' }}</textarea>
-			<small><span class="private-note">Not publicly visible. Internal notes for editors.</span></small>
+			<label for="doi">DOI <span class="validation-status" id="doi-status"></span></label>
+			<input type="text" name="doi" id="doi" value="{{ code.doi or '' }}" maxlength="255" style="width:50%;" oninput="checkDOI()">
+			<div id="doi-info" class="field-info"></div>
+			<small>Format: 10.XXXX/suffix (e.g., 10.5281/zenodo.1234567)</small>
 		</div>
 	</div>
 
@@ -358,10 +370,22 @@ function handleDragEnd(e) {
 }
 
 // Fetch the next available ASCL ID from the server
+var autofillPreviousValue = null;
+
 function fetchNextAsclId() {
 	var btn = document.getElementById('autofill');
 	var field = document.getElementById('ascl_id');
 
+	// Undo mode: restore previous value
+	if (autofillPreviousValue !== null) {
+		field.value = autofillPreviousValue;
+		autofillPreviousValue = null;
+		btn.textContent = 'Autofill';
+		return;
+	}
+
+	// Autofill mode: fetch next ID
+	autofillPreviousValue = field.value;
 	btn.disabled = true;
 	btn.textContent = '...';
 
@@ -370,14 +394,19 @@ function fetchNextAsclId() {
 		.then(data => {
 			if (data.next_ascl_id) {
 				field.value = data.next_ascl_id;
+				btn.textContent = 'Undo';
+			} else {
+				autofillPreviousValue = null;
+				btn.textContent = 'Autofill';
 			}
 		})
 		.catch(err => {
 			console.error('Failed to fetch next ASCL ID:', err);
+			autofillPreviousValue = null;
+			btn.textContent = 'Autofill';
 		})
 		.finally(() => {
 			btn.disabled = false;
-			btn.textContent = 'Autofill';
 		});
 }
 
@@ -727,13 +756,6 @@ function addAlias() {
 	if (aliases.indexOf(alias) !== -1) {
 		statusSpan.innerHTML = 'Already added';
 		statusSpan.className = 'alias-status format-error';
-		return;
-	}
-
-	// Check if alias is used by another code
-	if (aliasAvailability[alias] && !aliasAvailability[alias].available) {
-		statusSpan.innerHTML = 'Used by ' + aliasAvailability[alias].used_by_ascl_id;
-		statusSpan.className = 'alias-status status-warning';
 		return;
 	}
 
@@ -1939,6 +1961,13 @@ document.addEventListener('DOMContentLoaded', function() {
 		loadNotes();
 	}
 });
+
+function toggleHints() {
+	var form = document.querySelector('.forms');
+	var btn = document.getElementById('toggle-hints-btn');
+	form.classList.toggle('hints-hidden');
+	btn.textContent = form.classList.contains('hints-hidden') ? 'Show Hints' : 'Hide Hints';
+}
 </script>
 
 <style>
@@ -2353,6 +2382,12 @@ document.addEventListener('DOMContentLoaded', function() {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+.seealso-manager {
+	max-width: 40ch;
+}
+.seealso-input-row button {
+	white-space: nowrap;
+}
 .seealso-table {
 	width: 100%;
 	border-collapse: collapse;
@@ -2469,6 +2504,10 @@ document.addEventListener('DOMContentLoaded', function() {
 	display: flex;
 	gap: 8px;
 	align-items: center;
+	flex-wrap: nowrap;
+}
+.keyword-input-row input {
+	width: 20ch;
 }
 .keyword-input-row button {
 	padding: 4px 12px;
@@ -2817,7 +2856,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 /* Field rows with alternating backgrounds */
 .field-row {
-	padding: 14px 20px;
+	padding: 8px 20px;
 	margin: 0;
 	border-bottom: 1px solid #eee;
 }
@@ -2913,8 +2952,42 @@ h3.section-title {
 .sticky-action-content {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
+	justify-content: space-between;
 	max-width: 100%;
+}
+.sticky-left {
+	display: flex;
+	align-items: center;
+}
+#toggle-hints-btn {
+	background: #95a5a6;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	padding: 8px 16px;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 500;
+}
+#toggle-hints-btn:hover {
+	background: #7f8c8d;
+}
+.hints-hidden small,
+.hints-hidden .field-help,
+.hints-hidden .insert-buttons {
+	display: none !important;
+}
+.hints-hidden .notes-header small {
+	display: inline !important;
+}
+.notes-header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	max-width: 700px;
+}
+.notes-header label {
+	margin-bottom: 0;
 }
 .sticky-buttons {
 	display: flex;

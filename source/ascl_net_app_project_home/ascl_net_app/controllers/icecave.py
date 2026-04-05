@@ -111,18 +111,6 @@ def icecave_code_detail(ascl_id):
 	return render_template("admin/icecave_detail.html", code=data)
 
 
-@icecave_page.route("/sync", methods=["POST"])
-@_login_required
-def icecave_trigger_sync():
-	"""Trigger a full sync via the API."""
-	data, error = _icecave_request('/api/sync', method='POST')
-	if error:
-		flash(f"Failed to trigger sync: {error}", "error")
-	else:
-		flash("Sync started.", "success")
-	return redirect(url_for("icecave_page.icecave_home"))
-
-
 @icecave_page.route("/sync/<ascl_id>", methods=["POST"])
 @_login_required
 def icecave_trigger_sync_single(ascl_id):
