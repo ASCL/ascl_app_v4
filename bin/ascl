@@ -657,18 +657,57 @@ compdef _ascl ascl
 # ascl test
 # ---------------------------------------------------------------------------
 
+def _print_admin_credential_status(args):
+    """Print admin credential status and return (user, pass) or (None, None)."""
+    admin_user = args.admin_user or os.environ.get("ASCL_ADMIN_USER")
+    admin_pass = args.admin_pass or os.environ.get("ASCL_ADMIN_PASSWORD")
+    if admin_user and admin_pass:
+        source = "command line"
+        if not args.admin_user:
+            source = "$ASCL_ADMIN_USER / $ASCL_ADMIN_PASSWORD"
+        print(f"Admin credentials found: user={_bold(admin_user)} (from {source})")
+    elif admin_user:
+        print(_yellow(f"Admin user {_bold(admin_user)} found but no password set — "
+                       "skipping admin tests."))
+        print(f"  Set $ASCL_ADMIN_PASSWORD or pass --admin-pass.")
+        admin_pass = None
+    else:
+        print("Admin tests: skipped (no credentials)")
+        print(f"  Set $ASCL_ADMIN_USER and $ASCL_ADMIN_PASSWORD, or pass "
+              f"--admin-user and --admin-pass.")
+    return admin_user, admin_pass
+
+
 def cmd_test(args):
     """Run smoke tests against a live URL."""
+    admin_user, admin_pass = _print_admin_credential_status(args)
+
+    if not args.url:
+        print(_red("\nError: URL is required."))
+        print(f"  Usage: ascl test <url>")
+        print(f"  Example: ascl test https://dev.ascl.net")
+        sys.exit(1)
+
+    url = args.url
+    if not url.startswith(("http://", "https://")):
+        # Try https first, fall back to http
+        import requests
+        https_url = f"https://{url}"
+        try:
+            requests.head(https_url, timeout=5, allow_redirects=True)
+            url = https_url
+        except requests.RequestException:
+            url = f"http://{url}"
+        print(f"Using URL: {_bold(url)}")
+
     test_dir = pathlib.Path(__file__).resolve().parent.parent / "tests"
     if not (test_dir / "test_smoke.py").exists():
         print(f"Error: test_smoke.py not found in {test_dir}", file=sys.stderr)
         sys.exit(1)
 
     cmd = [sys.executable, "-m", "pytest", str(test_dir / "test_smoke.py"),
-           "--base-url", args.url, "-v"]
+           "--base-url", url, "-v"]
 
-    admin_user = args.admin_user or os.environ.get("ASCL_ADMIN_USER")
-    admin_pass = args.admin_pass or os.environ.get("ASCL_ADMIN_PASSWORD")
     if admin_user and admin_pass:
         cmd += ["--admin-user", admin_user, "--admin-pass", admin_pass]
 
@@ -731,7 +770,7 @@ def main():
 
     # ascl test <url> [--admin-user X --admin-pass Y] [-x]
     p = sub.add_parser("test", help="Run smoke tests against a live site")
-    p.add_argument("url", help="Base URL to test (e.g. https://dev.ascl.net)")
+    p.add_argument("url", nargs="?", help="Base URL to test (e.g. https://dev.ascl.net)")
     p.add_argument("--admin-user", help="Admin username (or set $ASCL_ADMIN_USER)")
     p.add_argument("--admin-pass", help="Admin password (or set $ASCL_ADMIN_PASSWORD)")
     p.add_argument("-x", "--exitfirst", action="store_true", help="Stop on first failure")

@@ -12,7 +12,10 @@ def app():
 	if project_root not in sys.path:
 		sys.path.insert(0, project_root)
 
-	app = create_app(debug=False)
+	# Prevent PermissionError on /etc/ascl/secrets.cfg during tests
+	os.environ.setdefault("ASCL_SECRETS_FILE", "/dev/null")
+
+	app = create_app(debug=True)
 	app.config["TESTING"] = True
 	return app
 

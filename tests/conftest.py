@@ -56,21 +56,17 @@ def session(base_url):
 def known_ascl_id(session, base_url):
     """Fetch one known published ASCL ID from the JSON export."""
     r = session.get(f"{base_url}/code/json", timeout=30)
-    if r.status_code != 200:
-        pytest.skip("Could not fetch /code/json to discover a known ASCL ID")
+    assert r.status_code == 200, f"/code/json returned {r.status_code}"
     data = r.json()
-    if not data:
-        pytest.skip("JSON export returned no codes")
-    # Handle both list-of-dicts and dict-keyed-by-id formats
+    assert data, "/code/json returned empty data"
+
     if isinstance(data, dict):
         entries = list(data.values())
     else:
         entries = data
-    for code in entries[:10]:
-        aid = code.get("ascl_id") or code.get("ascl_ID") or code.get("id")
-        if aid:
-            return aid
-    pytest.skip("No ASCL ID found in JSON export")
+    aid = entries[0].get("ascl_id") or entries[0].get("ascl_ID") or entries[0].get("id")
+    assert aid, f"First entry in /code/json has no ascl_id: {list(entries[0].keys())}"
+    return aid
 
 
 @pytest.fixture(scope="session")
@@ -105,28 +101,18 @@ def admin_session(request, base_url):
 
 @pytest.fixture(scope="session")
 def known_code_pk(admin_session, base_url):
-    """Fetch one code PK from the admin unpublished or full table page."""
-    # Use the JSON export to get a code, then look up its PK via admin view
+    """Fetch one code PK from the JSON export (keys are PKs)."""
     r = admin_session.get(f"{base_url}/code/json", timeout=30)
-    if r.status_code != 200:
-        pytest.skip("Could not fetch /code/json")
+    assert r.status_code == 200, f"/code/json returned {r.status_code}"
     data = r.json()
+    assert data, "/code/json returned empty data"
+
     if isinstance(data, dict):
-        entries = list(data.values())
+        # JSON export is keyed by code PK (as string)
+        key = next(iter(data))
+        return int(key)
     else:
-        entries = data
-    if not entries:
-        pytest.skip("No codes in JSON export")
-    # The JSON export includes pk in v4
-    for code in entries[:10]:
-        pk = code.get("pk") or code.get("id")
-        if pk and isinstance(pk, int):
-            return pk
-    # Fallback: try to extract from admin full table
-    r = admin_session.get(f"{base_url}/admin/utility/simple_table", timeout=30)
-    if r.status_code == 200:
-        import re
-        m = re.search(r'/admin/view/(\d+)', r.text)
-        if m:
-            return int(m.group(1))
-    pytest.skip("Could not determine a code PK for admin tests")
+        # List format — entries must have pk or id
+        pk = data[0].get("pk") or data[0].get("id")
+        assert pk, f"First entry in /code/json has no pk or id: {list(data[0].keys())}"
+        return int(pk)

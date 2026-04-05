@@ -126,22 +126,46 @@ def _credit_text_from_authors(code):
 
 
 def _sync_authors_from_credit(db_session, ascldb, code_pk, credit_text):
-	"""Replace author rows for a code from semicolon-delimited credit text."""
-	if not hasattr(ascldb, "Author"):
+	"""Replace author rows for a code from semicolon-delimited credit text.
+
+	Uses the code_to_author junction table to link authors to codes.
+	"""
+	if not hasattr(ascldb, "Author") or not hasattr(ascldb, "CodeToAuthor"):
 		return
 
-	db_session.query(ascldb.Author).filter(ascldb.Author.code_pk == code_pk).delete()
-	raw_credit_text = credit_text.strip() if credit_text else ""
+	# Get existing author PKs for this code before removing the links
+	existing_links = (db_session.query(ascldb.CodeToAuthor)
+					  .filter(ascldb.CodeToAuthor.code_pk == code_pk)
+					  .all())
+	old_author_pks = [link.author_pk for link in existing_links]
+
+	# Delete junction table rows
+	db_session.query(ascldb.CodeToAuthor).filter(
+		ascldb.CodeToAuthor.code_pk == code_pk
+	).delete()
+
+	# Delete orphaned author rows (only those not linked to other codes)
+	for author_pk in old_author_pks:
+		other_links = (db_session.query(ascldb.CodeToAuthor)
+					   .filter(ascldb.CodeToAuthor.author_pk == author_pk)
+					   .count())
+		if other_links == 0:
+			db_session.query(ascldb.Author).filter(
+				ascldb.Author.pk == author_pk
+			).delete()
+
+	# Create new author + junction rows
 	for idx, token in enumerate(_split_credit_text(credit_text)):
 		author = ascldb.Author()
-		author.code_pk = code_pk
-		author.display_order = idx
-		author.raw_name = token
-		author.display_name = token
-		author.raw_credit_text = raw_credit_text
-		author.orcid_id = None
-		author.email = None
+		author.name = token
 		db_session.add(author)
+		db_session.flush()
+
+		link = ascldb.CodeToAuthor()
+		link.code_pk = code_pk
+		link.author_pk = author.pk
+		link.display_order = idx
+		db_session.add(link)
 
 
 def _current_user(db_session=None):

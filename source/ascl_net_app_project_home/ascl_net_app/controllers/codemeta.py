@@ -6,7 +6,7 @@ CodeMeta 3.1 and CITATION.cff export endpoints.
 Implements:
   /code/codemeta.json        — CodeMeta 3.1 JSON-LD catalog (all published codes)
   /<ascl_id>/codemeta.json   — CodeMeta 3.1 JSON-LD (single code)
-  /<ascl_id>/CITATION.cff    — Citation File Format (CFF) v1.1.0
+  /<ascl_id>/CITATION.cff    — Citation File Format (CFF) v1.2.0
   /<ascl_id>/citation.cff    — 301 redirect to CITATION.cff
 """
 
@@ -389,45 +389,75 @@ def citation_cff(ascl_id):
     else:
         authors_raw = _parse_credit_authors(row["credit"])
 
-    lines = ["cff-version: 1.1.0"]
+    lines = ["cff-version: 1.2.0"]
+    lines.append('message: "If you use this software, please cite it using the metadata from this file."')
+    lines.append("type: software")
 
-    # Message
-    if row["citation_method"]:
-        msg = row["citation_method"]
-    elif row["bibcode"]:
-        msg = f"https://ui.adsabs.harvard.edu/abs/{row['bibcode']}"
-    else:
-        msg = f"https://ascl.net/{row['ascl_id']}"
-    lines.append(f'message: "Please cite the following works when using this software: {msg}"')
+    # Title
+    lines.append(f'title: "{row["title"]}"')
 
     # Authors
     lines.append("authors:")
     for a in authors_raw:
         lines.append(f"- family-names: {a['family'] or ''}")
         lines.append(f"  given-names: {a['given'] or ''}")
-
-    # Title
-    lines.append(f'title: "{row["title"]}"')
+        if a.get("orcid"):
+            lines.append(f"  orcid: https://orcid.org/{a['orcid']}")
 
     # Placeholders for version / date-released
     lines.append("version: PLACEHOLDER")
-    lines.append("date-released: PLACEHOLDER")
+    if row["time_added"]:
+        lines.append(f"date-released: {row['time_added'].strftime('%Y-%m-%d')}")
+    else:
+        lines.append("date-released: PLACEHOLDER")
 
     # Identifiers
     lines.append("identifiers:")
-    lines.append(' - type: "ascl-id"')
-    lines.append(f'   value: "{row["ascl_id"]}"')
-    lines.append(' - type: "doi"')
+    lines.append('- type: "ascl-id"')
+    lines.append(f'  value: "{row["ascl_id"]}"')
     if row["doi"]:
-        lines.append(f'   value: "{row["doi"]}"')
-    else:
-        lines.append("   value: PLACEHOLDER")
+        lines.append('- type: doi')
+        lines.append(f'  value: "{row["doi"]}"')
     if row["bibcode"]:
-        lines.append(' - type: "bibcode"')
-        lines.append(f'   value: "{row["bibcode"]}"')
+        lines.append('- type: "bibcode"')
+        lines.append(f'  value: "{row["bibcode"]}"')
 
     # Abstract
     lines.append(f'abstract: "{row["abstract"]}"')
+
+    # Repository URL
+    site_links = links.get("code-site", [])
+    repos = [u for u in site_links if any(h in u.lower() for h in _REPO_HOSTS)]
+    if repos:
+        lines.append(f"repository-code: {repos[0]}")
+
+    # ASCL URL
+    lines.append(f"url: https://ascl.net/{row['ascl_id']}")
+
+    # Keywords
+    if keywords:
+        lines.append("keywords:")
+        for kw in keywords:
+            lines.append(f'- "{kw}"')
+
+    # Preferred citation (if there's a bibcode or described-in paper)
+    described_in = links.get("described-in", [])
+    if row["bibcode"] or described_in:
+        lines.append("preferred-citation:")
+        lines.append("  type: article")
+        if row["bibcode"]:
+            lines.append(f'  title: "{row["title"]}"')
+            lines.append("  authors:")
+            for a in authors_raw:
+                lines.append(f"  - family-names: {a['family'] or ''}")
+                lines.append(f"    given-names: {a['given'] or ''}")
+                if a.get("orcid"):
+                    lines.append(f"    orcid: https://orcid.org/{a['orcid']}")
+            lines.append("  identifiers:")
+            lines.append('  - type: "bibcode"')
+            lines.append(f'    value: "{row["bibcode"]}"')
+            if described_in:
+                lines.append(f'  url: "{described_in[0]}"')
 
     return Response("\n".join(lines) + "\n", mimetype="text/plain")
 

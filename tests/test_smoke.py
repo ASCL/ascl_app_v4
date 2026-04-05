@@ -229,6 +229,17 @@ class TestNews:
         r = get(session, base_url, "/news")
         assert r.status_code == 200
 
+    def test_news_detail(self, session, base_url):
+        """Fetch the news list, extract a post slug, and verify the detail page."""
+        r = get(session, base_url, "/news")
+        assert r.status_code == 200
+        # Extract first post link from the news list page
+        m = re.search(r'href="/news/([^"]+)"', r.text)
+        assert m, "No news post links found on /news"
+        slug = m.group(1)
+        r = get(session, base_url, f"/news/{slug}")
+        assert r.status_code == 200
+
     def test_news_rss_feed(self, session, base_url):
         r = get(session, base_url, "/news/feed")
         assert r.status_code == 200
