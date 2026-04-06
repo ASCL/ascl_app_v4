@@ -355,18 +355,8 @@ else
     print_warning "Migration script not found: $SHORT_NAME_SQL"
 fi
 
-# Add time_reviewed column and seed from time_updated
-print_step "18/19" "Adding time_reviewed column to codes table..."
-TIME_REVIEWED_SQL="$SCRIPT_DIR/add_time_reviewed_column.sql"
-if [[ -f "$TIME_REVIEWED_SQL" ]]; then
-    mysql $MYSQL_OPTS "$TARGET_DB" < "$TIME_REVIEWED_SQL"
-    print_success "time_reviewed column added and seeded from time_updated"
-else
-    print_warning "Migration script not found: $TIME_REVIEWED_SQL"
-fi
-
 # Run validation tests
-print_step "19/19" "Running migration validation tests..."
+print_step "18/18" "Running migration validation tests..."
 APP_DIR="$SCRIPT_DIR/../source/ascl_net_app_project_home"
 TEST_FILE="$APP_DIR/ascl_net_app/tests/test_db_schema_v4.py"
 

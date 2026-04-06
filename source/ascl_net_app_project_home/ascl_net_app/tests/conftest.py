@@ -15,6 +15,9 @@ def app():
 	# Prevent PermissionError on /etc/ascl/secrets.cfg during tests
 	os.environ.setdefault("ASCL_SECRETS_FILE", "/dev/null")
 
+	# Use the correct ~/.my.cnf section for the Docker MySQL dev database
+	os.environ.setdefault("ASCLDB_MYCNF_SECTION", "client_ascl")
+
 	app = create_app(debug=True)
 	app.config["TESTING"] = True
 	return app

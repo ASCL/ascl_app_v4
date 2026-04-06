@@ -242,10 +242,10 @@ def admin_dashboard():
 	return render_template("admin/dashboard.html", **ctx)
 
 
-@admin_page.route("/not-reviewed-since", methods=["GET"])
+@admin_page.route("/not-updated-since", methods=["GET"])
 @_login_required
-def not_reviewed_since():
-	"""Show published codes not reviewed since a given date."""
+def not_updated_since():
+	"""Show published codes not updated since a given date."""
 	from datetime import datetime
 	from sqlalchemy import text
 
@@ -267,15 +267,15 @@ def not_reviewed_since():
 		"SELECT COUNT(*) FROM codes WHERE published = 1 AND ascl_id != '0000.000'"
 	)).scalar()
 
-	# Codes not reviewed since the cutoff date
+	# Codes not updated since the cutoff date
 	rows = db_session.execute(text(
-		"SELECT pk, ascl_id, title, time_reviewed FROM codes "
-		"WHERE published = 1 AND ascl_id != '0000.000' AND time_reviewed < :cutoff "
-		"ORDER BY time_reviewed ASC"
+		"SELECT pk, ascl_id, title, time_updated FROM codes "
+		"WHERE published = 1 AND ascl_id != '0000.000' AND time_updated < :cutoff "
+		"ORDER BY time_updated ASC"
 	), {"cutoff": cutoff}).fetchall()
 
 	return render_template(
-		"admin/not_reviewed_since.html",
+		"admin/not_updated_since.html",
 		date_str=date_str,
 		cutoff=cutoff.strftime("%b %-d, %Y"),
 		codes=rows,
@@ -283,32 +283,6 @@ def not_reviewed_since():
 		total_published=total_published,
 	)
 
-
-@admin_page.route("/mark-reviewed/<int:pk>", methods=["POST"])
-@_login_required
-def mark_reviewed(pk):
-	"""Set time_reviewed to NOW() for a given code."""
-	from datetime import datetime
-	from flask import jsonify
-	from sqlalchemy import text
-
-	db_session = _get_db_session()
-	db_session.execute(
-		text("UPDATE codes SET time_reviewed = NOW() WHERE pk = :pk"),
-		{"pk": pk},
-	)
-	db_session.commit()
-
-	row = db_session.execute(
-		text("SELECT time_reviewed FROM codes WHERE pk = :pk"),
-		{"pk": pk},
-	).fetchone()
-
-	return jsonify(
-		success=True,
-		time_reviewed=row.time_reviewed.strftime("%Y-%m-%d %H:%M") if row and row.time_reviewed else "—",
-		time_reviewed_iso=row.time_reviewed.strftime("%Y-%m-%dT%H:%M:%S") if row and row.time_reviewed else "",
-	)
 
 
 @admin_page.route("/login", methods=["POST"])
@@ -640,12 +614,43 @@ def update_code(pk):
 		credit = request.form.get("credit", "").strip()
 		ascl_id = request.form.get("ascl_id", "").strip()
 
+		validation_error = None
 		if not title:
-			flash("Title is required.", "error")
+			validation_error = "Title is required."
 		elif not credit:
-			flash("Credit is required.", "error")
+			validation_error = "Credit is required."
 		elif not ascl_id or len(ascl_id) != 8:
-			flash("ASCL ID must be 8 characters (e.g., 2401.001).", "error")
+			validation_error = "ASCL ID must be 8 characters (e.g., 2401.001)."
+
+		if validation_error:
+			flash(validation_error, "error")
+			# Overlay submitted values so the user doesn't lose edits
+			code.ascl_id = ascl_id or code.ascl_id
+			code.title = title
+			code.credit = credit
+			code.abstract = request.form.get("abstract", "").strip()
+			code.citation_method = request.form.get("citation_method", "").strip()
+			code.email = request.form.get("email", "").strip()
+			code.notes = request.form.get("notes", "").strip()
+			code.published = int(request.form.get("published", 0))
+			code.doi = request.form.get("doi", "").strip()
+			db_session.expunge(code)
+
+			return render_template(
+				"admin/edit_code.html",
+				code=code,
+				mode="update",
+				credits_str=credit,
+				aliases_str=request.form.get("aliases", ""),
+				keywords_str=request.form.get("keywords", ""),
+				url_link_types=_get_url_link_types(db_session),
+				typed_links_json=request.form.get("typed_links", "[]"),
+				described_in_urls=request.form.get("described_in_urls", ""),
+				used_in_urls=request.form.get("used_in_urls", ""),
+				see_also_str=request.form.get("see_also", ""),
+				all_keywords_json=json.dumps(_get_all_keyword_labels(db_session)),
+				current_user=_current_user(db_session),
+			)
 		else:
 			# Check ASCL ID uniqueness (unless it's 0000.000 or unchanged)
 			if ascl_id != "0000.000" and ascl_id != code.ascl_id:
@@ -725,7 +730,6 @@ def update_code(pk):
 	keywords_str = " ".join(keywords_list)
 
 	# Get links from link table
-	import json
 	url_link_types = _get_url_link_types(db_session)
 	typed_links = _get_all_typed_links_for_code(db_session, pk)
 	described_in_urls = _get_links_for_code(db_session, ascldb, pk, 'described-in')
@@ -792,12 +796,46 @@ def insert_code():
 		credit = request.form.get("credit", "").strip()
 		ascl_id = request.form.get("ascl_id", "").strip()
 
+		validation_error = None
 		if not title:
-			flash("Title is required.", "error")
+			validation_error = "Title is required."
 		elif not credit:
-			flash("Credit is required.", "error")
+			validation_error = "Credit is required."
 		elif not ascl_id or len(ascl_id) != 8:
-			flash("ASCL ID must be 8 characters (e.g., 2401.001).", "error")
+			validation_error = "ASCL ID must be 8 characters (e.g., 2401.001)."
+
+		if validation_error:
+			flash(validation_error, "error")
+			class MockCode:
+				pass
+			mock_code = MockCode()
+			mock_code.pk = None
+			mock_code.ascl_id = ascl_id or "0000.000"
+			mock_code.title = title
+			mock_code.credit = credit
+			mock_code.abstract = request.form.get("abstract", "").strip()
+			mock_code.citation_method = request.form.get("citation_method", "").strip()
+			mock_code.email = request.form.get("email", "").strip()
+			mock_code.notes = request.form.get("notes", "").strip()
+			mock_code.published = int(request.form.get("published", 0))
+			mock_code.doi = request.form.get("doi", "").strip()
+			mock_code.bibcode = request.form.get("bibcode", "").strip()
+
+			return render_template(
+				"admin/edit_code.html",
+				code=mock_code,
+				mode="insert",
+				credits_str=credit,
+				aliases_str=request.form.get("aliases", ""),
+				keywords_str=request.form.get("keywords", ""),
+				url_link_types=_get_url_link_types(db_session),
+				typed_links_json=request.form.get("typed_links", "[]"),
+				described_in_urls=request.form.get("described_in_urls", ""),
+				used_in_urls=request.form.get("used_in_urls", ""),
+				see_also_str=request.form.get("see_also", ""),
+				all_keywords_json=json.dumps(_get_all_keyword_labels(db_session)),
+				current_user=_current_user(db_session),
+			)
 		else:
 			# Check ASCL ID uniqueness (unless it's 0000.000)
 			if ascl_id != "0000.000":
