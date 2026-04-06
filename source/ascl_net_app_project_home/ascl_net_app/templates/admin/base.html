@@ -5,60 +5,60 @@
 	<!-- Left Navigation -->
 	<nav class="admin-nav" id="admin-nav">
 		<button class="nav-toggle" id="nav-toggle" onclick="toggleAdminNav()" title="Toggle navigation">
-			<span class="toggle-icon">&#9664;</span>
+			<svg viewBox="0 0 24 24"><polyline points="15 6 9 12 15 18"/></svg>
 		</button>
 		<div class="nav-content">
 			<div class="nav-section">
 				<div class="nav-section-title">Main</div>
-				<a href="{{ url_for('admin_page.admin_home') }}" class="nav-link {% if request.endpoint == 'admin_page.admin_home' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.admin_home') }}" data-tooltip="Home" class="nav-link {% if request.endpoint == 'admin_page.admin_home' %}active{% endif %}">
 					<span class="nav-icon">&#8962;</span><span class="nav-text">Home</span>
 				</a>
-				<a href="{{ url_for('admin_page.admin_dashboard') }}" class="nav-link {% if request.endpoint == 'admin_page.admin_dashboard' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.admin_dashboard') }}" data-tooltip="Dashboard" class="nav-link {% if request.endpoint == 'admin_page.admin_dashboard' %}active{% endif %}">
 					<span class="nav-icon">&#9635;</span><span class="nav-text">Dashboard</span>
 				</a>
-				<a href="{{ url_for('admin_page.insert_code') }}" class="nav-link {% if request.endpoint == 'admin_page.insert_code' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.insert_code') }}" data-tooltip="Add Code" class="nav-link {% if request.endpoint == 'admin_page.insert_code' %}active{% endif %}">
 					<span class="nav-icon">&#43;</span><span class="nav-text">Add Code</span>
 				</a>
 			</div>
 			<div class="nav-section">
 				<div class="nav-section-title">Code Lists</div>
-				<a href="{{ url_for('admin_page.unpublished_codes') }}" class="nav-link {% if request.endpoint == 'admin_page.unpublished_codes' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.unpublished_codes') }}" data-tooltip="Unpublished" class="nav-link {% if request.endpoint == 'admin_page.unpublished_codes' %}active{% endif %}">
 					<span class="nav-icon">&#9744;</span><span class="nav-text">Unpublished</span>
 				</a>
-				<a href="{{ url_for('admin_page.archived_codes') }}" class="nav-link {% if request.endpoint == 'admin_page.archived_codes' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.archived_codes') }}" data-tooltip="Archived" class="nav-link {% if request.endpoint == 'admin_page.archived_codes' %}active{% endif %}">
 					<span class="nav-icon">&#128451;</span><span class="nav-text">Archived</span>
 				</a>
-				<a href="{{ url_for('admin_page.notes_attention') }}" class="nav-link {% if request.endpoint == 'admin_page.notes_attention' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.notes_attention') }}" data-tooltip="Needs Attention" class="nav-link {% if request.endpoint == 'admin_page.notes_attention' %}active{% endif %}">
 					<span class="nav-icon">&#9888;</span><span class="nav-text">Needs Attention</span>
 				</a>
-				<a href="{{ url_for('admin_page.corrections') }}" class="nav-link {% if request.endpoint == 'admin_page.corrections' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.corrections') }}" data-tooltip="Corrections" class="nav-link {% if request.endpoint == 'admin_page.corrections' %}active{% endif %}">
 					<span class="nav-icon">&#9998;</span><span class="nav-text">Corrections</span>
 				</a>
-				<a href="{{ url_for('admin_page.broken_links') }}" class="nav-link {% if request.endpoint == 'admin_page.broken_links' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.broken_links') }}" data-tooltip="Broken Links" class="nav-link {% if request.endpoint == 'admin_page.broken_links' %}active{% endif %}">
 					<span class="nav-icon">&#128279;</span><span class="nav-text">Broken Links</span>
 				</a>
 			</div>
 			<div class="nav-section">
 				<div class="nav-section-title">Utilities</div>
-				<a href="{{ url_for('admin_page.utility_full_table') }}" class="nav-link {% if request.endpoint == 'admin_page.utility_full_table' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.utility_full_table') }}" data-tooltip="Full ASCL Table" class="nav-link {% if request.endpoint == 'admin_page.utility_full_table' %}active{% endif %}">
 					<span class="nav-icon">&#9638;</span><span class="nav-text">Full ASCL Table</span>
 				</a>
-				<a href="{{ url_for('admin_page.utility_simple_table') }}" class="nav-link {% if request.endpoint == 'admin_page.utility_simple_table' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.utility_simple_table') }}" data-tooltip="Simple ASCL Table" class="nav-link {% if request.endpoint == 'admin_page.utility_simple_table' %}active{% endif %}">
 					<span class="nav-icon">&#9637;</span><span class="nav-text">Simple ASCL Table</span>
 				</a>
-				<a href="{{ url_for('admin_page.utility_all_links') }}" class="nav-link {% if request.endpoint == 'admin_page.utility_all_links' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.utility_all_links') }}" data-tooltip="All Links List" class="nav-link {% if request.endpoint == 'admin_page.utility_all_links' %}active{% endif %}">
 					<span class="nav-icon">&#9776;</span><span class="nav-text">All Links List</span>
 				</a>
-				<a href="{{ url_for('admin_page.utility_site_links_list') }}" class="nav-link {% if request.endpoint == 'admin_page.utility_site_links_list' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.utility_site_links_list') }}" data-tooltip="Site Links List" class="nav-link {% if request.endpoint == 'admin_page.utility_site_links_list' %}active{% endif %}">
 					<span class="nav-icon">&#127760;</span><span class="nav-text">Site Links List</span>
 				</a>
 			</div>
 			<div class="nav-section">
 				<div class="nav-section-title">Account</div>
-				<a href="{{ url_for('admin_page.user_cp') }}" class="nav-link {% if request.endpoint == 'admin_page.user_cp' %}active{% endif %}">
+				<a href="{{ url_for('admin_page.user_cp') }}" data-tooltip="User CP" class="nav-link {% if request.endpoint == 'admin_page.user_cp' %}active{% endif %}">
 					<span class="nav-icon">&#9881;</span><span class="nav-text">User CP</span>
 				</a>
-				<a href="{{ url_for('admin_page.admin_logout') }}" class="nav-link">
+				<a href="{{ url_for('admin_page.admin_logout') }}" data-tooltip="Logout" class="nav-link">
 					<span class="nav-icon">&#10140;</span><span class="nav-text">Logout</span>
 				</a>
 			</div>
@@ -96,81 +96,100 @@
 	min-width: 200px;
 	background: #2c3e50;
 	color: #ecf0f1;
-	transition: width 0.2s ease, min-width 0.2s ease;
 	position: relative;
-	overflow: hidden;
+	overflow: visible;
+	transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+	            min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .admin-nav.collapsed {
-	width: 50px;
-	min-width: 50px;
-}
-.admin-nav.collapsed .nav-text,
-.admin-nav.collapsed .nav-section-title {
-	opacity: 0;
-	visibility: hidden;
-}
-.admin-nav.collapsed .nav-link {
-	justify-content: center;
-	padding: 12px 0;
-}
-.admin-nav.collapsed .nav-icon {
-	margin-right: 0;
-}
-.admin-nav.collapsed .toggle-icon {
-	transform: rotate(180deg);
+	width: 52px;
+	min-width: 52px;
 }
 
+/* Toggle button — sits on the sidebar edge */
 .nav-toggle {
 	position: absolute;
-	top: 10px;
-	right: 10px;
-	background: rgba(255,255,255,0.1);
-	border: none;
-	color: #ecf0f1;
+	top: 16px;
+	right: -14px;
 	width: 28px;
 	height: 28px;
-	border-radius: 4px;
+	background: #2c3e50;
+	border: 2px solid #3d566e;
+	border-radius: 50%;
+	color: #ecf0f1;
 	cursor: pointer;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	z-index: 10;
+	z-index: 20;
+	padding: 0;
+	transition: background 0.2s, border-color 0.2s, transform 0.15s;
 }
 .nav-toggle:hover {
-	background: rgba(255,255,255,0.2);
+	background: #3498db;
+	border-color: #3498db;
+	transform: scale(1.1);
 }
-.toggle-icon {
-	font-size: 12px;
-	transition: transform 0.2s ease;
+.nav-toggle svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2.5;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.admin-nav.collapsed .nav-toggle svg {
+	transform: rotate(180deg);
 }
 
+/* Nav content */
 .nav-content {
-	padding: 50px 0 20px 0;
+	padding: 54px 0 20px 0;
+	overflow: visible;
 }
 
 .nav-section {
-	margin-bottom: 20px;
+	margin-bottom: 8px;
 }
 .nav-section-title {
 	font-size: 11px;
 	font-weight: 600;
 	text-transform: uppercase;
 	color: #7f8c8d;
-	padding: 8px 15px;
+	padding: 10px 15px 4px;
 	letter-spacing: 0.5px;
 	white-space: nowrap;
-	transition: opacity 0.2s ease;
+	overflow: hidden;
+	max-width: 200px;
+	opacity: 1;
+	transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0.05s,
+	            max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+	            padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.admin-nav.collapsed .nav-section-title {
+	opacity: 0;
+	max-width: 0;
+	padding-top: 4px;
+	padding-bottom: 0;
+	padding-left: 0;
+	padding-right: 0;
+	transition: opacity 0.1s, max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+	            padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Nav links */
 .nav-link {
 	display: flex;
 	align-items: center;
-	padding: 10px 15px;
+	padding: 9px 15px;
 	color: #bdc3c7;
 	text-decoration: none;
 	font-size: 14px;
-	transition: background 0.15s ease, color 0.15s ease;
 	white-space: nowrap;
+	position: relative;
+	transition: background 0.15s, color 0.15s, padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .nav-link:hover {
 	background: rgba(255,255,255,0.1);
@@ -181,14 +200,58 @@
 	color: #fff;
 }
 .nav-icon {
-	width: 20px;
-	margin-right: 10px;
+	width: 22px;
 	text-align: center;
 	font-size: 16px;
 	flex-shrink: 0;
+	margin-right: 10px;
+	transition: margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .nav-text {
-	transition: opacity 0.2s ease;
+	opacity: 1;
+	transform: translateX(0);
+	transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0.05s,
+	            transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Collapsed states */
+.admin-nav.collapsed .nav-link {
+	justify-content: center;
+	padding: 11px 0;
+}
+.admin-nav.collapsed .nav-icon {
+	margin-right: 0;
+}
+.admin-nav.collapsed .nav-text {
+	opacity: 0;
+	transform: translateX(-8px);
+	position: absolute;
+	pointer-events: none;
+	transition: opacity 0.1s, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Tooltips when collapsed */
+.admin-nav.collapsed .nav-link::after {
+	content: attr(data-tooltip);
+	position: absolute;
+	left: 100%;
+	top: 50%;
+	transform: translateX(8px) translateY(-50%);
+	background: #34495e;
+	color: #fff;
+	padding: 5px 10px;
+	border-radius: 4px;
+	font-size: 13px;
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	z-index: 100;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+	transition: opacity 0.15s, transform 0.15s;
+}
+.admin-nav.collapsed .nav-link:hover::after {
+	opacity: 1;
+	transform: translateX(12px) translateY(-50%);
 }
 
 /* Main Content */
@@ -221,23 +284,51 @@
 /* Responsive */
 @media (max-width: 768px) {
 	.admin-nav {
-		width: 50px;
-		min-width: 50px;
+		width: 52px;
+		min-width: 52px;
 	}
-	.admin-nav .nav-text,
+	.admin-nav .nav-text {
+		opacity: 0;
+		position: absolute;
+		pointer-events: none;
+	}
 	.admin-nav .nav-section-title {
 		opacity: 0;
-		visibility: hidden;
+		max-width: 0;
+		padding: 0;
 	}
 	.admin-nav .nav-link {
 		justify-content: center;
-		padding: 12px 0;
+		padding: 11px 0;
 	}
 	.admin-nav .nav-icon {
 		margin-right: 0;
 	}
 	.nav-toggle {
 		display: none;
+	}
+	/* Enable tooltips on mobile-collapsed */
+	.admin-nav .nav-link::after {
+		content: attr(data-tooltip);
+		position: absolute;
+		left: 100%;
+		top: 50%;
+		transform: translateX(8px) translateY(-50%);
+		background: #34495e;
+		color: #fff;
+		padding: 5px 10px;
+		border-radius: 4px;
+		font-size: 13px;
+		white-space: nowrap;
+		opacity: 0;
+		pointer-events: none;
+		z-index: 100;
+		box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+		transition: opacity 0.15s, transform 0.15s;
+	}
+	.admin-nav .nav-link:hover::after {
+		opacity: 1;
+		transform: translateX(12px) translateY(-50%);
 	}
 }
 </style>
@@ -246,16 +337,14 @@
 function toggleAdminNav() {
 	var nav = document.getElementById('admin-nav');
 	nav.classList.toggle('collapsed');
-	// Save preference
 	localStorage.setItem('adminNavCollapsed', nav.classList.contains('collapsed'));
 }
 
-// Restore preference on load
-document.addEventListener('DOMContentLoaded', function() {
-	var collapsed = localStorage.getItem('adminNavCollapsed') === 'true';
-	if (collapsed) {
+// Restore preference — apply immediately to avoid flash of expanded state
+(function() {
+	if (localStorage.getItem('adminNavCollapsed') === 'true') {
 		document.getElementById('admin-nav').classList.add('collapsed');
 	}
-});
+})();
 </script>
 {% endblock %}

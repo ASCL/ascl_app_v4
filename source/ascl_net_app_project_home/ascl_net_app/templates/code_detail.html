@@ -80,7 +80,11 @@
 
 
 			<span class="ascl_id">
+				{% if code.ascl_id == '0000.000' %}
+				[submitted]
+				{% else %}
 				[<a href="/{{ code.ascl_id }}">ascl:{{ code.ascl_id }}</a>]
+				{% endif %}
 			</span>
 
 		<span class="title">
@@ -182,12 +186,13 @@
 		</dl>
 		{% endif %}
 
-		<div class="explain"><a href="/explain">Explain these fields?</a> | <a href="/{{ code.ascl_id }}/suggest-edit">Suggest a correction</a></div>
+		<div class="explain"><a href="/explain">Explain these fields?</a>{% if is_admin_logged_in %} | <a href="/{{ code.ascl_id }}/suggest-edit">Suggest a correction</a>{% endif %}</div>
 
 		<div class="clear"></div>
 
 		<br>
 		<div class="shield">
+			{% if code.ascl_id != '0000.000' %}
 			<img src="https://img.shields.io/badge/ascl-{{ code.ascl_id }}-blue.svg?colorB=262255" alt="ascl:{{ code.ascl_id }}" />
 			<script> 						var css = ".getShield { display: inline; } textarea { box-sizing: border-box; } .shieldText { width: 580px } .shieldCode { display: none; position: relative; } .ungetShield { height: 20px; width: 20px; position: absolute; top: -20px; left: 560px; background-color: #999; text-align: center; } .x { position: absolute; left: 0; right: 0; top: 2; bottom: 0; margin: auto; text-align: center; }";
 				var htmlDiv = document.createElement('div');
@@ -219,6 +224,7 @@
 					});
 				</script>
 			</div>
+			{% endif %}
 		</div>
 
 	</div>

@@ -184,7 +184,7 @@ echo -e "${GREEN}Confirmation received. Starting restore...${NC}"
 echo ""
 
 # Create temporary credentials file
-print_step "1/18" "Setting up MySQL credentials..."
+print_step "1/19" "Setting up MySQL credentials..."
 TMP_CREDS=$(create_temp_credentials)
 trap "rm -f '$TMP_CREDS'" EXIT
 print_success "Temporary credentials file created"
@@ -193,14 +193,14 @@ print_success "Temporary credentials file created"
 MYSQL_OPTS="--defaults-file=$TMP_CREDS --protocol=TCP --host=127.0.0.1 --port=3307"
 
 # Drop and recreate database
-print_step "2/18" "Dropping and recreating database '$TARGET_DB'..."
+print_step "2/19" "Dropping and recreating database '$TARGET_DB'..."
 mysql $MYSQL_OPTS -e "DROP DATABASE IF EXISTS $TARGET_DB;"
 mysql $MYSQL_OPTS -e "CREATE DATABASE $TARGET_DB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 print_success "Database '$TARGET_DB' created"
 
 # Restore backup
 # Note: Replace SQL_MODE line to disable strict mode and allow zero dates in TIMESTAMP columns
-print_step "3/18" "Restoring backup (this may take a while)..."
+print_step "3/19" "Restoring backup (this may take a while)..."
 if $IS_GZIPPED; then
     gunzip -c "$BACKUP_FILE" | sed 's/^SET SQL_MODE = .*/SET SQL_MODE = "";/' | mysql $MYSQL_OPTS "$TARGET_DB"
 else
@@ -213,7 +213,7 @@ TABLE_COUNT=$(mysql $MYSQL_OPTS -N -e "SELECT COUNT(*) FROM information_schema.t
 print_success "$TARGET_DB now has $TABLE_COUNT tables"
 
 # Convert tables to InnoDB (required for foreign keys)
-print_step "4/18" "Converting tables to InnoDB..."
+print_step "4/19" "Converting tables to InnoDB..."
 INNODB_MIGRATION="$SCRIPT_DIR/convert_to_innodb.sql"
 if [[ -f "$INNODB_MIGRATION" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$INNODB_MIGRATION"
@@ -223,7 +223,7 @@ else
 fi
 
 # Rename id columns to pk and update table names for v4
-print_step "5/18" "Renaming columns and tables for v4 schema..."
+print_step "5/19" "Renaming columns and tables for v4 schema..."
 PK_MIGRATION="$SCRIPT_DIR/rename_pk_columns.sql"
 if [[ -f "$PK_MIGRATION" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$PK_MIGRATION"
@@ -233,7 +233,7 @@ else
 fi
 
 # Update link_type table schema
-print_step "6/18" "Updating link_type table schema..."
+print_step "6/19" "Updating link_type table schema..."
 LINK_TYPE_MIGRATION="$SCRIPT_DIR/alter_link_type_table.sql"
 if [[ -f "$LINK_TYPE_MIGRATION" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$LINK_TYPE_MIGRATION"
@@ -244,7 +244,7 @@ else
 fi
 
 # Create code_note table (before Python migration so models can load)
-print_step "7/18" "Creating code_note table and migrating notes..."
+print_step "7/19" "Creating code_note table and migrating notes..."
 NOTE_MIGRATION="$SCRIPT_DIR/create_code_note_table.sql"
 if [[ -f "$NOTE_MIGRATION" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$NOTE_MIGRATION"
@@ -255,7 +255,7 @@ else
 fi
 
 # Create code_correction tables (for user-submitted corrections)
-print_step "8/18" "Creating code_correction tables..."
+print_step "8/19" "Creating code_correction tables..."
 CORRECTION_MIGRATION="$SCRIPT_DIR/create_code_correction_tables.sql"
 if [[ -f "$CORRECTION_MIGRATION" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$CORRECTION_MIGRATION"
@@ -266,7 +266,7 @@ else
 fi
 
 # Run PHP serialization migration
-print_step "9/18" "Migrating PHP-serialized fields to link table..."
+print_step "9/19" "Migrating PHP-serialized fields to link table..."
 MIGRATE_SCRIPT="$SCRIPT_DIR/migrate_serialized_to_links.py"
 if [[ -f "$MIGRATE_SCRIPT" ]]; then
     python3 "$MIGRATE_SCRIPT" "$TARGET_DB"
@@ -277,7 +277,7 @@ else
 fi
 
 # Create author tables and migrate credit field
-print_step "10/18" "Creating author, orcid_provenance, and code_to_author tables..."
+print_step "10/19" "Creating author, orcid_provenance, and code_to_author tables..."
 AUTHOR_MIGRATION="$SCRIPT_DIR/create_author_table.sql"
 if [[ -f "$AUTHOR_MIGRATION" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$AUTHOR_MIGRATION"
@@ -286,7 +286,7 @@ else
     print_warning "Migration script not found: $AUTHOR_MIGRATION"
 fi
 
-print_step "11/18" "Migrating codes.credit to author table..."
+print_step "11/19" "Migrating codes.credit to author table..."
 AUTHOR_MIGRATE_SCRIPT="$SCRIPT_DIR/migrate_credit_to_authors.py"
 if [[ -f "$AUTHOR_MIGRATE_SCRIPT" ]]; then
     python3 "$AUTHOR_MIGRATE_SCRIPT" "$TARGET_DB"
@@ -296,7 +296,7 @@ else
 fi
 
 # Drop PHP-serialized columns from codes table (data now in link table)
-print_step "12/18" "Dropping migrated PHP-serialized columns..."
+print_step "12/19" "Dropping migrated PHP-serialized columns..."
 DROP_COLS_SQL="$SCRIPT_DIR/drop_serialized_columns.sql"
 if [[ -f "$DROP_COLS_SQL" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$DROP_COLS_SQL"
@@ -306,7 +306,7 @@ else
 fi
 
 # Add fulltext index for search (moved to end - slow operation)
-print_step "13/18" "Adding fulltext search index..."
+print_step "13/19" "Adding fulltext search index..."
 FT_MIGRATION="$SCRIPT_DIR/create_fulltext_index.sql"
 if [[ -f "$FT_MIGRATION" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$FT_MIGRATION"
@@ -316,7 +316,7 @@ else
 fi
 
 # Create public_codes view
-print_step "14/18" "Creating public_codes view..."
+print_step "14/19" "Creating public_codes view..."
 VIEW_SQL="$SCRIPT_DIR/create_public_codes_view.sql"
 if [[ -f "$VIEW_SQL" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$VIEW_SQL"
@@ -326,7 +326,7 @@ else
 fi
 
 # Seed mission/survey keywords not in v3
-print_step "15/18" "Seeding mission/survey keywords..."
+print_step "15/19" "Seeding mission/survey keywords..."
 SEED_SQL="$SCRIPT_DIR/seed_mission_keywords.sql"
 if [[ -f "$SEED_SQL" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$SEED_SQL"
@@ -336,7 +336,7 @@ else
 fi
 
 # Create link_check table (for link checker results)
-print_step "16/18" "Creating link_check table..."
+print_step "16/19" "Creating link_check table..."
 LINK_CHECK_SQL="$SCRIPT_DIR/../migrations/004_create_link_check_table.sql"
 if [[ -f "$LINK_CHECK_SQL" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$LINK_CHECK_SQL"
@@ -346,7 +346,7 @@ else
 fi
 
 # Add short_name column and populate from GitHub repo names
-print_step "17/18" "Adding short_name column to codes table..."
+print_step "17/19" "Adding short_name column to codes table..."
 SHORT_NAME_SQL="$SCRIPT_DIR/add_short_name_column.sql"
 if [[ -f "$SHORT_NAME_SQL" ]]; then
     mysql $MYSQL_OPTS "$TARGET_DB" < "$SHORT_NAME_SQL"
@@ -355,8 +355,18 @@ else
     print_warning "Migration script not found: $SHORT_NAME_SQL"
 fi
 
+# Add time_reviewed column and seed from time_updated
+print_step "18/19" "Adding time_reviewed column to codes table..."
+TIME_REVIEWED_SQL="$SCRIPT_DIR/add_time_reviewed_column.sql"
+if [[ -f "$TIME_REVIEWED_SQL" ]]; then
+    mysql $MYSQL_OPTS "$TARGET_DB" < "$TIME_REVIEWED_SQL"
+    print_success "time_reviewed column added and seeded from time_updated"
+else
+    print_warning "Migration script not found: $TIME_REVIEWED_SQL"
+fi
+
 # Run validation tests
-print_step "18/18" "Running migration validation tests..."
+print_step "19/19" "Running migration validation tests..."
 APP_DIR="$SCRIPT_DIR/../source/ascl_net_app_project_home"
 TEST_FILE="$APP_DIR/ascl_net_app/tests/test_db_schema_v4.py"
 

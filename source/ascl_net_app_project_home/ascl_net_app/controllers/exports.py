@@ -76,14 +76,6 @@ def _keywords_for_code(db_session, code_pk):
     return [row.label for row in rows]
 
 
-def _pubdate(code):
-    """Derive pubdate string MM/CCYY from ascl_id and century."""
-    ascl_id = code.ascl_id  # e.g. "9903.001"
-    century = getattr(code, "century", 20)
-    month = ascl_id[2:4]
-    year = str(century) + ascl_id[0:2]
-    return f"{month}/{year}"
-
 
 def _build_code_dict(code, db_session, include_keywords=True):
     """Build the common dict used by JSON and XML exports."""

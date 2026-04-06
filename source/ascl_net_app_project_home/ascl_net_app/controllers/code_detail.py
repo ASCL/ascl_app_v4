@@ -91,6 +91,31 @@ def code_detail_alt(ascl_id):
 	return render_template("code_detail_alt.html", **templateDict)
 
 
+@code_detail_page.route("/code/v/<int:pk>", methods=['GET'])
+def code_detail_by_pk(pk):
+	'''View a code by its database primary key (used for newly submitted codes).'''
+	from ascl_net_app.model.database import Database
+	db = Database()
+	import ascl_core.database.ascldb.ASCLModelClasses as ascldb
+
+	session = db.Session()
+	code = session.query(ascldb.ASCLCode).filter_by(pk=pk).first()
+
+	if not code:
+		abort(404)
+
+	# Non-admin visitors cannot view unpublished codes
+	from flask import session as flask_session
+	if not flask_session.get("user_id") and not code.published:
+		abort(404)
+
+	# If the code has a real ASCL ID, redirect to the canonical URL
+	if code.ascl_id and code.ascl_id != '0000.000':
+		return redirect(f"/{code.ascl_id}")
+
+	return _render_code_detail(session, code)
+
+
 @code_detail_page.route("/<path:ascl_id>", methods=['GET'])
 def code_detail(ascl_id):
 	''' Show detailed information for a specific code, or resolve an alias. '''
@@ -141,6 +166,11 @@ def code_detail(ascl_id):
 	if not flask_session.get("user_id") and not code.published:
 		abort(404)
 
+	return _render_code_detail(session, code)
+
+
+def _render_code_detail(session, code):
+	"""Render the code detail page for a given code object and DB session."""
 	# Get related links from link table
 	link_query = text("""
 		SELECT l.pk AS lpk, l.url, lt.short_name

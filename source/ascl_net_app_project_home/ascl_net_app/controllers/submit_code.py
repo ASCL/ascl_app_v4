@@ -357,7 +357,7 @@ def submit_code():
 				new_code.title = form_data['title']
 				new_code.credit = form_data['credit']
 				new_code.abstract = form_data['abstract']
-				new_code.citation_method = form_data['citation_method'] if form_data['citation_method'] else None
+				new_code.citation_method = form_data['citation_method'] or None
 				new_code.email = form_data['email']
 				new_code.notes = notes
 				new_code.time_added = datetime.now()
@@ -396,6 +396,9 @@ def submit_code():
 				templateDict['hide_form'] = True
 
 			except Exception as e:
-				templateDict['err'] = f'<p>An error occurred while submitting your code: {str(e)}</p>'
+				import logging
+				logging.getLogger(__name__).exception("Code submission failed")
+				db_session.rollback()
+				templateDict['err'] = f'<p>An error occurred while submitting your code. Please try again or contact us if the problem persists.</p>'
 
 	return render_template("submit_code.html", **templateDict)

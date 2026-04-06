@@ -112,18 +112,6 @@ def _split_credit_text(credit_text):
 	return [token.strip() for token in credit_text.split(";") if token.strip()]
 
 
-def _credit_text_from_authors(code):
-	"""Build display credit string from related author rows when available."""
-	authors = getattr(code, "authors", None)
-	if not authors:
-		return getattr(code, "credit", "") or ""
-	names = []
-	for author in authors:
-		name = (getattr(author, "display_name", None) or getattr(author, "raw_name", None) or "").strip()
-		if name:
-			names.append(name)
-	return "; ".join(names)
-
 
 def _sync_authors_from_credit(db_session, ascldb, code_pk, credit_text):
 	"""Replace author rows for a code from semicolon-delimited credit text.
@@ -223,11 +211,25 @@ def admin_home():
 		except Exception:
 			correction_count = 0
 
+	# Last link check time
+	last_link_check = None
+	if current_usr:
+		try:
+			from sqlalchemy import text as sa_text
+			result = db_session.execute(sa_text(
+				"SELECT MAX(checked_at) FROM link_check"
+			)).scalar()
+			if result:
+				last_link_check = result.strftime('%Y-%m-%d %H:%M')
+		except Exception:
+			pass
+
 	return render_template(
 		"admin/home.html",
 		current_user=current_usr,
 		attention_count=attention_count,
 		correction_count=correction_count,
+		last_link_check=last_link_check,
 	)
 
 
@@ -238,6 +240,75 @@ def admin_dashboard():
 	from ascl_net_app.controllers.dashboard import _build_dashboard_context
 	ctx = _build_dashboard_context()
 	return render_template("admin/dashboard.html", **ctx)
+
+
+@admin_page.route("/not-reviewed-since", methods=["GET"])
+@_login_required
+def not_reviewed_since():
+	"""Show published codes not reviewed since a given date."""
+	from datetime import datetime
+	from sqlalchemy import text
+
+	date_str = request.args.get("date", "").strip()
+	if not date_str or len(date_str) != 8 or not date_str.isdigit():
+		flash("Please enter a valid date in YYYYMMDD format.", "error")
+		return redirect(url_for("admin_page.admin_home"))
+
+	try:
+		cutoff = datetime.strptime(date_str, "%Y%m%d")
+	except ValueError:
+		flash("Invalid date. Please use YYYYMMDD format.", "error")
+		return redirect(url_for("admin_page.admin_home"))
+
+	db_session = _get_db_session()
+
+	# Total published codes (for percentage)
+	total_published = db_session.execute(text(
+		"SELECT COUNT(*) FROM codes WHERE published = 1 AND ascl_id != '0000.000'"
+	)).scalar()
+
+	# Codes not reviewed since the cutoff date
+	rows = db_session.execute(text(
+		"SELECT pk, ascl_id, title, time_reviewed FROM codes "
+		"WHERE published = 1 AND ascl_id != '0000.000' AND time_reviewed < :cutoff "
+		"ORDER BY time_reviewed ASC"
+	), {"cutoff": cutoff}).fetchall()
+
+	return render_template(
+		"admin/not_reviewed_since.html",
+		date_str=date_str,
+		cutoff=cutoff.strftime("%b %-d, %Y"),
+		codes=rows,
+		match_count=len(rows),
+		total_published=total_published,
+	)
+
+
+@admin_page.route("/mark-reviewed/<int:pk>", methods=["POST"])
+@_login_required
+def mark_reviewed(pk):
+	"""Set time_reviewed to NOW() for a given code."""
+	from datetime import datetime
+	from flask import jsonify
+	from sqlalchemy import text
+
+	db_session = _get_db_session()
+	db_session.execute(
+		text("UPDATE codes SET time_reviewed = NOW() WHERE pk = :pk"),
+		{"pk": pk},
+	)
+	db_session.commit()
+
+	row = db_session.execute(
+		text("SELECT time_reviewed FROM codes WHERE pk = :pk"),
+		{"pk": pk},
+	).fetchone()
+
+	return jsonify(
+		success=True,
+		time_reviewed=row.time_reviewed.strftime("%Y-%m-%d %H:%M") if row and row.time_reviewed else "—",
+		time_reviewed_iso=row.time_reviewed.strftime("%Y-%m-%dT%H:%M:%S") if row and row.time_reviewed else "",
+	)
 
 
 @admin_page.route("/login", methods=["POST"])
@@ -412,14 +483,10 @@ def unpublished_codes():
 		import math
 		total_pages = math.ceil(total_count / per_page) if per_page > 0 else 1
 
-	# Build credit text for card view
-	codes_credit = {code.pk: _credit_text_from_authors(code) for code in codes}
-
 	return render_template(
 		"admin/unpublished.html",
 		page_title="Unpublished Codes",
 		codes=codes,
-		codes_credit=codes_credit,
 		current_user=_current_user(db_session),
 		page=page,
 		per_page=per_page,
@@ -646,7 +713,7 @@ def update_code(pk):
 	# GET request - load current data
 	# Get aliases as space-separated string
 	aliases_str = " ".join([a.alias for a in code.aliases]) if code.aliases else ""
-	credits_str = _credit_text_from_authors(code)
+	credits_str = code.credit_text
 
 	# Get keywords as space-separated string (quote keywords with spaces)
 	keywords_list = []

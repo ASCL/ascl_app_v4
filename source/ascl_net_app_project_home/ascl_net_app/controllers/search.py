@@ -49,92 +49,6 @@ def _author_query_variants(search_term):
 	return unique
 
 
-def _split_author_name(author_name):
-	"""Split author name into (surname, given_tokens) in lowercase."""
-	import re
-
-	raw = (author_name or "").strip().lower().replace(".", " ")
-	raw = re.sub(r"\s+", " ", raw)
-	if not raw:
-		return "", []
-
-	if "," in raw:
-		surname_raw, given_raw = raw.split(",", 1)
-		surname_tokens = [w for w in re.split(r"[\s\-]+", surname_raw.strip()) if w]
-		given_tokens = [w for w in re.split(r"[\s\-]+", given_raw.strip()) if w]
-		surname = surname_tokens[-1] if surname_tokens else ""
-		return surname, given_tokens
-
-	parts = [w for w in re.split(r"[\s\-]+", raw) if w]
-	if not parts:
-		return "", []
-	if len(parts) == 1:
-		return parts[0], []
-	return parts[-1], parts[:-1]
-
-
-def _author_name_matches(candidate_name, search_term):
-	"""True when candidate author matches the searched person (not just surname)."""
-	query_surname, query_given = _split_author_name(search_term)
-	cand_surname, cand_given = _split_author_name(candidate_name)
-
-	if not query_surname or not cand_surname or cand_surname != query_surname:
-		return False
-	if not query_given:
-		return True
-
-	full_query_tokens = [t for t in query_given if len(t) > 1]
-	initial_query_tokens = [t for t in query_given if len(t) == 1]
-	cand_full_tokens = [t for t in cand_given if len(t) > 1]
-	cand_initials = [t[0] for t in cand_given if t]
-
-	def _token_like(a, b):
-		# Treat close prefixes as equal to allow "alex" vs "alexander".
-		if a == b:
-			return True
-		if len(a) >= 3 and b.startswith(a):
-			return True
-		if len(b) >= 3 and a.startswith(b):
-			return True
-		return False
-
-	if full_query_tokens:
-		# Anchor by first given-name token for precision.
-		if not cand_full_tokens or not _token_like(full_query_tokens[0], cand_full_tokens[0]):
-			return False
-
-	# All full query tokens must match candidate full tokens.
-	for token in full_query_tokens:
-		if not any(_token_like(token, cand) for cand in cand_full_tokens):
-			return False
-
-	# All query initials must be present in candidate initials.
-	for initial in initial_query_tokens:
-		if initial not in cand_initials:
-			return False
-
-	return True
-
-
-def _code_matches_author_query(code, search_term):
-	"""Filter a code row to true author-name matches only."""
-	names = []
-	credit = getattr(code, "credit", None)
-	if credit:
-		names.extend([a.strip() for a in credit.split(";") if a and a.strip()])
-
-	authors = getattr(code, "authors", None)
-	if authors:
-		for author in authors:
-			display_name = getattr(author, "display_name", None)
-			if display_name:
-				names.append(display_name.strip())
-
-	if not names:
-		return False
-
-	return any(_author_name_matches(name, search_term) for name in names)
-
 
 def _search_credit_mysql(search_term, limit=100):
 	"""Improved MySQL credit search: phrase + token scoring."""
@@ -697,7 +611,7 @@ def credit_search(search_term):
 		templateDict['search_method'] = 'mysql'
 
 	# Keep only true person matches (avoid surname-only false positives).
-	results = [code for code in results if _code_matches_author_query(code, search_term)]
+	results = [code for code in results if code.matches_author_query(search_term)]
 
 	templateDict['codes'] = results
 	templateDict['result_count'] = len(results)
