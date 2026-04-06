@@ -169,7 +169,7 @@ def _search_mysql_suggestions(query_string, limit=8):
 		{
 			"ascl_id": c.ascl_id,
 			"title": c.title,
-			"url": f"/{c.ascl_id}",
+			"url": f"/code/v/{c.pk}" if c.ascl_id == "0000.000" else f"/{c.ascl_id}",
 		}
 		for c in results
 	]
@@ -469,10 +469,15 @@ def search_suggest():
 				# Fall back to highlighted title if that's where the match is
 				if not snippet and "title" in hl and hl["title"].get("snippet"):
 					snippet = hl["title"]["snippet"]
+				pk = doc.get("id")
+				if ascl_id == "0000.000" and pk:
+					url = f"/code/v/{pk}"
+				else:
+					url = f"/{ascl_id}"
 				suggestions.append({
 					"ascl_id": ascl_id,
 					"title": title,
-					"url": f"/{ascl_id}",
+					"url": url,
 					"snippet": snippet,
 				})
 

@@ -75,6 +75,75 @@ def test_search_suggest_uses_typesense(client, monkeypatch):
 	assert payload["suggestions"][0]["ascl_id"] == "2306.019"
 
 
+# ===========================================================================
+# 0000.000 codes must link by pk, not by ascl_id
+# ===========================================================================
+
+def test_mysql_suggest_0000_links_by_pk(client):
+    """MySQL autocomplete suggestions for 0000.000 codes should use /code/v/<pk>."""
+    resp = client.get("/search/suggest?q=ascl&limit=20")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+
+    for s in payload.get("suggestions", []):
+        if s["ascl_id"] == "0000.000":
+            assert s["url"].startswith("/code/v/"), (
+                f"0000.000 code '{s['title']}' links to '{s['url']}' "
+                f"instead of /code/v/<pk>"
+            )
+            break
+
+
+def test_typesense_suggest_0000_links_by_pk(client, monkeypatch):
+    """Typesense autocomplete suggestions for 0000.000 codes should use /code/v/<pk>."""
+    from ascl_net_app.services import typesense_client
+
+    class FakeTypesenseClient:
+        enabled = True
+        fallback_to_mysql = True
+
+        def is_healthy(self):
+            return True
+
+        def search(self, **kwargs):
+            return {
+                "found": 2,
+                "hits": [
+                    {"document": {"id": "42", "ascl_id": "0000.000", "title": "Unassigned Code"},
+                     "highlight": {}},
+                    {"document": {"id": "99", "ascl_id": "2306.019", "title": "Normal Code"},
+                     "highlight": {}},
+                ],
+            }
+
+    monkeypatch.setattr(typesense_client, "get_typesense_client", lambda: FakeTypesenseClient())
+
+    resp = client.get("/search/suggest?q=test&limit=5")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+
+    suggestions = payload["suggestions"]
+    assert len(suggestions) == 2
+
+    # 0000.000 code should link by pk
+    assert suggestions[0]["url"] == "/code/v/42"
+    # Normal code should link by ascl_id
+    assert suggestions[1]["url"] == "/2306.019"
+
+
+def test_suggest_0000_never_links_to_slash_0000(client):
+    """No autocomplete suggestion should ever link to /0000.000."""
+    resp = client.get("/search/suggest?q=ascl&limit=50")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+
+    for s in payload.get("suggestions", []):
+        assert s["url"] != "/0000.000", (
+            f"Code '{s['title']}' links to /0000.000 — "
+            f"0000.000 codes must use /code/v/<pk>"
+        )
+
+
 def test_author_query_variants_include_initial_form():
 	from ascl_net_app.controllers.search import _author_query_variants
 	variants = _author_query_variants("Smith, John Kevin")
