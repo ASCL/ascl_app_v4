@@ -94,9 +94,21 @@ def test_mysql_suggest_0000_links_by_pk(client):
             break
 
 
-def test_typesense_suggest_0000_links_by_pk(client, monkeypatch):
-    """Typesense autocomplete suggestions for 0000.000 codes should use /code/v/<pk>."""
+def test_typesense_suggest_0000_resolves_local_pk(client, monkeypatch):
+    """Typesense 0000.000 suggestions should resolve pk from the local DB, not Typesense id."""
     from ascl_net_app.services import typesense_client
+    from sqlalchemy import text as sa_text
+    from ascl_net_app.model.database import Database
+
+    # Find a real 0000.000 published code in the local DB
+    session = Database().Session()
+    row = session.execute(
+        sa_text("SELECT pk, title FROM codes "
+                "WHERE ascl_id = '0000.000' AND published = 1 LIMIT 1")
+    ).first()
+    if not row:
+        pytest.skip("No published 0000.000 code in local database")
+    local_pk, local_title = row[0], row[1]
 
     class FakeTypesenseClient:
         enabled = True
@@ -109,9 +121,12 @@ def test_typesense_suggest_0000_links_by_pk(client, monkeypatch):
             return {
                 "found": 2,
                 "hits": [
-                    {"document": {"id": "42", "ascl_id": "0000.000", "title": "Unassigned Code"},
+                    # Typesense id deliberately differs from local pk
+                    {"document": {"id": "99999", "ascl_id": "0000.000",
+                                  "title": local_title},
                      "highlight": {}},
-                    {"document": {"id": "99", "ascl_id": "2306.019", "title": "Normal Code"},
+                    {"document": {"id": "88", "ascl_id": "2306.019",
+                                  "title": "Normal Code"},
                      "highlight": {}},
                 ],
             }
@@ -125,10 +140,43 @@ def test_typesense_suggest_0000_links_by_pk(client, monkeypatch):
     suggestions = payload["suggestions"]
     assert len(suggestions) == 2
 
-    # 0000.000 code should link by pk
-    assert suggestions[0]["url"] == "/code/v/42"
+    # 0000.000 code should use the LOCAL pk, not Typesense's id
+    assert suggestions[0]["url"] == f"/code/v/{local_pk}"
     # Normal code should link by ascl_id
     assert suggestions[1]["url"] == "/2306.019"
+
+
+def test_typesense_suggest_0000_unknown_title_falls_back(client, monkeypatch):
+    """If a 0000.000 title from Typesense doesn't exist locally, fall back to search."""
+    from ascl_net_app.services import typesense_client
+
+    class FakeTypesenseClient:
+        enabled = True
+        fallback_to_mysql = True
+
+        def is_healthy(self):
+            return True
+
+        def search(self, **kwargs):
+            return {
+                "found": 1,
+                "hits": [
+                    {"document": {"id": "99999", "ascl_id": "0000.000",
+                                  "title": "NonexistentCodeXYZ123"},
+                     "highlight": {}},
+                ],
+            }
+
+    monkeypatch.setattr(typesense_client, "get_typesense_client", lambda: FakeTypesenseClient())
+
+    resp = client.get("/search/suggest?q=test&limit=5")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+
+    suggestions = payload["suggestions"]
+    assert len(suggestions) == 1
+    # Should fall back to a search URL, not /code/v/ with a wrong pk
+    assert suggestions[0]["url"].startswith("/search?")
 
 
 def test_suggest_0000_never_links_to_slash_0000(client):

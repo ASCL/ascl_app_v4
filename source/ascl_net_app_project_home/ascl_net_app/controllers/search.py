@@ -469,9 +469,17 @@ def search_suggest():
 				# Fall back to highlighted title if that's where the match is
 				if not snippet and "title" in hl and hl["title"].get("snippet"):
 					snippet = hl["title"]["snippet"]
-				pk = doc.get("id")
-				if ascl_id == "0000.000" and pk:
-					url = f"/code/v/{pk}"
+				if ascl_id == "0000.000":
+					# Typesense pk may not match the local database;
+					# resolve by title against the local DB.
+					from ascl_net_app.model.database import Database
+					from sqlalchemy import text as sa_text
+					local_row = Database().Session().execute(
+						sa_text("SELECT pk FROM codes WHERE title = :title "
+								"AND ascl_id = '0000.000' AND published = 1 LIMIT 1"),
+						{"title": title},
+					).first()
+					url = f"/code/v/{local_row[0]}" if local_row else f"/search?q={title}"
 				else:
 					url = f"/{ascl_id}"
 				suggestions.append({
