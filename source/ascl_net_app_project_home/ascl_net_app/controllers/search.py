@@ -65,18 +65,13 @@ def _search_credit_mysql(search_term, limit=100):
 	strong_words = [w for w in words if len(w) >= 2]
 
 	ASCLCode = ascldb.ASCLCode
-	use_author_table = hasattr(ascldb, "Author")
-	Author = getattr(ascldb, "Author", None)
-
-	credit_col = Author.display_name if use_author_table else ASCLCode.credit
+	credit_col = ASCLCode.credit
 	conditions = [credit_col.ilike(f"%{query_raw}%")] if query_raw else []
 	for w in strong_words:
 		conditions.append(credit_col.ilike(f"%{w}%"))
 
 	# Keep broad recall, then rank by phrase and token quality.
 	base_query = session.query(ASCLCode).filter(ASCLCode.published == 1)
-	if use_author_table:
-		base_query = base_query.join(Author, Author.code_pk == ASCLCode.pk)
 	if strong_words:
 		# Require at least the first strong token to be present to reduce false positives.
 		base_query = base_query.filter(credit_col.ilike(f"%{strong_words[0]}%"))

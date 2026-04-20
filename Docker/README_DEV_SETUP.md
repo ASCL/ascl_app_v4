@@ -1,6 +1,6 @@
 # ASCL Development Environment Setup Guide
 
-This guide documents the complete setup process for the ASCL MySQL development environment using Docker.
+This guide documents the complete setup process for the ASCL MySQL development environment using Docker. Docker here is used **only** for the local development database — production (VPS or cPanel) runs MySQL natively, not in a container.
 
 ## Overview
 
@@ -8,10 +8,61 @@ The development environment consists of:
 - **MySQL 8.0.42** running in a Docker container named `mysql_ascl_dev`
 - **Port 3307** (to avoid conflicts with other MySQL instances)
 - **Four databases**:
-  - `ascl_db` - Original production backup (MyISAM, no FKs)
-  - `ascl_db_v4` - Upgraded schema (InnoDB, foreign keys, code_pk migration)
-  - `ascl_wordpress` - WordPress content database
-  - `ascl_phpbb` - phpBB forum database
+
+  | Database | Size | Engine | Description                     |
+  |----------------|-------|--------|---------------------------------|
+  | `ascl_db`      | 18 MB | MyISAM | Original production backup (v3) |
+  | `ascl_db_v4`   | ~18 MB| InnoDB | Upgraded schema (FKs, `code_pk`)|
+  | `ascl_wordpress`| 26 MB| InnoDB | WordPress content DB            |
+  | `ascl_phpbb`   | 27 MB | InnoDB | phpBB forum DB                  |
+
+### Architecture
+
+```
+Host :3307 ──▶ Docker container mysql_ascl_dev :3306
+                ├── ascl_db         (v3 snapshot, MyISAM)
+                ├── ascl_db_v4      (upgraded, InnoDB + FKs)  ◀── Flask app reads this
+                ├── ascl_wordpress  (About/News/submissions)
+                └── ascl_phpbb      (legacy forum)
+
+~/.my.cnf [client_ascl]  ──▶ password-less CLI + Python access
+```
+
+## TL;DR cheat sheet
+
+```bash
+# First-time setup
+cd Docker && ./setup_dev_environment.sh
+
+# Daily use
+docker-compose up -d                            # start
+docker-compose stop                             # stop
+docker-compose ps                               # status
+docker-compose logs -f mysql                    # follow logs
+
+# Connect
+mysql --defaults-group-suffix=_ascl -D ascl_db_v4          # local client
+docker exec -it mysql_ascl_dev bash                        # container shell
+
+# Backup / restore one DB
+docker exec mysql_ascl_dev mysqldump -uroot -p<ROOT_PW> ascl_db_v4 | gzip > backup.sql.gz
+gunzip -c backup.sql.gz | docker exec -i mysql_ascl_dev mysql -uroot -p<ROOT_PW> ascl_db_v4
+
+# Nuke and rebuild (DELETES all data)
+docker-compose down -v && ./setup_dev_environment.sh
+```
+
+## What the upgrade playbook does (`ascl_db_v4`)
+
+`agents/DB_UPGRADE_PLAYBOOK.sql` converts the v3 snapshot to the v4 schema:
+
+- **Engine**: all tables MyISAM → InnoDB (enables FKs + ACID)
+- **Charset**: all tables → `utf8mb4_unicode_ci`
+- **Primary keys**: `codes.id` → `codes.pk`; adopted repo-wide naming convention
+- **Foreign keys**: 9 FKs added, migrated from `ascl_id` (varchar) to `code_pk` (int):
+  `code_aliases`, `code_keywords` (×2), `citations`, `ads_entries_new`, `link`, `change`, `citefile_metadata`, `ascl_for_zenodo_matching` → `codes` / `keywords`
+- **Cleanup**: drops superseded tables (`codes_backup2`, `classic_citations`, `citations_new`, `links`, `ads_entries`, `ascl_for_zenodo_matching{_two,2}`)
+- **Timestamps**: zero-dates (`0000-00-00 00:00:00`) → NULL, sane defaults for created/updated columns
 
 ## Quick Start
 

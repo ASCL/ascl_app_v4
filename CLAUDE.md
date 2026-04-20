@@ -2,15 +2,16 @@
 
 ## Project Overview
 
-This project aims to recreate the **ascl.net** (Astrophysics Source Code Library) website with a modern technology stack. The current site runs on cPanel with WordPress and MySQL 8.0.42. The goal is to migrate to a new platform using **Flask + SQLAlchemy** and **Nginx** while maintaining MySQL compatibility (with PostgreSQL support for future migration).
+This project recreates the **ascl.net** (Astrophysics Source Code Library) website with a modern stack, replacing the legacy PHP/CodeIgniter + WordPress site. Data flows through **Flask + SQLAlchemy** against the v4 normalized MySQL schema (`ascl_db_v4`), with **Typesense** for full-text search (MySQL fulltext fallback).
 
 ### Current State
-- **Original Platform**: cPanel + WordPress + MySQL 8.0.42
-- **Database**: MySQL 8.0.42 (PostgreSQL support built-in for future migration)
-- **Database Backup**: `ascl_db_2025.09.30_bkup.sql.gz` (5.3 MB compressed, MySQL format)
-- **Target Platform**: Flask + SQLAlchemy + MySQL + Phusion Passenger (cPanel)
-- **Dev Server**: Uvicorn (local development); Passenger (production on cPanel)
-- **Status**: Framework configured with dual database support, models defined, ready for development
+- **Legacy Site**: cPanel + WordPress + PHP/CodeIgniter on MySQL 8.0.42 (now served at `/v3/`)
+- **Production DB**: `ascl_db_v4` (v4 normalized schema); WordPress DB read-only for About/News content
+- **Deployment Targets** (both supported):
+  - **VPS**: Nginx + Uvicorn + systemd (uses `bin/ascl` with `restart_method = "systemd"`)
+  - **cPanel**: Phusion Passenger (production host for ascl.net and dev.ascl.net)
+- **Search**: Typesense (optional; falls back to MySQL fulltext when unavailable)
+- **Status**: 39 of 54 v3 PHP endpoints ported, plus 28 v4-only additions. See `ENDPOINT_MAPPING.md`.
 
 ---
 
@@ -111,11 +112,11 @@ USING_SQLALCHEMY = True
 DB_TYPE = 'mysql'  # or 'postgresql' for future migration
 
 # Database connection parameters
-DB_DATABASE = 'ascl_db'
-DB_HOST = 'localhost'
-DB_USER = 'ascl_db'
-DB_PASSWORD = ''  # Leave empty to use ~/.my.cnf (MySQL) or ~/.pgpass (PostgreSQL)
-DB_PORT = '3307'  # ASCL Docker MySQL: 3307, PostgreSQL default: 5432
+DB_DATABASE = 'ascl_db_v4'
+DB_HOST = '127.0.0.1'
+DB_USER = 'ascl_user'
+DB_PASSWORD = ''  # Leave empty to use ~/.my.cnf [client_ascl]
+DB_PORT = '3307'  # Dev Docker MySQL: 3307; standard MySQL: 3306
 
 # Production features
 USING_SENTRY = False
@@ -176,8 +177,12 @@ USING_UVICORN = True  # Modern ASGI server
 
 **Configuration Files**:
 - `ascl_net_app/configuration_files/` - Flask config files (.cfg)
-- `uwsgi_configuration_files/` - uWSGI deployment configs
-- `nginx_ascl_net_app.cfg` - Nginx configuration template
+- `deployments/` - Host-specific deployment artifacts (see `deployments/README.md`):
+  - `passenger/passenger_wsgi.py` - cPanel + Phusion Passenger entry point
+  - `systemd/ascl_net_app.service` - systemd unit for VPS (Uvicorn)
+  - `nginx/nginx_ascl_net_app.cfg`, `nginx_production.cfg` - Nginx reverse-proxy configs
+  - `uwsgi/uwsgi_configuration.ini` - uWSGI config (legacy / alternative to systemd)
+  - `my.cnf.template` - `~/.my.cnf` template for DB credentials
 
 ---
 
@@ -191,23 +196,29 @@ USING_UVICORN = True  # Modern ASGI server
 - **PostgreSQL** - Supported for future migration
 
 ### Deployment
-- **Production**: Phusion Passenger on shared cPanel hosting (one Python app per domain/subdomain)
-- **Development**: Uvicorn ASGI server for local development
-- **Note**: Uvicorn/Nginx/systemd deployment requires a VPS and is not available on shared cPanel
+Two targets are supported, both managed through `bin/ascl` (see main README):
+
+- **VPS**: Nginx → Uvicorn (4 workers, systemd-managed). Artifacts in `deployments/{systemd,nginx}/`.
+- **cPanel**: Phusion Passenger, one Python app per domain. Artifacts in `deployments/passenger/`.
+
+Typesense is optional for both targets; set `typesense_url` in `~/.config/ascl/config.toml`
+to enable indexing via `ascl typesense {reset,index,status}`. When Typesense is unreachable
+the search controllers fall back to MySQL fulltext.
 
 ### Database Strategy
-- **Current**: MySQL 8.0.42 (backup available in MySQL format)
-- **Migration Path**: PostgreSQL support built-in, ready for future migration
-- **Dual Support**: Application automatically detects database type via `DB_TYPE` config
-- **Connection Logic**: Automatically builds correct connection string based on database type
+- **Current**: MySQL 8.0 (`ascl_db_v4`, normalized v4 schema). Dev runs in Docker on port 3307.
+- **Connection**: Via `~/.my.cnf` `[client_ascl]` / `[client_ascl_root]` sections (no passwords in configs).
+- **PostgreSQL**: Support scaffolded in `ascl_core` but not currently used.
 
 ### Key Dependencies
-- `uvicorn[standard]` - ASGI server with performance optimizations
 - `flask>=3.0.0` - Web framework
 - `sqlalchemy>=2.0.0` - ORM
-- `mysqlclient>=2.2.0` - MySQL adapter (current)
-- `psycopg2-binary>=2.9.0` - PostgreSQL adapter (for future migration)
-- NumPy support for database columns (optional)
+- `uvicorn[standard]` - ASGI server (VPS target)
+- `mysqlclient` / `pymysql` - MySQL adapters (cPanel uses `pymysql` — pure Python, no compilation)
+- `typesense` - Search index client (optional)
+- `httpx` - Async HTTP (link checker)
+- `bcrypt` - Password hashing
+- `nameparser`, `phpserialize` - Data migration helpers
 
 ---
 
@@ -231,21 +242,21 @@ USING_UVICORN = True  # Modern ASGI server
    USING_SQLALCHEMY = True
    DB_TYPE = 'mysql'  # or 'postgresql' for future migration
 
-   DB_DATABASE = 'ascl_db'
-   DB_HOST = 'localhost'
+   DB_DATABASE = 'ascl_db_v4'
+   DB_HOST = '127.0.0.1'
    DB_USER = 'ascl_user'
-   DB_PASSWORD = ''  # Leave empty to use ~/.my.cnf (MySQL) or ~/.pgpass (PostgreSQL)
-   DB_PORT = '3306'  # MySQL: 3306, PostgreSQL: 5432
+   DB_PASSWORD = ''  # Leave empty to use ~/.my.cnf
+   DB_PORT = '3307'  # Dev Docker MySQL: 3307; standard MySQL: 3306
    ```
 
-2. **Set up MySQL credentials** (optional password-less auth):
+2. **Set up MySQL credentials** (password-less auth):
    Create `~/.my.cnf` file:
    ```ini
-   [client]
+   [client_ascl]
    user=ascl_user
    password=your_password
-   host=localhost
-   port=3306
+   host=127.0.0.1
+   port=3307
    ```
    Set permissions: `chmod 600 ~/.my.cnf`
 
@@ -427,8 +438,12 @@ within this application, not as a separate service. Rationale:
 - `source/ascl_net_app_project_home/ascl_net_app/configuration_files/mysql_example.cfg` - MySQL template
 - `source/ascl_net_app_project_home/ascl_net_app/configuration_files/postgresql_example.cfg` - PostgreSQL template
 - `source/ascl_net_app_project_home/requirements.txt` - Python dependencies
-- `source/ascl_net_app_project_home/nginx_ascl_net_app.cfg` - Nginx reverse proxy config
-- `source/ascl_net_app_project_home/systemd/ascl_net_app.service` - Systemd service file
+- `source/ascl_net_app_project_home/deployments/nginx/` - Nginx reverse-proxy configs
+- `source/ascl_net_app_project_home/deployments/systemd/ascl_net_app.service` - systemd service file
+- `source/ascl_net_app_project_home/deployments/passenger/passenger_wsgi.py` - cPanel entry point
+- `bin/ascl` - Management CLI (restart, redeploy, status, test, dumpdb, typesense, linkcheck)
+- `bin/ascl_link_checker.py` - Async link checker (writes to `link_check` table)
+- `bin/ascl_typesense.py` - Typesense collection management
 
 **Controllers**:
 - `source/ascl_net_app_project_home/ascl_net_app/controllers/index.py` - Index page

@@ -39,6 +39,8 @@ TARGETS = ("vps", "cpanel")
 RSYNC_EXCLUDES = [
     "venv", ".venv", "__pycache__", "*.pyc", ".git",
     "logs/*.log", "*.egg-info", ".uv", ".claude",
+    # Host-specific files that live only in the deploy directory
+    "passenger_wsgi.py", "secrets.cfg", "tmp",
 ]
 
 DEFAULT_CONFIG = """\
@@ -487,7 +489,7 @@ def cmd_dumpdb(args):
     from datetime import date
 
     db_name = args.database
-    outfile = args.output or f"{db_name}_{date.today().isoformat()}.sql"
+    outfile = args.output
     host = args.host
     port = args.port
     suffix = "_ascl_root"
@@ -518,7 +520,7 @@ def cmd_dumpdb(args):
             if user:
                 # Write a temp defaults file with only user+password
                 tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".cnf", delete=False)
-                tmp.write("[mysqldump]\n")
+                tmp.write("[client]\n")
                 tmp.write(f"user={user}\n")
                 if password:
                     tmp.write(f"password={password}\n")
@@ -527,32 +529,83 @@ def cmd_dumpdb(args):
                 tmp_cnf = tmp.name
                 cred_args = f"--defaults-file={tmp_cnf}"
 
-    _step(f"Dumping {db_name} → {outfile}")
+    cpanel = getattr(args, "cpanel", False)
 
-    # --databases  => includes CREATE DATABASE IF NOT EXISTS + USE
-    # --skip-add-drop-table => don't DROP TABLE before CREATE
-    # Post-process to add IF NOT EXISTS to CREATE TABLE statements
-    cmd = (
-        f"mysqldump {cred_args}"
-        f" -h {host or '127.0.0.1'} -P {port or '3307'}"
-        f" --databases {db_name}"
-        f" --skip-add-drop-table"
-        f" --set-gtid-purged=OFF"
-        f" > {outfile}"
-    )
+    if cpanel:
+        # cPanel-compatible dump: no CREATE DATABASE/USE, DROP TABLE before
+        # each CREATE, DEFINER clauses stripped, gzipped output.
+        if not outfile:
+            outfile = f"{db_name}_{date.today().isoformat()}_cpanel.sql.gz"
+        elif not outfile.endswith(".gz"):
+            outfile += ".gz"
+
+        _step(f"Dumping {db_name} → {outfile}  (cPanel-compatible)")
+
+        cmd = (
+            f"mysqldump {cred_args}"
+            f" -h {host or '127.0.0.1'} -P {port or '3307'}"
+            f" --no-create-db"
+            f" --add-drop-table"
+            f" --set-gtid-purged=OFF"
+            f" {db_name}"
+            f" | sed 's/DEFINER=[^ ]* //'"
+            f" | gzip > {outfile}"
+        )
+    else:
+        if not outfile:
+            outfile = f"{db_name}_{date.today().isoformat()}.sql"
+
+        _step(f"Dumping {db_name} → {outfile}")
+
+        cmd = (
+            f"mysqldump {cred_args}"
+            f" -h {host or '127.0.0.1'} -P {port or '3307'}"
+            f" --databases {db_name}"
+            f" --skip-add-drop-table"
+            f" --set-gtid-purged=OFF"
+            f" > {outfile}"
+        )
+
     try:
         _run(cmd)
 
-        # mysqldump has no flag for CREATE TABLE IF NOT EXISTS;
-        # patch it in-place.
-        with open(outfile, "r") as f:
-            sql = f.read()
-        sql = sql.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ")
-        with open(outfile, "w") as f:
-            f.write(sql)
+        if not cpanel:
+            # mysqldump has no flag for CREATE TABLE IF NOT EXISTS;
+            # patch it in-place.
+            with open(outfile, "r") as f:
+                sql = f.read()
+            sql = sql.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ")
+            with open(outfile, "w") as f:
+                f.write(sql)
 
         size = os.path.getsize(outfile)
         print(f"\n{_green('Done.')}  {outfile}  ({size:,} bytes)")
+        if cpanel:
+            print(f"\nImport on cPanel host:")
+            print(f"  zcat {outfile} | mysql <CPANEL_DB_NAME>")
+    except subprocess.CalledProcessError:
+        # Clean up empty/partial output file on failure
+        if os.path.exists(outfile):
+            os.unlink(outfile)
+
+        # Try to list available databases to help with typos
+        list_cmd = (
+            f"mysql {cred_args}"
+            f" -h {host or '127.0.0.1'} -P {port or '3307'}"
+            f" -e 'SHOW DATABASES'"
+            f" --skip-column-names"
+        )
+        result = subprocess.run(list_cmd, shell=True, capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            databases = [
+                db for db in result.stdout.strip().split("\n")
+                if db not in ("information_schema", "performance_schema", "mysql", "sys")
+            ]
+            if databases:
+                print(f"\n{_yellow('Available databases:')}")
+                for db in sorted(databases):
+                    print(f"  - {db}")
+        sys.exit(1)
     finally:
         if tmp_cnf and os.path.exists(tmp_cnf):
             os.unlink(tmp_cnf)
@@ -730,24 +783,24 @@ def main():
 
     # ascl restart [target]
     p = sub.add_parser("restart", help="Restart the app")
-    p.add_argument("target", nargs="?", choices=TARGETS, help="Deployment target")
+    p.add_argument("target", nargs="?", help="Deployment target (any section in config.toml)")
     p.set_defaults(func=cmd_restart)
 
     # ascl redeploy <target>
     p = sub.add_parser("redeploy", help="Full redeploy (sync, install, restart)")
-    p.add_argument("target", nargs="?", choices=TARGETS, help="Deployment target")
+    p.add_argument("target", nargs="?", help="Deployment target (any section in config.toml)")
     p.add_argument("--force", "-f", action="store_true",
                    help="Deploy even if repos have uncommitted changes")
     p.set_defaults(func=cmd_redeploy)
 
     # ascl status [target]
     p = sub.add_parser("status", help="Show app/service status")
-    p.add_argument("target", nargs="?", choices=TARGETS, help="Deployment target")
+    p.add_argument("target", nargs="?", help="Deployment target (any section in config.toml)")
     p.set_defaults(func=cmd_status)
 
     # ascl config [target]
     p = sub.add_parser("config", help="Show resolved config for a target")
-    p.add_argument("target", nargs="?", choices=TARGETS, help="Deployment target")
+    p.add_argument("target", nargs="?", help="Deployment target (any section in config.toml)")
     p.set_defaults(func=cmd_config)
 
     # ascl dumpdb <database>
@@ -756,6 +809,8 @@ def main():
     p.add_argument("-o", "--output", help="Output filename (default: {db}_yyyy-mm-dd.sql)")
     p.add_argument("--host", help="MySQL host (default: from ~/.my.cnf or 127.0.0.1)")
     p.add_argument("--port", help="MySQL port (default: from ~/.my.cnf or 3307)")
+    p.add_argument("--cpanel", action="store_true",
+                   help="cPanel-compatible dump: gzipped, DROP TABLE, no CREATE DATABASE, no DEFINER")
     p.set_defaults(func=cmd_dumpdb)
 
     # ascl init

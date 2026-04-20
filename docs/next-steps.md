@@ -1,33 +1,35 @@
 # Next Steps
 
-## Immediate Tasks
+Active punch list. For the full v3 → v4 endpoint map see [`ENDPOINT_MAPPING.md`](../ENDPOINT_MAPPING.md); for architecture see [`CLAUDE.md`](../CLAUDE.md).
 
-### 1. Test the Citations Script
-- Verify the citations script functionality
-- Check data accuracy and formatting
-- Ensure proper integration with the main application
-- Document any issues or edge cases discovered
+## High priority
 
-### 2. Deploy the Flask App on Production Server
-- Finalize production configuration
-- Set up environment variables and secrets
-- Configure web server (nginx/Apache) and WSGI
-- Run deployment checklist:
-  - Database migrations
-  - Static files collection
-  - SSL/TLS certificates
-  - Monitoring and logging setup
-- Perform smoke tests post-deployment
+### Security hardening
+- CSRF protection on admin forms
+- Rate limiting on `/admin/login`
+- Role-based access control (admin / curator / user) — currently a single admin role
+- HTTPS on all deployment targets; set `SESSION_COOKIE_SECURE = True`
 
-### 3. Launch phpBB Stopgap App on trillian2 Server
+### Exports & API
+- Verify `/code/ads/<date>` plain-text export matches v3 output byte-for-byte
+- REST API as a Flask blueprint (not a separate service) — see `CLAUDE.md` architectural decision
+  - `/api/search` with authentication as the first endpoint
 
-- Prepare phpBB installation on trillian2
-- Configure database and user authentication
-- Migrate or set up initial forum structure
-- Test forum functionality
-- Coordinate launch timing with team
+### Link checker follow-up
+- Scheduled run (cron or systemd timer) of `ascl linkcheck` in quiet mode against `ascl_db_v4`
+- Admin review UI on top of the `link_check` table (domain changes, pattern-matched notes)
+- Log rotation plan for `~/ascl_app_v4/logs/app.log` (noted in README TODO)
 
-## Follow-up Items
-- Monitor production deployment for issues
-- Gather user feedback on the Flask app
-- Plan phpBB to main app migration path (if applicable)
+## Medium priority
+
+- Port remaining v3 admin utilities flagged in `ENDPOINT_MAPPING.md`
+- Typesense: verify re-index cadence and add a health check endpoint the dashboard can surface
+- Monitoring / alerting (Sentry hook is already scaffolded; just needs DSN)
+
+## Future enhancements
+
+- ADS integration: automatic citation data sync
+- Zenodo integration: software preservation + DOI minting
+- Citation exports: BibTeX, RIS, EndNote
+- Faceted search UI
+- Activity log surfaced in the admin UI

@@ -1,5 +1,12 @@
 # ASCL.net Deployment Guide
 
+Two deployment targets are supported:
+
+- **VPS** — Nginx → Uvicorn (4 workers) → systemd. Artifacts in `deployments/{systemd,nginx}/`.
+- **cPanel** — Phusion Passenger. Artifacts in `deployments/passenger/`.
+
+Both are managed through `bin/ascl` (see top-level `README.md` for CLI commands: `restart`, `redeploy`, `status`, `test`, `dumpdb`, `typesense`, `linkcheck`). This document covers the environment-variable and credentials side of both targets. For a cPanel-specific walkthrough see `PRODUCTION_DEPLOYMENT.md`.
+
 ## Environment Configuration
 
 ### Local Development
@@ -29,7 +36,7 @@ You'll see:
 
 For production deployment using systemd, environment variables are configured in the service file:
 
-**File:** `systemd/ascl_net_app.service`
+**File:** `deployments/systemd/ascl_net_app.service`
 
 ```ini
 [Service]
@@ -42,7 +49,7 @@ Environment="ASCLDB_MYCNF_SECTION=client_ascl"
 
 1. Copy service file to systemd:
    ```bash
-   sudo cp systemd/ascl_net_app.service /etc/systemd/system/
+   sudo cp deployments/systemd/ascl_net_app.service /etc/systemd/system/
    ```
 
 2. Reload systemd:
@@ -63,23 +70,25 @@ Environment="ASCLDB_MYCNF_SECTION=client_ascl"
 
 ---
 
-### Production Deployment (Docker)
+### Production Deployment (cPanel + Passenger)
 
-If using Docker, create a `.env.production` file (NOT committed to git):
+On cPanel the entry point is `deployments/passenger/passenger_wsgi.py`, which sets
+`FLASK_CONFIG` and any needed env vars *inside* the file before importing `create_app`
+(there's no systemd `Environment=` directive available). Typical contents:
 
-```bash
-# .env.production (production environment - keep secret!)
-ASCLDB_MYCNF_SECTION=client_ascl
+```python
+import os, sys, pymysql
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+pymysql.install_as_MySQLdb()
+os.environ['FLASK_CONFIG']        = 'ascl_net.cfg'
+os.environ['ASCLDB_MYCNF_SECTION'] = 'client_ascl'
+os.environ['ASCL_SECRETS_FILE']   = '/itss/home/<account>/secrets/secrets.cfg'
+from ascl_net_app import create_app
+application = create_app(debug=False)
 ```
 
-Then reference it in your `docker-compose.yml`:
-
-```yaml
-services:
-  ascl_net_app:
-    env_file:
-      - .env.production
-```
+Restart Passenger after changes: `touch ~/ascl_app_v4/tmp/restart.txt`
+(or use `ascl restart cpanel`). See `PRODUCTION_DEPLOYMENT.md` for full cPanel setup.
 
 ---
 
@@ -92,10 +101,10 @@ The app reads database credentials from `~/.my.cnf` based on the section specifi
 ```ini
 [client_ascl]
 host = 127.0.0.1
-port = 3306
-user = ascl_db
+port = 3307                # dev Docker MySQL; cPanel uses 3306
+user = ascl_user
 password = your_secure_password
-database = ascl_db
+database = ascl_db_v4
 ```
 
 **Security Notes:**
@@ -112,9 +121,11 @@ database = ascl_db
 | `ASCLDB_MYCNF_SECTION` | Section in ~/.my.cnf to use | `client_ascl` | Yes |
 | `ASCLDB_HOST` | Database host (overrides .my.cnf) | `127.0.0.1` | No |
 | `ASCLDB_PORT` | Database port (overrides .my.cnf) | `3306` | No |
-| `ASCLDB_USER` | Database user (overrides .my.cnf) | `ascl_db` | No |
+| `ASCLDB_USER` | Database user (overrides .my.cnf) | `ascl_user` | No |
 | `ASCLDB_PASSWORD` | Database password (overrides .my.cnf) | - | No |
-| `ASCLDB_DATABASE` | Database name (overrides .my.cnf) | `ascl_db` | No |
+| `ASCLDB_DATABASE` | Database name (overrides .my.cnf) | `ascl_db_v4` | No |
+| `ASCL_SECRETS_FILE` | Path to `secrets.cfg` (cPanel override) | `~/secrets/secrets.cfg` | No |
+| `FLASK_CONFIG` | Flask config file to load | `ascl_net.cfg` | Production |
 
 ---
 

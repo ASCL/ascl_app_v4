@@ -37,6 +37,36 @@ def setupJSONandDecimal():
     psycopg2.extensions.register_type(DECARRAY2FLOATARRAY)
     # -----------------------------------------------------------------------------
 
+def loadSecretsFile(debug=False):
+	'''
+	Load the secrets configuration file (Python-syntax pyfile) into a dict
+	without requiring a Flask app instance. Used to read values like
+	SENTRY_DSN before the Flask app is created.
+
+	Mirrors the secrets-file lookup performed in create_app():
+	  - $ASCL_SECRETS_FILE if set, else /etc/ascl/secrets.cfg
+	  - In debug mode, falls back to configuration_files/secrets.cfg
+	'''
+	secrets_path = os.environ.get('ASCL_SECRETS_FILE', '/etc/ascl/secrets.cfg')
+	if not os.path.exists(secrets_path) and debug:
+		try:
+			local = getConfigFile("secrets.cfg")
+			if os.path.exists(local):
+				secrets_path = local
+		except Exception:
+			return {}
+
+	if not os.path.exists(secrets_path):
+		return {}
+
+	namespace = {}
+	try:
+		with open(secrets_path, 'rb') as f:
+			exec(compile(f.read(), secrets_path, 'exec'), namespace)
+	except Exception:
+		return {}
+	return {k: v for k, v in namespace.items() if not k.startswith('__')}
+
 def setupSentry(app=None, dsn=None):
 	'''
 	Set up getsentry.com logging - only use when in production

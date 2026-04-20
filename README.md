@@ -15,10 +15,10 @@ Flask rebuild of the [ascl.net](https://ascl.net) website, replacing the legacy 
 ```
 alt_ascl/
 ├── bin/
-│   └── ascl                       # Management CLI (restart, redeploy, status)
-├── deployment/
-│   ├── ascl_net_app.service       # systemd unit file
-│   └── nginx_ascl_production.conf
+│   ├── ascl                       # Management CLI
+│   ├── ascl_typesense.py          # Typesense index management (subcommand)
+│   ├── ascl_link_checker.py       # Async link checker (subcommand)
+│   └── ascl_db_dump.sh            # Portable MySQL dump script
 ├── source/
 │   └── ascl_net_app_project_home/ # Flask application
 │       ├── ascl_net_app/
@@ -29,10 +29,16 @@ alt_ascl/
 │       │   ├── templates/         # Jinja2 templates
 │       │   ├── static/            # CSS, JS, images
 │       │   └── configuration_files/
+│       ├── deployments/           # Host-specific deploy artifacts
+│       │   ├── passenger/         # passenger_wsgi.py for cPanel
+│       │   ├── systemd/           # ascl_net_app.service unit file
+│       │   ├── nginx/             # Reverse-proxy configs (dev + production)
+│       │   └── uwsgi/             # uWSGI configuration (legacy)
 │       ├── run_ascl_net_app.py    # Dev server entry point
 │       ├── asgi.py                # Production ASGI entry point
 │       └── requirements.txt
 ├── v3_to_v4_migration/            # Database migration scripts (v3 → v4)
+├── tests/test_smoke.py            # Live-URL smoke tests
 ├── ENDPOINT_MAPPING.md            # v3 → v4 endpoint migration status
 └── CLAUDE.md                      # Detailed technical documentation
 ```
@@ -126,15 +132,24 @@ On first run, if no config exists, the CLI creates a template at `~/.config/ascl
 ### Commands
 
 ```bash
-ascl status [vps|cpanel]       # Show service status
-ascl restart [vps|cpanel]      # Restart the running app
-ascl redeploy [vps|cpanel]     # Full redeploy: sync code, install deps, restart
-ascl config [vps|cpanel]       # Show resolved config for a target
-ascl init [--force]            # Create or overwrite config template
-ascl completions bash|zsh      # Print shell completion script
+ascl status [TARGET]                # Show app/service status
+ascl restart [TARGET]               # Restart the running app
+ascl redeploy [TARGET] [-f]         # Full redeploy: sync code + libs, install, restart
+ascl config [TARGET]                # Show resolved config for a target
+ascl test <URL> [--admin-user U --admin-pass P] [-x]
+                                    # Run smoke tests against a live site
+ascl dumpdb <DATABASE> [-o FILE]    # Dump a MySQL database to a dated .sql file
+ascl typesense reset                # Drop collection, recreate schema, re-index
+ascl typesense index                # (Re-)index all published codes
+ascl typesense status               # Show collection info and document count
+ascl linkcheck [DATABASE] [options] # Async link checker (see below)
+ascl init [--force]                 # Create or overwrite config template
+ascl completions bash|zsh           # Print shell completion script
 ```
 
-Target defaults to `default_target` in the config file.
+`TARGET` defaults to `default_target` in the config file. Built-in targets are `vps` and `cpanel`, but any section name in the config works.
+
+`ascl redeploy -f` overrides the uncommitted-changes guard on source repositories.
 
 ### Config
 
@@ -143,8 +158,9 @@ Each deployment target is a TOML section in `~/.config/ascl/config.toml`:
 ```toml
 default_target = "vps"
 
+# VPS — Nginx + Uvicorn + systemd
 [vps]
-restart_method = "systemd"       # systemctl restart <service_name>
+restart_method = "systemd"
 service_name   = "ascl_net_app"
 repo_app       = "/home/user/repositories/ASCL/alt_ascl/source/ascl_net_app_project_home"
 deploy_app     = "/var/www/ascl_net_app"
@@ -154,20 +170,73 @@ secrets_file   = "/etc/ascl/secrets.cfg"
 typesense_url        = "http://127.0.0.1:8108"
 typesense_collection = "codes"
 
+# Optional library dependencies — rsynced and pip-installed on redeploy
+[[vps.libs]]
+repo   = "/home/user/repositories/ASCL/ascl_core"
+deploy = "/var/www/ascl_core"
+
+[[vps.libs]]
+repo   = "/home/user/repositories/ASCL/dm-dbcore"
+deploy = "/var/www/dm-dbcore"
+
+# cPanel — Phusion Passenger
 [cpanel]
 restart_method = "passenger"     # touch tmp/restart.txt
+repo_app       = ""              # leave empty if using git pull on the server
 deploy_app     = "~/ascl.net"
 flask_config   = "ascl_net.cfg"
-ssh_host       = ""              # Set for remote deploy from another machine
+ssh_host       = ""              # set for remote deploy from another machine
 typesense_url        = ""
 typesense_collection = "codes"
 ```
 
-### What `ascl redeploy` Does
+### What `ascl redeploy` does
 
-**VPS (systemd):** stop service, rsync app from repo to deploy path, set ownership, `pip install -r requirements.txt`, start service.
+**VPS (systemd):** abort if any tracked repo has uncommitted changes (override with `-f`), stop the service, rsync libs listed in `[[vps.libs]]`, rsync the app, set ownership, `uv pip install` libs + requirements, start the service.
 
-**cPanel (Passenger):** rsync app (local or over SSH), `pip install -r requirements.txt`, touch `tmp/restart.txt`.
+**cPanel (Passenger):** rsync the app (local or over SSH via `ssh_host`), `pip install -r requirements.txt`, touch `tmp/restart.txt`.
+
+Both modes exclude `venv/`, `.venv/`, `__pycache__/`, `.git/`, `*.egg-info`, `passenger_wsgi.py`, `secrets.cfg`, and `tmp/` from the rsync.
+
+### `ascl test`
+
+Runs the smoke-test suite (`tests/test_smoke.py`) against a live base URL. Admin tests run only if credentials are provided via `--admin-user`/`--admin-pass` or `$ASCL_ADMIN_USER`/`$ASCL_ADMIN_PASSWORD`.
+
+```bash
+ascl test https://dev.ascl.net
+ascl test dev.ascl.net -x                       # Stop on first failure
+ASCL_ADMIN_USER=admin ASCL_ADMIN_PASSWORD=... ascl test https://ascl.net
+```
+
+### `ascl dumpdb`
+
+Dumps a MySQL database to `{name}_YYYY-MM-DD.sql`. Reads credentials from `~/.my.cnf [client_ascl_root]`, defaults to `127.0.0.1:3307`, uses `--databases` (includes `CREATE DATABASE IF NOT EXISTS` + `USE`), skips `DROP TABLE`, and patches `CREATE TABLE` to `CREATE TABLE IF NOT EXISTS`.
+
+```bash
+ascl dumpdb ascl_db_v4
+ascl dumpdb ascl_db_v4 -o mybackup.sql --host 127.0.0.1 --port 3307
+```
+
+### `ascl linkcheck`
+
+Async link checker for the v4 `link` table. Uses `httpx` + `pymysql`, writes per-link results into the `link_check` table (HTTP status, final URL after redirects, page `<title>`, domain-change flag, pattern-matched notes) and mirrors `is_working` / `last_working` back to `link`.
+
+```bash
+ascl linkcheck                              # Default DB (ascl_db_v4), link_type=code-site
+ascl linkcheck --link-type all              # Check every link type
+ascl linkcheck --retry-failed -i            # Only re-check previously failed links
+ascl linkcheck --dry-run -v                 # Check without writing to DB
+ascl linkcheck --concurrency 10             # Limit concurrency
+```
+
+Features:
+- Per-domain rate limiting (max 2 in flight per domain, 0.5s spacing)
+- Retries on 429/5xx with `Retry-After` support
+- Treats 401/403/405/406/429 as "probably working" (bot-blocking)
+- Detects Cloudflare challenges, bot checks, GitHub/GitLab/Bitbucket "not found"/"archived" pages, and parked-domain indicators
+- Relaxes SSL verification on certificate errors so the site can still be reached
+- Interactive progress display with live failure ticker (`-i` or `-v`); `-q` silences output for cron
+- Reads DB credentials from `~/.my.cnf` (`[client_ascl]`, `[client_ascl_root]`, or `[client]`)
 
 ## cPanel Deployment
 
@@ -318,9 +387,10 @@ Flask application errors are logged to `~/ascl_app_v4/logs/app.log`.
 
 - [ENDPOINT_MAPPING.md](ENDPOINT_MAPPING.md) — v3 → v4 endpoint migration status
 - [CLAUDE.md](CLAUDE.md) — Architecture, database schema, configuration reference
-- [deployment/DEPLOYMENT.md](deployment/DEPLOYMENT.md) — Production deployment guide
+- [source/ascl_net_app_project_home/deployments/README.md](source/ascl_net_app_project_home/deployments/README.md) — Deployment artifacts reference
+- [source/ascl_net_app_project_home/DEPLOYMENT.md](source/ascl_net_app_project_home/DEPLOYMENT.md) — Production deployment guide
 - [tests/test_smoke.py](tests/test_smoke.py) — Smoke tests for all public and admin pages
 
 ---
 
-*Last Updated: 2026-03-20*
+*Last Updated: 2026-04-14*

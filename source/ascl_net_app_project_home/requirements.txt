@@ -31,8 +31,8 @@ httpx>=0.27.0  # Async HTTP client for link checker
 # Optional: Performance improvements
 # cdecimal  # Obsolete: Built into Python 3 as 'decimal' module
 
-# Optional: Error tracking
-# sentry-sdk[flask]>=1.40.0  # Uncomment if using Sentry
+# Error tracking
+sentry-sdk[flask]>=1.40.0
 
 # Development tools (optional)
 # pytest>=7.4.0

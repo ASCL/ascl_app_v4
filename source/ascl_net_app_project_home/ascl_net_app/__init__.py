@@ -58,6 +58,29 @@ app = None
 
 def create_app(debug=False): #, conf=dict()):
 
+	# --------------------------------------------------
+	# Initialize Sentry BEFORE the Flask app is created.
+	# The DSN is read from the secrets file (typically
+	# /etc/ascl/secrets.cfg). If no DSN is configured,
+	# Sentry is silently skipped.
+	# --------------------------------------------------
+	_secrets = _app_setup_utils.loadSecretsFile(debug=debug)
+	_sentry_dsn = _secrets.get('SENTRY_DSN')
+	if _sentry_dsn:
+		try:
+			import sentry_sdk
+			sentry_sdk.init(
+				dsn=_sentry_dsn,
+				# Add data like request headers and IP for users; see
+				# https://docs.sentry.io/platforms/python/data-management/data-collected/
+				send_default_pii=True,
+			)
+			print_info("Sentry initialized.")
+		except ImportError:
+			print_warning("SENTRY_DSN is set but sentry_sdk is not installed; skipping Sentry init.")
+		except Exception as e:
+			print_warning(f"Failed to initialize Sentry: {e}")
+
 	global app
 	app = Flask(__name__) # creates the app instance using the name of the module
 	app.debug = debug
@@ -172,9 +195,6 @@ def create_app(debug=False): #, conf=dict()):
 	if app.debug:
 		#print("{0}App '{1}' created.{2}".format('\033[92m', __name__, '\033[0m'))
 		print_info("Application '{0}' created.".format(__name__))
-	else:
-		if app.config["USING_SENTRY"]:
-			_app_setup_utils.setupSentry(app, dsn=sentryDSN)
 
 	# Set up logging for the application and ascl_core module
 	from .utilities.logging_config import setup_logging
