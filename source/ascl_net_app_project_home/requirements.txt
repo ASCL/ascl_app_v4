@@ -13,8 +13,11 @@ asgiref>=3.7.0  # WSGI-to-ASGI adapter for running Flask with Uvicorn
 
 # Database adapters - install the one(s) you need
 # MySQL (currently used)
-mysqlclient>=2.2.0  # MySQL adapter (recommended, C-based, fast)
-# PyMySQL>=1.1.0  # Alternative: Pure Python MySQL adapter (uncomment if preferred)
+# PyMySQL is pure-Python so it installs without compilation on cPanel.
+# The app installs it as the MySQLdb shim in ascl_net_app/__init__.py, so
+# SQLAlchemy's default mysql:// URLs continue to work.
+PyMySQL>=1.1.0
+# mysqlclient>=2.2.0  # Alternative: C-based adapter (faster; requires Python.h / build tools)
 
 # PostgreSQL (for future migration)
 psycopg2-binary>=2.9.0  # PostgreSQL adapter

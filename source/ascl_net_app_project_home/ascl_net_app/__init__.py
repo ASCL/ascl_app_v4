@@ -7,6 +7,13 @@ import sys
 import socket
 import os
 
+# Install PyMySQL as the MySQLdb driver so SQLAlchemy's mysql:// URLs resolve
+# to the pure-Python adapter. Lets us drop the mysqlclient C dependency on
+# cPanel (no Python.h / build tools there). Must run before any SQLAlchemy
+# engine is created.
+import pymysql
+pymysql.install_as_MySQLdb()
+
 from flask import Flask, g
 
 from . import jinja_filters
