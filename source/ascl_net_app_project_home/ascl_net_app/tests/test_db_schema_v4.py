@@ -67,7 +67,7 @@ class TestTableExistence:
 
     # Legacy tables kept for backward compatibility but not part of core v4 schema
     LEGACY_KEPT_TABLES = {
-        'ci_sessions',  # CodeIgniter session data (WordPress legacy)
+        'ci_sessions',  # CodeIgniter session data (PHP/CodeIgniter legacy)
         'temp',         # Staging table for bulk operations (legacy)
     }
 

@@ -661,7 +661,7 @@ var pendingAliasCheck = null;
 var currentCodePk = {% if code.pk %}{{ code.pk }}{% else %}null{% endif %};
 
 {% if aliases_str %}
-aliases = "{{ aliases_str }}".split(/\s+/).filter(a => a.trim());
+aliases = {{ aliases_str | tojson }}.split(/\s+/).filter(a => a.trim());
 {% endif %}
 
 function renderAliasTable() {
@@ -943,9 +943,9 @@ function removeTypedLink(index) {
 var credits = [];
 
 {% if credits_str is defined and credits_str %}
-credits = "{{ credits_str|e }}".split(/;\s*/).map(s => s.trim()).filter(s => s);
+credits = {{ credits_str | tojson }}.split(/;\s*/).map(s => s.trim()).filter(s => s);
 {% elif code.credit %}
-credits = "{{ code.credit|e }}".split(/;\s*/).map(s => s.trim()).filter(s => s);
+credits = {{ code.credit | tojson }}.split(/;\s*/).map(s => s.trim()).filter(s => s);
 {% endif %}
 
 function renderCreditTable() {
@@ -1012,7 +1012,7 @@ function removeCredit(index) {
 var emails = [];
 
 {% if code.email %}
-emails = "{{ code.email|e }}".split(/,\s*/).map(s => s.trim()).filter(s => s);
+emails = {{ code.email | tojson }}.split(/,\s*/).map(s => s.trim()).filter(s => s);
 {% endif %}
 
 function renderEmailTable() {
@@ -1223,7 +1223,7 @@ function importCreditsFromCreditBibcode() {
 var describedInItems = [];
 
 {% if described_in_urls %}
-describedInItems = "{{ described_in_urls }}".split(/\n/).map(s => s.trim()).filter(s => s);
+describedInItems = {{ described_in_urls | tojson }}.split(/\n/).map(s => s.trim()).filter(s => s);
 {% endif %}
 
 function renderBibcodeCell(cellContent, item, index, tableId) {
@@ -1336,7 +1336,7 @@ function removeDescribedIn(index) {
 var usedInItems = [];
 
 {% if used_in_urls %}
-usedInItems = "{{ used_in_urls }}".split(/\n/).map(s => s.trim()).filter(s => s);
+usedInItems = {{ used_in_urls | tojson }}.split(/\n/).map(s => s.trim()).filter(s => s);
 {% endif %}
 
 function renderUsedInTable() {
@@ -1409,7 +1409,7 @@ var currentInputStatus = null; // Track current input validation state
 var pendingCheck = null; // Track pending API check
 
 {% if code.see_also %}
-seeAlsoItems = "{{ code.see_also }}".split(/[;\s]+/).filter(a => a.trim());
+seeAlsoItems = {{ code.see_also | tojson }}.split(/[;\s]+/).filter(a => a.trim());
 {% endif %}
 
 function renderSeeAlsoTable() {
@@ -1594,7 +1594,7 @@ var allKeywords = {{ all_keywords_json | default('[]') | safe }};
 
 {% if keywords_str %}
 // Parse keywords - handle quoted keywords with spaces
-var kwStr = "{{ keywords_str|e }}";
+var kwStr = {{ keywords_str | tojson }};
 var kwRegex = /"([^"]+)"|'([^']+)'|(\S+)/g;
 var match;
 while ((match = kwRegex.exec(kwStr)) !== null) {

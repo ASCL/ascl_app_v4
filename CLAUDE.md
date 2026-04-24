@@ -2,11 +2,12 @@
 
 ## Project Overview
 
-This project recreates the **ascl.net** (Astrophysics Source Code Library) website with a modern stack, replacing the legacy PHP/CodeIgniter + WordPress site. Data flows through **Flask + SQLAlchemy** against the v4 normalized MySQL schema (`ascl_db_v4`), with **Typesense** for full-text search (MySQL fulltext fallback).
+This project recreates the **ascl.net** (Astrophysics Source Code Library) website with a modern stack, replacing the legacy PHP/CodeIgniter front end. **WordPress remains the active CMS** — it is no longer used to render pages, but it is still where About/Submissions/Resources/Explain and news/blog content is authored. Data flows through **Flask + SQLAlchemy** against the v4 normalized MySQL schema (`ascl_db_v4`), with **Typesense** for full-text search (MySQL fulltext fallback).
 
 ### Current State
-- **Legacy Site**: cPanel + WordPress + PHP/CodeIgniter on MySQL 8.0.42 (now served at `/v3/`)
-- **Production DB**: `ascl_db_v4` (v4 normalized schema); WordPress DB read-only for About/News content
+- **Legacy Front End**: cPanel + PHP/CodeIgniter on MySQL 8.0.42 (now served at `/v3/`)
+- **Active CMS**: WordPress — content authored there; Flask reads its DB read-only to render About/Submissions/Resources/Explain/News pages
+- **Production DB**: `ascl_db_v4` (v4 normalized schema); WordPress DB (`ascl_wordpress`) is the live CMS store, read-only from Flask
 - **Deployment Targets** (both supported):
   - **VPS**: Nginx + Uvicorn + systemd (uses `bin/ascl` with `restart_method = "systemd"`)
   - **cPanel**: Phusion Passenger (production host for ascl.net and dev.ascl.net)

@@ -34,6 +34,11 @@ _real_home = pathlib.Path(f"~{os.environ['SUDO_USER']}").expanduser() if os.envi
 CONFIG_DIR = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", _real_home / ".config")) / "ascl"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
+# This script lives at <repo>/bin/ascl, so the app source is always at
+# <repo>/source/ascl_net_app_project_home regardless of where the repo is cloned.
+REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+APP_SRC = REPO_ROOT / "source" / "ascl_net_app_project_home"
+
 TARGETS = ("vps", "cpanel")
 
 RSYNC_EXCLUDES = [
@@ -55,9 +60,6 @@ default_target = "vps"
 [vps]
 restart_method = "systemd"
 service_name   = "ascl_net_app"
-
-# Source repository (for rsync during redeploy)
-repo_app = ""
 
 # Where the running app is deployed to
 deploy_app = "/var/www/ascl_net_app"
@@ -89,9 +91,6 @@ typesense_collection = "codes"
 # ---------------------------------------------------------------------------
 [cpanel]
 restart_method = "passenger"
-
-# Source repository (for rsync during redeploy; leave empty if using git pull)
-repo_app = ""
 
 # cPanel app root (contains passenger_wsgi.py and tmp/restart.txt)
 deploy_app = "~/ascl.net"
@@ -311,12 +310,16 @@ def _sync_libs(cfg):
 
 def _sync_app(cfg):
     """Rsync the app source to the deploy path."""
-    src = cfg.get("repo_app", "")
+    if not APP_SRC.is_dir():
+        print(_red(f"Error: application source not found at {APP_SRC}"))
+        print("  The ascl script must run from inside the repo at <repo>/bin/ascl.")
+        sys.exit(1)
+
     dst = cfg.get("deploy_app", "")
-    if not src:
-        print(_yellow("  (skipping sync — no repo_app configured)"))
-        return
-    src = os.path.expanduser(src)
+    if not dst:
+        print(_red("Error: 'deploy_app' is not set for this target."))
+        print(f"  Edit {CONFIG_FILE}")
+        sys.exit(1)
     dst = os.path.expanduser(dst)
 
     ssh_host = cfg.get("ssh_host", "")
@@ -327,7 +330,7 @@ def _sync_app(cfg):
 
     excludes = _rsync_excludes()
     _step("Syncing application")
-    _run(f"rsync -a --delete {excludes} {src}/ {remote_prefix}{dst}/")
+    _run(f"rsync -a --delete {excludes} {APP_SRC}/ {remote_prefix}{dst}/")
 
 
 def _set_ownership(cfg):
@@ -386,7 +389,7 @@ def _redeploy_vps(target_name, cfg, force=False):
         sys.exit(1)
 
     # Block on uncommitted changes unless --force
-    repo_dirs = [cfg.get("repo_app", "")]
+    repo_dirs = [str(REPO_ROOT)]
     repo_dirs += [lib["repo"] for lib in cfg.get("libs", [])]
     _check_uncommitted([d for d in repo_dirs if d], force=force)
 
@@ -844,7 +847,18 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    args.func(args)
+    try:
+        args.func(args)
+    except subprocess.CalledProcessError as e:
+        print(_red(f"\nCommand failed with exit code {e.returncode}. See output above."))
+        sys.exit(e.returncode)
+    except KeyError as e:
+        print(_red(f"\nError: missing required config key: {e}"))
+        print(f"  Check {CONFIG_FILE} for this target.")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print(_red("\nInterrupted."))
+        sys.exit(130)
 
 
 if __name__ == "__main__":
