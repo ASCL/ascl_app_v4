@@ -712,7 +712,8 @@ def update_code(pk):
 			_update_see_also_for_code(db_session, ascldb, pk, request.form.get("see_also", ""))
 
 			db_session.commit()
-			flash(f"Code updated successfully. <a href='/{code.ascl_id}'>View it here</a>.", "success")
+			view_href = f"/{code.ascl_id}" if (code.published and code.ascl_id and code.ascl_id != '0000.000') else url_for("admin_page.view_code", pk=pk)
+			flash(f"Code updated successfully. <a href='{view_href}'>View it here</a>.", "success")
 			return redirect(url_for("admin_page.view_code", pk=pk))
 
 	# GET request - load current data
@@ -923,7 +924,8 @@ def insert_code():
 			_update_see_also_for_code(db_session, ascldb, pk, request.form.get("see_also", ""))
 
 			db_session.commit()
-			flash(f"Code added successfully. <a href='/{code.ascl_id}'>View it here</a>.", "success")
+			view_href = f"/{code.ascl_id}" if (code.published and code.ascl_id and code.ascl_id != '0000.000') else url_for("admin_page.view_code", pk=pk)
+			flash(f"Code added successfully. <a href='{view_href}'>View it here</a>.", "success")
 			return redirect(url_for("admin_page.view_code", pk=pk))
 
 	# GET request - show empty form
@@ -1665,7 +1667,7 @@ def get_code_notes(code_pk):
 		notes = (
 			db_session.query(ascldb.CodeNote)
 			.filter(ascldb.CodeNote.code_pk == code_pk)
-			.order_by(ascldb.CodeNote.is_pinned.desc(), ascldb.CodeNote.created_at.desc())
+			.order_by(ascldb.CodeNote.is_pinned.desc(), ascldb.CodeNote.created_at.asc())
 			.all()
 		)
 		return jsonify({
