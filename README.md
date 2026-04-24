@@ -245,6 +245,72 @@ Features:
 - cPanel account with **Setup Python App** and **MySQL Databases** access
 - SSH access to the cPanel server
 
+### Repository Access (GitHub Personal Access Tokens)
+
+Because the cPanel account is **shared between developers**, SSH deploy keys aren't a good fit — a single key would give everyone the same GitHub access with no accountability, and rotating it would break every user at once. Instead, each developer clones and pulls over HTTPS using their own **GitHub Personal Access Token (PAT)**.
+
+A PAT is a long string GitHub generates that acts as a substitute for your password at the git command line. You create it once (or once per expiration window), paste it as the password when git prompts, and you're done.
+
+**One-time setup per developer:**
+
+1. Sign in to GitHub with your own account.
+2. Click your avatar in the top-right → **Settings**.
+3. In the left sidebar, scroll all the way down to **Developer settings**.
+4. Choose **Personal access tokens → Tokens (classic)**.
+   *GitHub also offers newer "Fine-grained tokens", but those are scoped to a single organization or user account. Since this project pulls from the `ASCL` organization and also from a personal repo (`demitri/dm-dbcore`), one classic token is the simplest way to cover everything with a single credential.*
+5. Click **Generate new token → Generate new token (classic)**. GitHub may ask you to confirm your password or 2FA code.
+6. Fill in the form:
+   - **Note**: a label so you can recognize it later, e.g. `cpanel-devascl-<yourname>`.
+   - **Expiration**: pick a duration. 90 days is a safe default; 1 year is the maximum. Tokens on GitHub.com cannot be made non-expiring.
+   - **Scopes**: tick **`repo`** (full control of private repositories). This is the minimum scope required to clone and pull from private repos.
+7. Click **Generate token** at the bottom of the page.
+8. **Copy the token immediately.** It looks like `ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`. GitHub will show it only this once — if you lose it, you must generate a new one.
+
+**Cloning the ASCL repos on cPanel:**
+
+SSH into the cPanel account, then clone the three repos the deployment depends on:
+
+```bash
+cd ~
+git clone https://github.com/ASCL/alt_ascl.git
+git clone https://github.com/ASCL/ascl_core.git
+git clone https://github.com/demitri/dm-dbcore.git
+```
+
+When git prompts for credentials:
+
+- **Username**: your GitHub username
+- **Password**: paste the PAT (not your GitHub account password)
+
+**Avoid re-entering the token on every `git pull`.** Cache it with git's credential helper. Either on disk:
+
+```bash
+git config --global credential.helper 'store --file=~/.git-credentials'
+# After the next successful git operation, lock the file down:
+chmod 600 ~/.git-credentials
+```
+
+…or in memory only, cleared when the session ends:
+
+```bash
+git config --global credential.helper 'cache --timeout=28800'   # 8 hours
+```
+
+Because this is a shared account, anything written to `~/.git-credentials` is technically readable by other users of the account (if permissions slip). If that concerns you, use the in-memory cache, or clear the saved credential when you log out:
+
+```bash
+git credential reject https://github.com
+```
+
+**Token expiry and rotation:**
+
+Tokens **expire**. When yours does, `git pull` starts failing with `HTTP 401 Unauthorized` (or `Authentication failed`). To rotate:
+
+1. Generate a new token on GitHub by repeating the steps above.
+2. Either edit the line for `github.com` in `~/.git-credentials` to contain the new token, or run `git credential reject https://github.com` and let the next git operation re-prompt you to paste it.
+
+If a token is ever leaked (accidentally pasted into a message, committed to a repo, etc.), revoke it immediately from the same **Personal access tokens** page on GitHub. Revocation is instant, and because each developer has their own token, it does not affect anyone else.
+
 ### 1. Import the Database
 
 Via cPanel's **MySQL Databases** interface:
