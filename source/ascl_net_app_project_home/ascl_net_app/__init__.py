@@ -159,7 +159,7 @@ def create_app(debug=False): #, conf=dict()):
 	# Override with ASCL_SECRETS_FILE env var.
 	# In debug mode, also check configuration_files/secrets.cfg as a fallback.
 	secrets_file = os.environ.get('ASCL_SECRETS_FILE', '/etc/ascl/secrets.cfg')
-	if os.path.exists(secrets_file):
+	if os.access(secrets_file, os.R_OK):
 		app.config.from_pyfile(secrets_file)
 	elif app.debug:
 		local_secrets = _app_setup_utils.getConfigFile("secrets.cfg")

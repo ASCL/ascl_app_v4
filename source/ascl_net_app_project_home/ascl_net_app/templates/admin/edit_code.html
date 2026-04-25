@@ -169,6 +169,23 @@
 		</div>
 
 		<div class="field-row">
+			<label>Code Site</label>
+			<div class="bibcode-manager">
+				<table class="bibcode-table sortable-table" id="code-site-table">
+					<thead><tr><th class="drag-col"></th><th>URL</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<div class="bibcode-input-row">
+					<input type="text" id="code-site-input" placeholder="URL" size="50" oninput="checkCodeSiteUrl()" onkeydown="handleEnterKey(event, addCodeSite)">
+					<span id="code-site-status" class="bibcode-status"></span>
+					<button type="button" onclick="addCodeSite()">Add</button>
+				</div>
+			</div>
+			<input type="hidden" name="code_site_urls" id="code_site_urls_hidden" value="">
+			<small>URLs only.</small>
+		</div>
+
+		<div class="field-row">
 			<div class="notes-header">
 				<label for="citation_method">Preferred Citation Method <span class="html-warning" id="citation-html-warning"></span></label>
 				<small><span id="citation-char-count" class="char-count">0</span>/255 characters</small>
@@ -1402,6 +1419,101 @@ function removeUsedIn(index) {
 	renderUsedInTable();
 }
 
+// Code Site management
+var codeSiteItems = [];
+
+{% if code_site_urls %}
+codeSiteItems = {{ code_site_urls | tojson }}.split(/\n/).map(s => s.trim()).filter(s => s);
+{% endif %}
+
+function isValidCodeSiteUrl(value) {
+	var normalized = normalizeUrl(value);
+	return /^https?:\/\/.+/i.test(normalized);
+}
+
+function renderCodeSiteTable() {
+	var tbody = document.getElementById('code-site-table').getElementsByTagName('tbody')[0];
+	tbody.innerHTML = '';
+	codeSiteItems.forEach(function(item, index) {
+		var row = tbody.insertRow();
+		row.draggable = true;
+		row.dataset.index = index;
+		row.addEventListener('dragstart', handleDragStart);
+		row.addEventListener('dragover', handleDragOver);
+		row.addEventListener('drop', function(e) { handleDrop(e, codeSiteItems, renderCodeSiteTable); });
+		row.addEventListener('dragend', handleDragEnd);
+		var cellDrag = row.insertCell(0);
+		var cellContent = row.insertCell(1);
+		var cellAction = row.insertCell(2);
+		cellDrag.className = 'drag-handle';
+		cellDrag.innerHTML = '&#9776;';
+
+		cellContent.innerHTML = '<a href="' + item + '" target="_blank">' + item + '</a>';
+
+		cellAction.innerHTML = '<button type="button" class="remove-x" onclick="removeCodeSite(' + index + ')" title="Remove">&times;</button>';
+	});
+	document.getElementById('code_site_urls_hidden').value = codeSiteItems.join('\n');
+}
+
+function checkCodeSiteUrl() {
+	var input = document.getElementById('code-site-input');
+	var statusSpan = document.getElementById('code-site-status');
+	var value = input.value.trim();
+
+	if (!value) {
+		statusSpan.innerHTML = '';
+		statusSpan.className = 'bibcode-status';
+		return;
+	}
+
+	var normalized = normalizeUrl(value);
+	if (codeSiteItems.indexOf(normalized) !== -1) {
+		statusSpan.innerHTML = 'Already added';
+		statusSpan.className = 'bibcode-status invalid';
+		return;
+	}
+
+	if (isValidCodeSiteUrl(value)) {
+		statusSpan.innerHTML = 'URL &#10003;';
+		statusSpan.className = 'bibcode-status valid';
+	} else {
+		statusSpan.innerHTML = 'Not a valid URL';
+		statusSpan.className = 'bibcode-status invalid';
+	}
+}
+
+function addCodeSite() {
+	var input = document.getElementById('code-site-input');
+	var statusSpan = document.getElementById('code-site-status');
+	var item = input.value.trim();
+
+	if (!item) return;
+
+	if (!isValidCodeSiteUrl(item)) {
+		statusSpan.innerHTML = 'Not a valid URL';
+		statusSpan.className = 'bibcode-status invalid';
+		return;
+	}
+
+	var normalized = normalizeUrl(item);
+	if (codeSiteItems.indexOf(normalized) !== -1) {
+		statusSpan.innerHTML = 'Already added';
+		statusSpan.className = 'bibcode-status invalid';
+		return;
+	}
+
+	codeSiteItems.push(normalized);
+	renderCodeSiteTable();
+	input.value = '';
+	statusSpan.innerHTML = '';
+	statusSpan.className = 'bibcode-status';
+}
+
+function removeCodeSite(index) {
+	codeSiteItems.splice(index, 1);
+	renderCodeSiteTable();
+}
+
 // See Also management
 var seeAlsoItems = [];
 var seeAlsoCache = {}; // Cache for ASCL ID existence and title
@@ -1939,6 +2051,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	renderEmailTable();
 	renderDescribedInTable();
 	renderUsedInTable();
+	renderCodeSiteTable();
 	renderSeeAlsoTable();
 	renderKeywordBadges();
 	updateCharCount();

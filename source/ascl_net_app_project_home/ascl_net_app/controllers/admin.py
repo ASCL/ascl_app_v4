@@ -645,6 +645,7 @@ def update_code(pk):
 				keywords_str=request.form.get("keywords", ""),
 				url_link_types=_get_url_link_types(db_session),
 				typed_links_json=request.form.get("typed_links", "[]"),
+				code_site_urls=request.form.get("code_site_urls", ""),
 				described_in_urls=request.form.get("described_in_urls", ""),
 				used_in_urls=request.form.get("used_in_urls", ""),
 				see_also_str=request.form.get("see_also", ""),
@@ -705,6 +706,7 @@ def update_code(pk):
 
 			# Update links (stored in link table, not codes table)
 			_update_all_typed_links(db_session, ascldb, pk, request.form.get("typed_links", ""))
+			_update_links_for_code(db_session, ascldb, pk, 'code-site', request.form.get("code_site_urls", ""))
 			_update_links_for_code(db_session, ascldb, pk, 'described-in', request.form.get("described_in_urls", ""))
 			_update_links_for_code(db_session, ascldb, pk, 'used-in', request.form.get("used_in_urls", ""))
 
@@ -733,6 +735,7 @@ def update_code(pk):
 	# Get links from link table
 	url_link_types = _get_url_link_types(db_session)
 	typed_links = _get_all_typed_links_for_code(db_session, pk)
+	code_site_urls = _get_links_for_code(db_session, ascldb, pk, 'code-site')
 	described_in_urls = _get_links_for_code(db_session, ascldb, pk, 'described-in')
 	used_in_urls = _get_links_for_code(db_session, ascldb, pk, 'used-in')
 
@@ -748,6 +751,7 @@ def update_code(pk):
 		keywords_str=keywords_str,
 		url_link_types=url_link_types,
 		typed_links_json=json.dumps(typed_links),
+		code_site_urls=code_site_urls,
 		described_in_urls=described_in_urls,
 		used_in_urls=used_in_urls,
 		see_also_str=see_also_str,
@@ -831,6 +835,7 @@ def insert_code():
 				keywords_str=request.form.get("keywords", ""),
 				url_link_types=_get_url_link_types(db_session),
 				typed_links_json=request.form.get("typed_links", "[]"),
+				code_site_urls=request.form.get("code_site_urls", ""),
 				described_in_urls=request.form.get("described_in_urls", ""),
 				used_in_urls=request.form.get("used_in_urls", ""),
 				see_also_str=request.form.get("see_also", ""),
@@ -871,6 +876,7 @@ def insert_code():
 						keywords_str=request.form.get("keywords", ""),
 						url_link_types=_get_url_link_types(db_session),
 						typed_links_json=request.form.get("typed_links", "[]"),
+						code_site_urls=request.form.get("code_site_urls", ""),
 						described_in_urls=request.form.get("described_in_urls", ""),
 						used_in_urls=request.form.get("used_in_urls", ""),
 						see_also_str=request.form.get("see_also", ""),
@@ -917,6 +923,7 @@ def insert_code():
 
 			# Add links (stored in link table)
 			_update_all_typed_links(db_session, ascldb, pk, request.form.get("typed_links", ""))
+			_update_links_for_code(db_session, ascldb, pk, 'code-site', request.form.get("code_site_urls", ""))
 			_update_links_for_code(db_session, ascldb, pk, 'described-in', request.form.get("described_in_urls", ""))
 			_update_links_for_code(db_session, ascldb, pk, 'used-in', request.form.get("used_in_urls", ""))
 
@@ -952,6 +959,7 @@ def insert_code():
 		keywords_str="",
 		url_link_types=_get_url_link_types(db_session),
 		typed_links_json="[]",
+		code_site_urls="",
 		described_in_urls="",
 		used_in_urls="",
 		see_also_str="",
@@ -1019,14 +1027,13 @@ def _get_all_keyword_labels(db_session):
 
 
 def _get_url_link_types(db_session):
-	"""Get all link types except described-in and used-in (those have special bibcode UI).
+	"""Get all link types except code-site, described-in, and used-in (those have dedicated UI sections).
 	Returns list of {pk, short_name, name, description}."""
 	from sqlalchemy import text
 	results = db_session.execute(text("""
 		SELECT pk, short_name, name, description FROM link_type
-		WHERE short_name NOT IN ('described-in', 'used-in')
+		WHERE short_name NOT IN ('code-site', 'described-in', 'used-in')
 		ORDER BY CASE short_name
-			WHEN 'code-site' THEN 0
 			WHEN 'refereed' THEN 1
 			WHEN 'emac' THEN 2
 			ELSE 3
@@ -1039,14 +1046,14 @@ def _get_url_link_types(db_session):
 
 
 def _get_all_typed_links_for_code(db_session, code_pk):
-	"""Get all URL-type links for a code (excludes described-in and used-in).
+	"""Get all URL-type links for a code (excludes code-site, described-in, and used-in).
 	Returns list of {url, type} ordered by display_order."""
 	from sqlalchemy import text
 	results = db_session.execute(text("""
 		SELECT l.url, lt.short_name as type
 		FROM link l
 		JOIN link_type lt ON l.link_type_pk = lt.pk
-		WHERE l.code_pk = :code_pk AND lt.short_name NOT IN ('described-in', 'used-in')
+		WHERE l.code_pk = :code_pk AND lt.short_name NOT IN ('code-site', 'described-in', 'used-in')
 		ORDER BY l.display_order, l.pk
 	"""), {"code_pk": code_pk}).fetchall()
 	return [{"url": row.url, "type": row.type} for row in results]
@@ -1054,15 +1061,17 @@ def _get_all_typed_links_for_code(db_session, code_pk):
 
 def _update_all_typed_links(db_session, ascldb, code_pk, links_json_str):
 	"""Update URL-type links from JSON array of {url, type, display_order}.
-	Deletes existing URL-type links (not described-in/used-in), inserts new ones."""
+	Deletes existing URL-type links (not code-site/described-in/used-in), inserts new ones.
+	Submitted entries with type 'code-site', 'described-in', or 'used-in' are ignored
+	since those types have dedicated form sections."""
 	import json
 	from sqlalchemy import text
 
-	# Delete existing URL-type links (not described-in or used-in)
+	# Delete existing URL-type links (not code-site, described-in, or used-in)
 	db_session.execute(text("""
 		DELETE l FROM link l
 		JOIN link_type lt ON l.link_type_pk = lt.pk
-		WHERE l.code_pk = :code_pk AND lt.short_name NOT IN ('described-in', 'used-in')
+		WHERE l.code_pk = :code_pk AND lt.short_name NOT IN ('code-site', 'described-in', 'used-in')
 	"""), {"code_pk": code_pk})
 
 	if not links_json_str or not links_json_str.strip():
@@ -1080,6 +1089,8 @@ def _update_all_typed_links(db_session, ascldb, code_pk, links_json_str):
 		url = (link_data.get("url") or "").strip()
 		type_short = (link_data.get("type") or "").strip()
 		if not url or not type_short:
+			continue
+		if type_short in ('code-site', 'described-in', 'used-in'):
 			continue
 
 		if type_short not in type_cache:
