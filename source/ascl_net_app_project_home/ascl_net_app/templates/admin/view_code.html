@@ -10,9 +10,9 @@
 	<a href="{{ url_for('admin_page.archive_code', pk=code.pk) }}" class="button">{% if code.archived == 1 %}Unarchive{% else %}Archive{% endif %}</a>
 	<a href="{{ url_for('admin_page.delete_code', pk=code.pk) }}" class="button danger">Delete</a>
 	{% if code.ascl_id and code.ascl_id != '0000.000' %}
-	<a href="/{{ code.ascl_id }}" class="button" target="_blank">View Public Page</a>
+	<a href="/{{ code.ascl_id }}" class="button">View Public Page</a>
 	{% else %}
-	<a href="/code/v/{{ code.pk }}" class="button" target="_blank">View Public Page</a>
+	<a href="/code/v/{{ code.pk }}" class="button">View Public Page</a>
 	{% endif %}
 </div>
 
