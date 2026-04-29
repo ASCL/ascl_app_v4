@@ -25,6 +25,34 @@ def wp_table(table_name: str) -> str:
 	prefix = current_app.config.get('WP_TABLE_PREFIX', '0hjpDo4yM_')
 	return f"{db}.{prefix}{table_name}"
 
+
+# ---------------------------------------------------------------------------
+# Link rewriting (for non-production hosts)
+# ---------------------------------------------------------------------------
+
+# Match http(s)://[www.]ascl.net at a URL boundary. Scheme is required so
+# prose mentions of "ascl.net" without a scheme are left untouched.
+_ASCL_LINK_RE = re.compile(r'\bhttps?://(?:www\.)?ascl\.net', re.IGNORECASE)
+
+
+def rewrite_ascl_links(html: str) -> str:
+	"""Rewrite ascl.net URLs to the host in WP_LINK_REWRITE_HOST.
+
+	No-op when the config is unset or no app context is active. Only
+	scheme-prefixed URLs are rewritten — bare "ascl.net/..." prose is
+	preserved.
+	"""
+	if not html:
+		return html
+	from flask import current_app, has_app_context
+	if not has_app_context():
+		return html
+	host = current_app.config.get('WP_LINK_REWRITE_HOST')
+	if not host:
+		return html
+	return _ASCL_LINK_RE.sub(f'https://{host}', html)
+
+
 # ---------------------------------------------------------------------------
 # Shortcodes
 # ---------------------------------------------------------------------------
@@ -298,6 +326,7 @@ def wpautop(content: str, br=True) -> str:
 	if '<!-- wpnl -->' in text:
 		text = text.replace(' <!-- wpnl --> ', "\n").replace('<!-- wpnl -->', "\n")
 
+	text = rewrite_ascl_links(text)
 	return text
 
 
