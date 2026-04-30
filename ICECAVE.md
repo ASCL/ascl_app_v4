@@ -57,9 +57,9 @@ The ASCL Icecave is an automated archival system for preserving copies of every 
 
 ### Database Schema
 
-**`codes.short_name`** (VARCHAR(100), nullable) — added after `title` column. Used for directory naming. Populated from GitHub repo names via migration step 17/18 in `migrate_v3_to_v4.sh`.
+**`codes.short_name`** (VARCHAR(100), nullable) — added after `title` column. Used for directory naming. Populated from GitHub repo names via migration step 18/20 in `migrate_v3_to_v4.sh`.
 
-**`code_archive` table** (migration `005_create_code_archive_table.sql`):
+**`code_archive` table** (migration `v3_to_v4_migration/create_code_archive_table.sql`):
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -149,8 +149,8 @@ git --git-dir=/data/ascl_icecave/codes/emcee-2010.001 tag
 
 ## Migration Script Integration
 
-- `v3_to_v4_migration/add_short_name_column.sql` — adds `short_name` to `codes` and populates from GitHub repo names (step 17/18 in `migrate_v3_to_v4.sh`)
-- `migrations/005_create_code_archive_table.sql` — creates the `code_archive` table (run separately, not part of v3→v4 migration since it has no v3 equivalent)
+- `v3_to_v4_migration/add_short_name_column.sql` — adds `short_name` to `codes` and populates from GitHub repo names (step 18/20 in `migrate_v3_to_v4.sh`)
+- `v3_to_v4_migration/create_code_archive_table.sql` — creates the `code_archive` table (step 17/20 in `migrate_v3_to_v4.sh`)
 
 ## Archive.org Integration (Future)
 

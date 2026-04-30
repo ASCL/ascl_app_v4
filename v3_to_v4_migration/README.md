@@ -10,6 +10,11 @@ This directory contains scripts, documentation, and utilities for migrating ASCL
 - **`restore_wordpress_backup.sh`** - Restore a provided WordPress backup SQL into the dev MySQL instance
 - **`README_DATABASE_COPY.md`** - Documentation for the database copy process
 
+### v4-only tables (created during v3→v4 migration; no v3 equivalent)
+- **`create_link_check_table.sql`** - `link_check` table for the link checker results
+- **`create_code_archive_table.sql`** - `code_archive` table tracking icecave archival status
+- **`create_abuse_blocker_tables.sql`** - `ip_error_event` + `ip_block` tables for the per-IP rate limiter
+
 #### Restoring WordPress Backup
 ```bash
 # Default target DB is ascl_wordpress
