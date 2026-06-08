@@ -188,6 +188,29 @@ def create_app(debug=False): #, conf=dict()):
 	if os.environ.get('TYPESENSE_API_KEY'):
 		app.config['TYPESENSE_API_KEY'] = os.environ.get('TYPESENSE_API_KEY')
 
+	# Abuse blocker overrides from environment. Lets the operator turn the
+	# feature on per-host (e.g. only on dev.ascl.net first) without redeploy.
+	def _truthy(v):
+		return str(v).strip().lower() in ('1', 'true', 'yes', 'on')
+
+	for key in (
+		'ABUSE_BLOCKER_ENABLED',
+		'ABUSE_DETECT_WINDOW_MINUTES',
+		'ABUSE_DETECT_THRESHOLD',
+		'ABUSE_BLOCK_DURATION_MINUTES',
+		'ABUSE_CACHE_REFRESH_SECONDS',
+		'TRUST_X_FORWARDED_FOR',
+	):
+		if key in os.environ:
+			val = os.environ[key]
+			if key in ('ABUSE_BLOCKER_ENABLED', 'TRUST_X_FORWARDED_FOR'):
+				app.config[key] = _truthy(val)
+			else:
+				try:
+					app.config[key] = int(val)
+				except ValueError:
+					print_warning(f"Ignoring non-integer env var {key}={val!r}")
+
 	# Validate required secrets in production
 	if not (app.debug or app.testing):
 		missing = [k for k in ['SECRET_KEY', 'ADS_API_TOKEN', 'TYPESENSE_API_KEY']
@@ -305,6 +328,11 @@ def create_app(debug=False): #, conf=dict()):
 	def page_not_found(e):
 		from flask import render_template
 		return render_template("404.html"), 404
+
+	# Per-IP abuse blocker. No-op unless ABUSE_BLOCKER_ENABLED is set.
+	# Must come after the database is connected.
+	from .services.abuse_blocker import install_hooks as install_abuse_hooks
+	install_abuse_hooks(app)
 
 	# Register all paths (URLs) available.
 	register_blueprints(app=app)

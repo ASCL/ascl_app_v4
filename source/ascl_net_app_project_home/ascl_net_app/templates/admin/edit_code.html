@@ -78,8 +78,8 @@
 			<label>Credit</label>
 			<small>Names auto-normalize to "Surname, Firstname I." format. List of names separated by ";" also accepted.</small>
 			<div class="entry-manager">
-				<table class="entry-table" id="credit-table">
-					<thead><tr><th>Name</th><th></th></tr></thead>
+				<table class="entry-table sortable-table" id="credit-table">
+					<thead><tr><th class="drag-col"></th><th>Name</th><th></th></tr></thead>
 					<tbody></tbody>
 				</table>
 				<div class="entry-input-row">
@@ -970,10 +970,20 @@ function renderCreditTable() {
 	tbody.innerHTML = '';
 	credits.forEach(function(name, index) {
 		var row = tbody.insertRow();
-		var cellName = row.insertCell(0);
-		var cellAction = row.insertCell(1);
+		row.draggable = true;
+		row.dataset.index = index;
+		row.addEventListener('dragstart', handleDragStart);
+		row.addEventListener('dragover', handleDragOver);
+		row.addEventListener('drop', function(e) { handleDrop(e, credits, renderCreditTable); });
+		row.addEventListener('dragend', handleDragEnd);
+		var cellDrag = row.insertCell(0);
+		var cellName = row.insertCell(1);
+		var cellAction = row.insertCell(2);
+		cellDrag.className = 'drag-handle';
+		cellDrag.innerHTML = '&#9776;';
 		cellName.textContent = name;
-		cellAction.innerHTML = '<button type="button" onclick="removeCredit(' + index + ')">Remove</button>';
+		cellAction.innerHTML = '<button type="button" onclick="editCredit(' + index + ')">Edit</button> ' +
+			'<button type="button" onclick="removeCredit(' + index + ')">Remove</button>';
 	});
 	document.getElementById('credit_hidden').value = credits.join('; ');
 }
@@ -1023,6 +1033,75 @@ function addCredit() {
 function removeCredit(index) {
 	credits.splice(index, 1);
 	renderCreditTable();
+}
+
+function editCredit(index) {
+	var tbody = document.getElementById('credit-table').getElementsByTagName('tbody')[0];
+	var row = tbody.rows[index];
+	row.draggable = false;  // don't let text selection in the input start a row drag
+	var cellName = row.cells[1];
+	var cellAction = row.cells[2];
+
+	cellName.textContent = '';
+	var input = document.createElement('input');
+	input.type = 'text';
+	input.value = credits[index];
+	input.size = 40;
+	cellName.appendChild(input);
+
+	cellAction.textContent = '';
+	var saveBtn = document.createElement('button');
+	saveBtn.type = 'button';
+	saveBtn.textContent = 'Save';
+	var cancelBtn = document.createElement('button');
+	cancelBtn.type = 'button';
+	cancelBtn.textContent = 'Cancel';
+	cancelBtn.onclick = function() { renderCreditTable(); };
+
+	saveBtn.onclick = function() {
+		var raw = input.value.trim();
+		if (!raw || raw === credits[index]) {
+			renderCreditTable();
+			return;
+		}
+		input.disabled = true;
+		saveBtn.disabled = true;
+		cancelBtn.disabled = true;
+		saveBtn.textContent = '...';
+
+		fetch('/admin/api/normalize_name', {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({name: raw})
+		})
+		.then(function(response) { return response.json(); })
+		.then(function(data) { return data.normalized || raw; })
+		.catch(function() { return raw; })
+		.then(function(normalized) {
+			// Avoid creating a duplicate of another entry
+			var existing = credits.indexOf(normalized);
+			if (existing === -1 || existing === index) {
+				credits[index] = normalized;
+			}
+			renderCreditTable();
+		});
+	};
+
+	input.addEventListener('keydown', function(event) {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			saveBtn.click();
+		} else if (event.key === 'Escape') {
+			event.preventDefault();
+			renderCreditTable();
+		}
+	});
+
+	cellAction.appendChild(saveBtn);
+	cellAction.appendChild(document.createTextNode(' '));
+	cellAction.appendChild(cancelBtn);
+	input.focus();
+	input.select();
 }
 
 // Email management
@@ -2376,7 +2455,8 @@ document.addEventListener('DOMContentLoaded', function() {
 	text-align: center;
 }
 .entry-table td:last-child {
-	width: 70px;
+	width: 1%;
+	white-space: nowrap;
 	text-align: center;
 }
 .url-table button, .entry-table button {

@@ -174,6 +174,23 @@
 		</dl>
 		{% endif %}
 
+		{% if code.citation_method %}
+		{% set citation_links = code.citation_method | citation_urls %}
+		<dl class="sites cite_method">
+			<dt>Preferred citation method{% if citation_links and citation_links | length > 1 %}s{% endif %}:</dt>
+			<dd>
+				{% if citation_links %}
+					{% for url in citation_links %}
+					<a href="{{ url }}">{{ url }}</a>
+					{% endfor %}
+				{% else %}
+					<span class="cite-prose">{{ code.citation_method | auto_link }}</span>
+				{% endif %}
+			</dd>
+			<div class="clear"></div>
+		</dl>
+		{% endif %}
+
 		{% if keywords %}
 		<dl class="sites keywords">
 			<dt>Keywords:</dt>
@@ -186,7 +203,7 @@
 		</dl>
 		{% endif %}
 
-		<div class="explain"><a href="/explain">Explain these fields?</a>{% if is_admin_logged_in %} | <a href="/{{ code.ascl_id }}/suggest-edit">Suggest a correction</a>{% endif %}</div>
+		<div class="explain"><a href="/explain">Explain these fields?</a>{# hidden for now: {% if is_admin_logged_in %} | <a href="/{{ code.ascl_id }}/suggest-edit">Suggest a correction</a>{% endif %} #}</div>
 
 		<div class="clear"></div>
 
@@ -194,36 +211,17 @@
 		<div class="shield">
 			{% if code.ascl_id != '0000.000' %}
 			<img src="https://img.shields.io/badge/ascl-{{ code.ascl_id }}-blue.svg?colorB=262255" alt="ascl:{{ code.ascl_id }}" />
-			<script> 						var css = ".getShield { display: inline; } textarea { box-sizing: border-box; } .shieldText { width: 580px } .shieldCode { display: none; position: relative; } .ungetShield { height: 20px; width: 20px; position: absolute; top: -20px; left: 560px; background-color: #999; text-align: center; } .x { position: absolute; left: 0; right: 0; top: 2; bottom: 0; margin: auto; text-align: center; }";
-				var htmlDiv = document.createElement('div');
-				htmlDiv.innerHTML = '<p>&nbsp;</p><style>' + css + '</style>'; // IE bug workaround
-				document.getElementsByTagName('head')[0].appendChild(htmlDiv.childNodes[1]);
-			</script>
 			<br>
-			<a class="getShield" id="getShield{{ code.ascl_id }}">Add this shield to your page</a>
-			<script>
-				var shieldButton = document.getElementById("getShield{{ code.ascl_id }}");
-				shieldButton.addEventListener("click", function () {
-					var css = ".shieldCode { display: block; } .getShield { display: none; }";
-					var htmlDiv = document.createElement('div');
-					htmlDiv.innerHTML = '<p>&nbsp;</p><style>' + css + '</style>';
-					document.getElementsByTagName('head')[0].appendChild(htmlDiv.childNodes[1]);
-				});
-			</script>
-			<div class="shieldCode">
-				<textarea rows="5" class="shieldText">&lt;a href=&quot;https://ascl.net/{{ code.ascl_id }}&quot;&gt;&lt;img src=&quot;https://img.shields.io/badge/ascl-{{ code.ascl_id }}-blue.svg?colorB=262255&quot; alt=&quot;ascl:{{ code.ascl_id }}&quot; /&gt;&lt;/a&gt;</textarea>
-				<div class="shieldCopy">Copy the above HTML to add this shield to your code&#39;s website.</div>
-				<button class="ungetShield" id="ungetShield{{ code.ascl_id }}"><span class="x">X</span></button>
-				<script>
-					var unshieldButton = document.getElementById("ungetShield{{ code.ascl_id }}");
-					unshieldButton.addEventListener("click", function () {
-						var css = ".shieldCode { display: none; } .getShield { display: inline; }";
-						var htmlDiv = document.createElement('div');
-						htmlDiv.innerHTML = '<p>&nbsp;</p><style>' + css + '</style>';
-						document.getElementsByTagName('head')[0].appendChild(htmlDiv.childNodes[1]);
-					});
-				</script>
-			</div>
+			<span class="shield-copy-row">
+				<span class="shield-copy-text">Add this ASCL shield to your page.</span>
+				<button type="button" class="copy-shield-btn" id="copyShieldBtn" data-code-id="{{ code.ascl_id }}" title="Copy the HTML for this shield to your clipboard">
+					<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+						<path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+						<path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+					</svg>
+				</button>
+				<span class="shield-copied-msg" id="shieldCopiedMsg">Copied!</span>
+			</span>
 			{% endif %}
 		</div>
 
@@ -253,6 +251,9 @@
 }
 .code-record-detail dl.keywords dd a:hover {
 	text-decoration: underline;
+}
+.code-record-detail dl.cite_method .cite-prose a {
+	display: inline;
 }
 .code-record-detail dl.untyped-links {
 	border-left: 3px solid #ccc;
@@ -293,5 +294,79 @@
 .delete-link-btn:hover {
 	background: #a93226;
 }
+.shield-copy-row {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 4px;
+}
+.shield-copy-text {
+	font-size: 11px; /* match .explain */
+}
+.copy-shield-btn {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 5px;
+	background: none;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	color: #352bb3;
+	cursor: pointer;
+	transition: background 0.2s, border-color 0.2s;
+}
+.copy-shield-btn:hover {
+	background: #f3f4f6;
+	border-color: #d1d5db;
+}
+.shield-copied-msg {
+	font-size: 12px;
+	color: #047857;
+	opacity: 0;
+	transition: opacity 0.3s;
+}
+.shield-copied-msg.visible {
+	opacity: 1;
+}
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+	var copyBtn = document.getElementById('copyShieldBtn');
+	if (!copyBtn) return;
+
+	copyBtn.addEventListener('click', function() {
+		var codeId = copyBtn.getAttribute('data-code-id');
+		var shieldHtml = '<a href="https://ascl.net/' + codeId + '"><img src="https://img.shields.io/badge/ascl-' + codeId + '-blue.svg?colorB=262255" alt="ascl:' + codeId + '" /></a>';
+
+		var copiedTimer = null;
+		function showCopied() {
+			var msg = document.getElementById('shieldCopiedMsg');
+			msg.classList.add('visible');
+			if (copiedTimer) clearTimeout(copiedTimer);
+			copiedTimer = setTimeout(function() {
+				msg.classList.remove('visible');
+			}, 2000);
+		}
+
+		if (navigator.clipboard && window.isSecureContext) {
+			navigator.clipboard.writeText(shieldHtml).then(showCopied);
+		} else {
+			// Fallback for non-secure contexts (e.g. dev over plain HTTP)
+			var textarea = document.createElement('textarea');
+			textarea.value = shieldHtml;
+			textarea.style.position = 'fixed';
+			textarea.style.opacity = '0';
+			document.body.appendChild(textarea);
+			textarea.select();
+			try {
+				document.execCommand('copy');
+				showCopied();
+			} catch (err) {
+				console.error('Failed to copy:', err);
+			}
+			document.body.removeChild(textarea);
+		}
+	});
+});
+</script>
 {% endblock %}

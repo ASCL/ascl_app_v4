@@ -239,6 +239,21 @@ _COMMON_WORDS = frozenset({
 	'tool', 'use', 'used', 'using', 'was', 'which', 'with',
 })
 
+# MySQL boolean fulltext operators. A bare '-' or '+' inside a term (e.g. a
+# title word like "Environmentally-") makes AGAINST(... IN BOOLEAN MODE) fail
+# to parse, and unsanitized URL input ("@@xyz") triggers the same.
+_FULLTEXT_OP_RE = re.compile(r'[+\-<>()~*"@]')
+
+def _strip_fulltext_ops(word):
+	return _FULLTEXT_OP_RE.sub('', word)
+
+# Characters that need escaping inside a MySQL REGEXP pattern so caller-supplied
+# strings can't introduce unbalanced parens, dangling quantifiers, etc.
+_REGEXP_META_RE = re.compile(r'([\\.^$*+?()\[\]{}|])')
+
+def _escape_regexp_literal(s):
+	return _REGEXP_META_RE.sub(r'\\\1', s)
+
 def has_referenced_by(session, ascl_id, code_pk, title):
 	''' Return True if at least one other published code references this code
 	    (by ASCL ID in abstract, or by significant title words via fulltext).
@@ -254,7 +269,8 @@ def has_referenced_by(session, ascl_id, code_pk, title):
 
 	# Tier 2: fulltext match on significant title words
 	words = re.findall(r'[A-Za-z0-9][\w-]*', title)
-	significant = [w for w in words if w.lower() not in _COMMON_WORDS and len(w) > 2]
+	significant = [_strip_fulltext_ops(w) for w in words if w.lower() not in _COMMON_WORDS and len(w) > 2]
+	significant = [w for w in significant if len(w) > 2]
 	if significant:
 		search_expr = ' '.join(f'+{w}' for w in significant)
 		if session.execute(text("""
@@ -300,7 +316,8 @@ def discover_mentioned(ascl_id):
 
 	# Tier 2: fulltext match on significant title words
 	words = re.findall(r'[A-Za-z0-9][\w-]*', source.title)
-	significant = [w for w in words if w.lower() not in _COMMON_WORDS and len(w) > 2]
+	significant = [_strip_fulltext_ops(w) for w in words if w.lower() not in _COMMON_WORDS and len(w) > 2]
+	significant = [w for w in significant if len(w) > 2]
 
 	if significant:
 		# Boolean mode: all significant words required
@@ -330,15 +347,21 @@ def discover_domain(term):
 	# Short terms (< 3 chars) fall below MySQL fulltext min token size;
 	# use REGEXP with word boundaries instead
 	if len(term) < 3:
+		regex_term = _escape_regexp_literal(term)
+		if not regex_term:
+			return redirect(request.referrer or "/code/all")
 		row = session.execute(text("""
 			SELECT ascl_id FROM public_codes
 			WHERE abstract REGEXP CONCAT('\\\\b', :term, '\\\\b')
 			  AND ascl_id != :exclude_id
 			ORDER BY RAND() LIMIT 1
-		"""), {"term": term, "exclude_id": exclude_ascl_id}).first()
+		"""), {"term": regex_term, "exclude_id": exclude_ascl_id}).first()
 	else:
+		clean = _strip_fulltext_ops(term).strip()
+		if not clean:
+			return redirect(request.referrer or "/code/all")
 		# Wrap multi-word terms in quotes for exact phrase matching
-		search_term = f'"{term}"' if ' ' in term else term
+		search_term = f'"{clean}"' if ' ' in clean else clean
 
 		row = session.execute(text("""
 			SELECT ascl_id FROM public_codes
@@ -371,12 +394,15 @@ def discover_language(lang):
 			ORDER BY RAND() LIMIT 1
 		"""), {"pattern": "%C++%", "exclude_id": exclude_ascl_id}).first()
 	else:
+		regex_lang = _escape_regexp_literal(lang)
+		if not regex_lang:
+			return redirect(request.referrer or "/code/all")
 		row = session.execute(text("""
 			SELECT ascl_id FROM public_codes
 			WHERE abstract REGEXP CONCAT('\\\\b', :lang, '\\\\b')
 			  AND ascl_id != :exclude_id
 			ORDER BY RAND() LIMIT 1
-		"""), {"lang": lang, "exclude_id": exclude_ascl_id}).first()
+		"""), {"lang": regex_lang, "exclude_id": exclude_ascl_id}).first()
 
 	if row:
 		return redirect(f"/{row.ascl_id}")

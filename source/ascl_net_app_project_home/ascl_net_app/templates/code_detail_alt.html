@@ -196,9 +196,13 @@
 		<!-- Right Column: Sidebar -->
 		<aside class="sidebar">
 			<!-- Citation Card -->
-			{% if code.bibcode %}
+			{% if code.bibcode or code.citation_method %}
 			<div class="sidebar-card">
 				<h3 class="sidebar-card-title">Preferred Citation</h3>
+				{% if code.citation_method %}
+				<div class="citation-method-text">{{ code.citation_method | auto_link }}</div>
+				{% endif %}
+				{% if code.bibcode %}
 				<a href="https://ui.adsabs.harvard.edu/abs/{{ code.bibcode }}/abstract"
 				   class="bibcode-link" target="_blank" rel="noopener">
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -210,6 +214,7 @@
 						<path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
 					</svg>
 				</a>
+				{% endif %}
 			</div>
 			{% endif %}
 
@@ -481,6 +486,18 @@
 	font-weight: 700;
 	margin: 0 0 16px 0;
 	color: #262255;
+}
+
+.citation-method-text {
+	font-size: 0.9em;
+	color: #374151;
+	line-height: 1.5;
+	margin-bottom: 12px;
+	overflow-wrap: break-word;
+}
+
+.citation-method-text a {
+	color: #352bb3;
 }
 
 .bibcode-link {

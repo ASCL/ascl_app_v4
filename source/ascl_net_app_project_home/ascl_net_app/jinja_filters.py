@@ -140,6 +140,74 @@ def link_ascl_ids(text_value):
 	return Markup(linked)
 
 
+@blueprint.app_template_filter()
+def auto_link(text_value):
+	"""Convert bare URLs in text to clickable links, preserving existing HTML.
+
+	Matches the PHP production site's auto_link() helper, used for the
+	'Preferred citation method' field. URLs already inside anchor tags
+	(or any tag attributes) are left alone.
+	"""
+	if not text_value:
+		return ""
+
+	text = str(text_value)
+
+	url_pattern = re.compile(r'(https?://[^\s<>\'"\)\]]+)', re.IGNORECASE)
+
+	def _link_url(match):
+		url = match.group(1)
+		# Keep trailing sentence punctuation out of the link
+		trailing = ''
+		while url and url[-1] in '.,;:':
+			trailing = url[-1] + trailing
+			url = url[:-1]
+		return f'<a href="{url}" target="_blank" rel="noopener">{url}</a>{trailing}'
+
+	# Split out existing anchors and other tags so only plain-text
+	# segments are linkified.
+	token_pattern = re.compile(r'(<a\b[^>]*>.*?</a>|<[^>]+>)', re.IGNORECASE | re.DOTALL)
+	parts = token_pattern.split(text)
+	for i in range(0, len(parts), 2):  # even indices are plain text
+		parts[i] = url_pattern.sub(_link_url, parts[i])
+
+	return Markup(''.join(parts))
+
+
+@blueprint.app_template_filter()
+def citation_urls(text_value):
+	"""Return the list of URLs in a citation_method string, or None if the
+	text contains prose beyond a simple list of URLs.
+
+	Lets the 'Preferred citation method' field render one link per line when
+	it is just a list of URLs joined by connectors like ',' or 'and';
+	callers fall back to auto_link for anything with real prose.
+	"""
+	if not text_value:
+		return None
+
+	text = str(text_value)
+	url_pattern = re.compile(r'(https?://[^\s<>\'"\)\]]+)', re.IGNORECASE)
+	urls = url_pattern.findall(text)
+	if not urls:
+		return None
+
+	# If anything besides trivial connectors remains once the URLs are
+	# removed, the field is prose — let the caller render it as text.
+	remainder = url_pattern.sub(' ', text)
+	remainder = re.sub(r'\b(?:and|or)\b', ' ', remainder, flags=re.IGNORECASE)
+	if re.sub(r'[\s,;&.]+', '', remainder):
+		return None
+
+	# Keep trailing sentence punctuation out of the links
+	cleaned = []
+	for url in urls:
+		while url and url[-1] in '.,;:':
+			url = url[:-1]
+		cleaned.append(url)
+	return cleaned
+
+
 def _strip_html(text):
 	"""Remove HTML tags from text."""
 	return re.sub(r'<[^>]+>', '', text)

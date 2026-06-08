@@ -64,3 +64,19 @@ def favicon():
 def robots():
 	robots_path = os.path.join(current_app.root_path, 'static')
 	return send_from_directory(robots_path, "robots.txt")
+
+
+# Diagnostic endpoint for verifying what client IP the app sees under cPanel.
+# Used to decide whether the abuse blocker should trust X-Forwarded-For.
+# Hit from a known external IP (e.g. cellular) and compare remote_addr to the
+# expected public IP. Safe to leave in place — reveals only the caller's own
+# IP and forwarding headers.
+@index_page.route('/__whoami__')
+def whoami():
+	from flask import jsonify, request
+	return jsonify({
+		"remote_addr": request.remote_addr,
+		"x_forwarded_for": request.headers.get("X-Forwarded-For"),
+		"x_real_ip": request.headers.get("X-Real-IP"),
+		"forwarded": request.headers.get("Forwarded"),
+	})

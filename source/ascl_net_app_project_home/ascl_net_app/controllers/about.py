@@ -38,23 +38,6 @@ def _fetch_wp_page(page_id: int):
 		return conn.execute(sql, {"id": page_id}).mappings().first()
 
 
-def _title_case(s):
-	"""Capitalize first letter of each word, but preserve all-uppercase words like ASCL."""
-	words = s.split()
-	result = []
-	for w in words:
-		if w.isupper() and len(w) > 1:
-			result.append(w)
-		elif '/' in w:
-			result.append('/'.join(
-				p if (p.isupper() and len(p) > 1) else p.capitalize()
-				for p in w.split('/')
-			))
-		else:
-			result.append(w.capitalize())
-	return ' '.join(result)
-
-
 def _fetch_subpages(parent_id: int):
 	sql = text(
 		f"""
@@ -79,7 +62,7 @@ def _render_wp_page(page_id: int, back: str = None, show_subpages: bool = True):
 	parent_id = page["post_parent"] or page["ID"]
 	if show_subpages:
 		subpages_raw = _fetch_subpages(parent_id) if parent_id else []
-		subpages = [{"ID": sp["ID"], "post_title": _title_case(sp["post_title"])} for sp in subpages_raw]
+		subpages = [{"ID": sp["ID"], "post_title": sp["post_title"]} for sp in subpages_raw]
 	else:
 		subpages = []
 	content_html = Markup(wpautop(page["post_content"] or ""))
@@ -87,7 +70,7 @@ def _render_wp_page(page_id: int, back: str = None, show_subpages: bool = True):
 
 	return render_template(
 		"about.html",
-		page_title=_title_case(page["post_title"]),
+		page_title=page["post_title"],
 		content=content_html,
 		subpages=subpages,
 		current_page=page["ID"],

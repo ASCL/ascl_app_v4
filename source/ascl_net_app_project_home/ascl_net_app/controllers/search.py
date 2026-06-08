@@ -16,6 +16,23 @@ def _normalize_suggest_query(raw_query):
 	return q
 
 
+def _safe_int(value, default, min_val=None, max_val=None):
+	'''Parse a request arg to int with a default and optional clamping.
+
+	Tolerates the garbage that scanners and stale links send to numeric query
+	params (URL-encoded payloads, sentinel strings) without raising.
+	'''
+	try:
+		n = int(value)
+	except (TypeError, ValueError):
+		return default
+	if min_val is not None and n < min_val:
+		return min_val
+	if max_val is not None and n > max_val:
+		return max_val
+	return n
+
+
 def _author_query_variants(search_term):
 	"""Build a few author-query variants to improve matches across name formats."""
 	import re
@@ -318,8 +335,8 @@ def search():
 		per_page: Results per page (default: 20)
 	"""
 	query_string = request.args.get('q', '').strip()
-	page = int(request.args.get('page', 1))
-	per_page = int(request.args.get('per_page', 20))
+	page = _safe_int(request.args.get('page'), default=1, min_val=1)
+	per_page = _safe_int(request.args.get('per_page'), default=20, min_val=1, max_val=100)
 
 	templateDict = {
 		'query': query_string,
