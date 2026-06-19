@@ -28,8 +28,5 @@ Active punch list. For the full v3 → v4 endpoint map see [`ENDPOINT_MAPPING.md
 
 ## Future enhancements
 
-- ADS integration: automatic citation data sync
-- Zenodo integration: software preservation + DOI minting
-- Citation exports: BibTeX, RIS, EndNote
 - Faceted search UI
 - Activity log surfaced in the admin UI
