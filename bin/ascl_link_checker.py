@@ -484,19 +484,29 @@ def write_result(
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_working = result["is_working"]
 
+    # Clip strings to their link_check column limits so a pathological page
+    # title or long redirect URL can't trigger a "Data too long" (1406) error.
+    def _clip(v, n):
+        return v[:n] if isinstance(v, str) and len(v) > n else v
+
+    message = _clip(result["message"], 255)
+    final_url = _clip(result["final_url"], 2048)
+    page_title = _clip(result["page_title"], 512)
+    note = _clip(result["note"], 255)
+
     params = {
         "http_status": result["http_status"],
-        "message": result["message"],
+        "message": message,
         "is_working": result["is_working"],
-        "final_url": result["final_url"],
-        "page_title": result["page_title"],
+        "final_url": final_url,
+        "page_title": page_title,
         "domain_changed": result["domain_changed"],
         "now": now,
         "init_fail_count": 0 if is_working else 1,
-        "note": result["note"],
+        "note": note,
         "last_working": now if is_working else None,
-        "title_ok": result["page_title"] if is_working else None,
-        "final_url_ok": result["final_url"] if is_working else None,
+        "title_ok": page_title if is_working else None,
+        "final_url_ok": final_url if is_working else None,
     }
 
     with connection.cursor() as cursor:
