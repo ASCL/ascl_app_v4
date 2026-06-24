@@ -348,7 +348,7 @@ def _build_dashboard_context():
 		.filter(ascldb.ASCLCode.ascl_id != '0000.000')
 		.group_by(ascldb.ASCLCode.pk)
 		.order_by(desc("citation_count"))
-		.limit(10)
+		.limit(15)
 		.all()
 	)
 	stats["most_cited"] = [
@@ -462,7 +462,9 @@ def _build_dashboard_context():
 
 	db_session.close()
 
-	return {"stats": stats, "admin_stats": admin_stats, "is_admin": is_admin}
+	link_check_db = flask.current_app.config.get("DB_DATABASE", "ascl_db_v4")
+	return {"stats": stats, "admin_stats": admin_stats, "is_admin": is_admin,
+		"link_check_db": link_check_db}
 
 
 @dashboard_page.route("/", methods=["GET"])

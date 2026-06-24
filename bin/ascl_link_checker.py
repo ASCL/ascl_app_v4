@@ -26,6 +26,7 @@ import asyncio
 import collections
 import configparser
 import datetime
+import gc
 import logging
 import os
 import re
@@ -76,7 +77,7 @@ def read_db_config() -> dict:
     config = configparser.ConfigParser()
     config.read(cnf_path)
 
-    for section in ("client_ascl", "client_ascl_root", "client"):
+    for section in ("client_ascl_root", "client_ascl", "client"):
         if config.has_section(section):
             break
     else:
@@ -120,7 +121,8 @@ def get_connection(db_cfg: dict, database: str) -> pymysql.Connection:
 # ---------------------------------------------------------------------------
 
 def fetch_links(connection: pymysql.Connection, link_type: str,
-                retry_failed: bool = False) -> list[dict]:
+                retry_failed: bool = False,
+                offset: int = 0, limit: int | None = None) -> list[dict]:
     """Read links to check from the link table, deduplicated by URL.
 
     Returns list of dicts with keys: link_pks (list), url.
@@ -130,7 +132,7 @@ def fetch_links(connection: pymysql.Connection, link_type: str,
     If retry_failed=True, only returns links that previously failed.
     """
     sql = """
-        SELECT l.pk AS link_pk, l.url, l.code_pk
+        SELECT DISTINCT l.pk AS link_pk, l.url, l.code_pk
         FROM link l
         JOIN codes c ON c.pk = l.code_pk
     """
@@ -147,6 +149,8 @@ def fetch_links(connection: pymysql.Connection, link_type: str,
     if link_type != "all":
         sql += " AND l.link_type_pk = (SELECT pk FROM link_type WHERE short_name = %s)"
         params.append(link_type)
+
+    sql += " ORDER BY l.pk"  # stable order so --offset/--limit batches are consistent
 
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
@@ -165,6 +169,10 @@ def fetch_links(connection: pymysql.Connection, link_type: str,
     dupes = len(rows) - len(links)
     log.info("Loaded %d links (%d unique URLs, %d duplicates) (%s)",
              len(rows), len(links), dupes, label)
+    if offset or limit is not None:
+        links = links[offset:(offset + limit) if limit is not None else None]
+        log.info("Batch slice: offset=%d limit=%s -> %d links this run",
+                 offset, limit, len(links))
     return links
 
 
@@ -242,8 +250,8 @@ def domains_differ(original_url: str, final_url: str | None) -> bool:
     if not final_url:
         return False
     try:
-        orig = urlparse(original_url).netloc.lower().lstrip("www.")
-        final = urlparse(final_url).netloc.lower().lstrip("www.")
+        orig = urlparse(original_url).netloc.lower().removeprefix("www.")
+        final = urlparse(final_url).netloc.lower().removeprefix("www.")
         return orig != final
     except Exception:
         return False
@@ -253,35 +261,62 @@ def domains_differ(original_url: str, final_url: str | None) -> bool:
 # Async URL checking
 # ---------------------------------------------------------------------------
 
-async def _request_with_retry(
-    client: httpx.AsyncClient,
-    method: str,
-    url: str,
-) -> httpx.Response:
-    """Make an HTTP request with retry on 429 and 5xx.
+class _Resp:
+    """Lightweight response holder — only the fields check_url needs."""
+    __slots__ = ("status_code", "reason_phrase", "url", "snippet")
 
-    Respects Retry-After header. Retries up to MAX_RETRIES times.
+    def __init__(self, status_code, reason_phrase, url, snippet):
+        self.status_code = status_code
+        self.reason_phrase = reason_phrase
+        self.url = url
+        self.snippet = snippet
+
+
+async def _get_limited(client: httpx.AsyncClient, url: str) -> _Resp:
+    """Streaming GET that reads at most TITLE_READ_LIMIT bytes of the body.
+
+    Avoids loading full response bodies into memory (the main cause of
+    runaway memory growth on large pages). Retries on 429/5xx,
+    honouring the Retry-After header.
     """
+    status = 0
+    reason = ""
+    final = url
     for attempt in range(MAX_RETRIES + 1):
-        resp = await getattr(client, method)(url, follow_redirects=True)
+        wait = None
+        async with client.stream("GET", url, follow_redirects=True) as resp:
+            status = resp.status_code
+            reason = resp.reason_phrase or ""
+            final = str(resp.url)
 
-        if resp.status_code == 429 or (resp.status_code >= 500 and attempt < MAX_RETRIES):
-            retry_after = resp.headers.get("retry-after")
-            if retry_after:
-                try:
-                    wait = min(float(retry_after), 120)  # cap at 2 minutes
-                except ValueError:
-                    wait = 30
+            if attempt < MAX_RETRIES and (status == 429 or status >= 500):
+                retry_after = resp.headers.get("retry-after")
+                if retry_after:
+                    try:
+                        wait = min(float(retry_after), 120)  # cap at 2 minutes
+                    except ValueError:
+                        wait = 30
+                else:
+                    wait = 2 ** (attempt + 1)
             else:
-                wait = 2 ** (attempt + 1)  # 2, 4, 8 seconds
-            log.debug("Got %d from %s, retrying in %.0fs (attempt %d/%d)",
-                      resp.status_code, url, wait, attempt + 1, MAX_RETRIES)
-            await asyncio.sleep(wait)
-            continue
+                data = bytearray()
+                try:
+                    async for chunk in resp.aiter_bytes(chunk_size=TITLE_READ_LIMIT):
+                        data.extend(chunk)
+                        if len(data) >= TITLE_READ_LIMIT:
+                            break
+                except Exception:
+                    pass  # partial/failed body read — status is still valid
+                snippet = bytes(data[:TITLE_READ_LIMIT]).decode(
+                    resp.encoding or "utf-8", errors="replace")
+                return _Resp(status, reason, final, snippet)
 
-        return resp
+        # Only reached when retrying; the connection is closed before we sleep.
+        log.debug("Got %d from %s, retrying in %.0fs (attempt %d/%d)",
+                  status, url, wait, attempt + 1, MAX_RETRIES)
+        await asyncio.sleep(wait)
 
-    return resp  # return last response even if still failing
+    return _Resp(status, reason, final, "")
 
 
 async def check_url(
@@ -325,13 +360,16 @@ async def check_url(
         domain_sems[domain] = asyncio.Semaphore(MAX_PER_DOMAIN)
 
     async with global_sem, domain_sems[domain]:
-        # Per-domain pacing: wait if we hit this domain too recently
+        # Per-domain pacing: reserve this domain's next slot *before* awaiting
+        # so concurrent workers for the same domain don't all read the same
+        # stale timestamp and fire together.
         now = time.monotonic()
         last = domain_last_request.get(domain, 0)
-        gap = DOMAIN_DELAY - (now - last)
+        scheduled = max(now, last + DOMAIN_DELAY)
+        domain_last_request[domain] = scheduled
+        gap = scheduled - now
         if gap > 0:
             await asyncio.sleep(gap)
-        domain_last_request[domain] = time.monotonic()
 
         http_status = 0
         message = ""
@@ -341,16 +379,17 @@ async def check_url(
         body_html = ""
 
         try:
-            # Single GET request — gets status and body for title extraction
-            resp = await _request_with_retry(client, "get", url)
-            body_html = resp.text[:TITLE_READ_LIMIT]
+            # Streaming GET — read only the first TITLE_READ_LIMIT bytes of the
+            # body (enough for the <title>) so large pages can't blow up memory.
+            resp = await _get_limited(client, url)
+            body_html = resp.snippet
 
             http_status = resp.status_code
             message = resp.reason_phrase or ""
 
             # Record final URL if redirected
-            if str(resp.url) != url:
-                final_url = str(resp.url)
+            if resp.url != url:
+                final_url = resp.url
 
         except httpx.TimeoutException as exc:
             http_status = 0
@@ -375,12 +414,12 @@ async def check_url(
                         verify=ctx,
                     )
                     async with insecure_client:
-                        resp = await insecure_client.get(url, follow_redirects=True)
+                        resp = await _get_limited(insecure_client, url)
                         http_status = resp.status_code
                         message = resp.reason_phrase or ""
-                        body_html = resp.text[:TITLE_READ_LIMIT]
-                        if str(resp.url) != url:
-                            final_url = str(resp.url)
+                        body_html = resp.snippet
+                        if resp.url != url:
+                            final_url = resp.url
                         note = "SSL certificate error (site reachable without verification)"
                 except Exception:
                     http_status = -1
@@ -515,7 +554,8 @@ async def run(args: argparse.Namespace) -> None:
 
     try:
         links = fetch_links(connection, args.link_type,
-                            retry_failed=args.retry_failed)
+                            retry_failed=args.retry_failed,
+                            offset=args.offset, limit=args.limit)
     except Exception:
         connection.close()
         raise
@@ -544,9 +584,9 @@ async def run(args: argparse.Namespace) -> None:
     interactive = getattr(args, "interactive", False)
     start_time = datetime.datetime.now()
 
-    # Recent failures for the interactive ticker
-    recent_failures: list[str] = []
+    # Recent failures for the interactive ticker (bounded so it can't grow).
     MAX_RECENT = 5
+    recent_failures: collections.deque = collections.deque(maxlen=MAX_RECENT)
 
     def _render_progress():
         """Render the interactive progress display."""
@@ -578,7 +618,7 @@ async def run(args: argparse.Namespace) -> None:
 
         if recent_failures:
             lines.append(f"\033[2K  ── recent failures ──")
-            for entry in recent_failures[-MAX_RECENT:]:
+            for entry in recent_failures:
                 lines.append(f"\033[2K    {entry}")
 
         # Move cursor up and redraw
@@ -594,19 +634,51 @@ async def run(args: argparse.Namespace) -> None:
             print()
 
     async def producer():
+        # Feed links through a fixed pool of workers so only `concurrency`
+        # requests (and their response buffers) are ever alive at once,
+        # rather than creating one coroutine per link up front.
+        link_queue: asyncio.Queue = asyncio.Queue()
+        for link in links:
+            link_queue.put_nowait(link)
+
+        async def worker(client):
+            while True:
+                try:
+                    link = link_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    return
+                try:
+                    result = await check_url(
+                        client, global_sem, domain_sems, domain_last_request, link)
+                except Exception as exc:
+                    result = {
+                        "link_pks": link["link_pks"],
+                        "url": link["url"],
+                        "http_status": -2,
+                        "message": str(exc)[:255],
+                        "is_working": False,
+                        "final_url": None,
+                        "page_title": None,
+                        "domain_changed": False,
+                        "note": "checker error",
+                    }
+                await results_queue.put(result)
+
         async with httpx.AsyncClient(
             timeout=timeout,
             headers={"User-Agent": USER_AGENT},
             follow_redirects=True,
+            limits=httpx.Limits(
+                max_connections=args.concurrency,
+                max_keepalive_connections=0,  # don't pool sockets across domains
+            ),
         ) as client:
-            tasks = [
-                check_url(client, global_sem, domain_sems, domain_last_request, link)
-                for link in links
+            workers = [
+                asyncio.create_task(worker(client))
+                for _ in range(args.concurrency)
             ]
-            for coro in asyncio.as_completed(tasks):
-                result = await coro
-                await results_queue.put(result)
-            await results_queue.put(None)  # sentinel
+            await asyncio.gather(*workers)
+        await results_queue.put(None)  # sentinel
 
     async def consumer():
         nonlocal checked, working, failed
@@ -636,6 +708,9 @@ async def run(args: argparse.Namespace) -> None:
                 if uncommitted >= 50 and not args.dry_run:
                     connection.commit()
                     uncommitted = 0
+
+                if checked % 500 == 0:
+                    gc.collect()
 
                 _render_progress()
 
@@ -695,6 +770,14 @@ def build_parser(parser: argparse.ArgumentParser | None = None) -> argparse.Argu
     parser.add_argument(
         "--retry-failed", action="store_true",
         help="Only re-check links that previously failed (is_working=0 in link_check)",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None,
+        help="Check at most N unique URLs this run (for batching under tight memory).",
+    )
+    parser.add_argument(
+        "--offset", type=int, default=0,
+        help="Skip the first N unique URLs (use with --limit to process in batches).",
     )
     parser.add_argument(
         "--dry-run", action="store_true",

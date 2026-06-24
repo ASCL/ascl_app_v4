@@ -8,6 +8,10 @@
 		as of <span class="toggleable-time" data-utc="{{ stats.link_check.last_checked.strftime('%Y-%m-%dT%H:%M:%S') }}">{{ stats.link_check.last_checked.strftime('%b %-d, %Y %H:%M') }} UTC</span>.*
 		{% if is_admin %}<a href="{{ url_for('admin_page.broken_links') }}">Link check page.</a>{% endif %}
 	</p>
+	{% else %}
+	<p class="link-check-summary link-check-pending">
+		Site link check has not been run yet.{% if is_admin %} Run it with <code>python bin/ascl_link_checker.py {{ link_check_db }}</code>{% endif %}
+	</p>
 	{% endif %}
 
 	<!-- Overall Statistics -->
@@ -46,6 +50,14 @@
 				</ul>
 			</div>
 		</div>
+		<div class="admin-most-cited">
+			<h3>Most Cited Codes{% if stats.most_cited|length > 5 %} <span class="amc-toggle" id="amc-toggle" onclick="toggleMostCited()">show more</span>{% endif %}</h3>
+			<ol class="admin-most-cited-list">
+				{% for item in stats.most_cited %}
+				<li class="amc-row{% if loop.index > 5 %} amc-hidden{% endif %}"><a href="/{{ item.code.ascl_id }}">{{ item.code.title }}</a> <span class="amc-meta">ascl:{{ item.code.ascl_id }} &mdash; <strong>{{ item.citation_count }}</strong> cites</span></li>
+				{% endfor %}
+			</ol>
+		</div>
 	</section>
 	{% endif %}
 
@@ -78,7 +90,7 @@
 		<div class="journal-table-wrap">
 			<div class="journal-table-toolbar">
 				<input type="text" id="journal-filter" class="journal-filter" placeholder="Filter journals…">
-				{% if stats.all_journal_citations|length > 20 %}
+				{% if stats.all_journal_citations|length > 12 %}
 				<button class="btn btn-small journal-toggle" id="journal-toggle" onclick="toggleJournalRows()">
 					Show all {{ stats.all_journal_citations|length }} journals
 				</button>
@@ -96,39 +108,12 @@
 				</thead>
 				<tbody>
 					{% for item in stats.all_journal_citations %}
-					<tr class="journal-row{% if loop.index > 20 %} journal-hidden{% endif %}">
+					<tr class="journal-row{% if loop.index > 12 %} journal-hidden{% endif %}">
 						<td>{{ loop.index }}</td>
 						<td>{{ item.journal }}</td>
 						<td>{{ item.full_name }}</td>
 						<td>{{ item.count }}</td>
 						<td>{{ item.pct }}%</td>
-					</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-		</div>
-	</section>
-
-	<!-- Most Cited Codes -->
-	<section class="dashboard-section">
-		<h2>Most Cited Codes</h2>
-		<div class="code-list">
-			<table class="data-table compact-table">
-				<thead>
-					<tr>
-						<th>Rank</th>
-						<th>ASCL ID</th>
-						<th>Title</th>
-						<th>Citations</th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for item in stats.most_cited %}
-					<tr>
-						<td>{{ loop.index }}</td>
-						<td><a href="/{{ item.code.ascl_id }}">ascl:{{ item.code.ascl_id }}</a></td>
-						<td><a href="/{{ item.code.ascl_id }}">{{ item.code.title }}</a></td>
-						<td>{{ item.citation_count }}</td>
 					</tr>
 					{% endfor %}
 				</tbody>
@@ -160,6 +145,19 @@
 	color: #444;
 }
 
+.link-check-pending {
+	color: #888;
+	font-style: italic;
+}
+
+.link-check-pending code {
+	font-style: normal;
+	background: #eee;
+	padding: 1px 6px;
+	border-radius: 4px;
+	font-size: 13px;
+}
+
 .toggleable-time {
 	cursor: pointer;
 	border-bottom: 1px dotted #aaa;
@@ -177,6 +175,10 @@
 	background: #f8f9fa;
 	padding: 16px 20px;
 	border-radius: 8px;
+}
+
+.admin-stats-section {
+	background: transparent;
 }
 
 .dashboard-section h2 {
@@ -238,10 +240,10 @@
 }
 
 .chart-container {
-	background: white;
+	background: transparent;
 	padding: 16px;
 	border-radius: 8px;
-	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	box-shadow: none;
 	height: 320px;
 }
 
@@ -261,6 +263,7 @@
 .chart-section {
 	min-width: 0;
 	margin-bottom: 0;
+	background: transparent;
 }
 
 .pie-chart-container {
@@ -375,6 +378,69 @@ ul.admin-stat-list li {
 
 .admin-stat-list strong {
 	color: #c0392b;
+}
+
+/* Most Cited Codes — full-width block inside Admin Statistics. */
+.admin-most-cited {
+	width: 100%;
+	margin-top: 12px;
+}
+
+.admin-most-cited h3 {
+	margin: 0 0 4px 0;
+	font-size: 14px;
+	color: #555;
+	font-weight: 600;
+}
+
+ol.admin-most-cited-list {
+	margin: 0;
+	padding-left: 22px;
+	list-style: decimal;
+	font-size: 13px;
+	line-height: 2.1;
+	color: #444;
+	white-space: nowrap;
+	overflow-x: auto;
+}
+
+ol.admin-most-cited-list a {
+	color: #c0392b;
+	text-decoration: none;
+}
+
+ol.admin-most-cited-list a:hover {
+	text-decoration: underline;
+}
+
+.admin-most-cited-list .amc-meta {
+	color: #777;
+}
+
+.admin-most-cited-list strong {
+	color: #c0392b;
+}
+
+.amc-hidden {
+	display: none;
+}
+
+.amc-toggle {
+	cursor: pointer;
+	display: inline-block;
+	margin-left: 8px;
+	background: #f0f0f0;
+	border: 1px solid #ccc;
+	border-radius: 10px;
+	padding: 1px 10px;
+	font-size: 11px;
+	font-weight: 400;
+	color: #555;
+	vertical-align: middle;
+}
+
+.amc-toggle:hover {
+	background: #e0e0e0;
 }
 
 /* Responsive: Stack charts on narrow screens */
@@ -649,6 +715,20 @@ document.addEventListener('DOMContentLoaded', function() {
 			}
 		}
 	});
+	// Most Cited Codes: show more / show fewer
+	var mostCitedExpanded = false;
+	window.toggleMostCited = function() {
+		mostCitedExpanded = !mostCitedExpanded;
+		var rows = document.querySelectorAll('.admin-most-cited-list .amc-row');
+		var btn = document.getElementById('amc-toggle');
+		rows.forEach(function(row, i) {
+			if (i >= 5) {
+				row.classList.toggle('amc-hidden', !mostCitedExpanded);
+			}
+		});
+		if (btn) btn.textContent = mostCitedExpanded ? 'show fewer' : 'show more';
+	};
+
 	// Journal table: show/hide and live filter
 	var journalExpanded = false;
 
@@ -657,11 +737,11 @@ document.addEventListener('DOMContentLoaded', function() {
 		var rows = document.querySelectorAll('#journal-table .journal-row');
 		var btn = document.getElementById('journal-toggle');
 		rows.forEach(function(row, i) {
-			if (i >= 20) {
+			if (i >= 12) {
 				row.classList.toggle('journal-hidden', !journalExpanded);
 			}
 		});
-		btn.textContent = journalExpanded ? 'Show top 20 only' : 'Show all ' + rows.length + ' journals';
+		btn.textContent = journalExpanded ? 'Show top 12 only' : 'Show all ' + rows.length + ' journals';
 	};
 
 	document.getElementById('journal-filter').addEventListener('input', function() {
@@ -678,7 +758,7 @@ document.addEventListener('DOMContentLoaded', function() {
 				if (!journalExpanded) {
 					// re-apply collapse
 					var idx = parseInt(row.cells[0].textContent) - 1;
-					row.classList.toggle('journal-hidden', idx >= 20);
+					row.classList.toggle('journal-hidden', idx >= 12);
 				}
 			}
 		});
