@@ -958,6 +958,17 @@
 
 **Recommended**: **Option 1** - Current Flask implementation aligns with TODO Phase 9 plan and provides unified site experience. Completed tasks WP-004 and WP-005 implement this approach successfully.
 
+### 9.4 Dev → Production WordPress via REST (Provider Abstraction)
+**Dependencies**: None (design complete)
+**Status**: 🔵 DEFERRED — design done, implementation later
+
+- [ ] **WP-006**: Have the dev (`devascl`) app read **production** WordPress over the REST API instead of keeping a stale local WP DB copy, while production keeps direct DB access.
+  - Design doc: `source/ascl_net_app_project_home/WP_REST_PROVIDER_DESIGN.md` (reviewed by codex + sonnet + opus)
+  - Approach: `WPDBProvider` / `WPRestProvider` behind one interface (canonical rendered DTO), config-selected via `WP_SOURCE`; dev read-only; no cache.
+  - Hard blocker before cutover: confirm prod `ascl.net/wordpress` exposes `/wp-json/` for **all** used resources (pages, posts, categories, users, comments), not just `/pages/2`.
+  - Open decisions baked into the doc to revisit: accept `content.rendered` (no auth) vs. authenticated raw (§2.1); custom WP archive route (§4.6).
+  - Must-fix set captured in the doc (§3.1 interface mapping, §3.4 DTO, §4 REST mappings, §5 read-only fail-safe, §6 error contract, §7 test decoupling).
+
 ---
 
 ## Phase 10: Authentication & Authorization
