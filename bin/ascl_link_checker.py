@@ -28,6 +28,7 @@ import configparser
 import datetime
 import gc
 import logging
+import shutil
 import os
 import re
 import sys
@@ -589,6 +590,9 @@ async def run(args: argparse.Namespace) -> None:
     recent_failures: collections.deque = collections.deque(maxlen=MAX_RECENT)
     # Fixed render height so the in-place redraw stays aligned as failures appear.
     PROGRESS_LINES = 2 + 1 + MAX_RECENT  # bar + stats + header + MAX_RECENT slots
+    # Strip control chars (especially embedded newlines from error messages /
+    # page-derived notes) so every rendered row is exactly one physical line.
+    ctrl_re = re.compile(r"[\x00-\x1f\x7f]")
 
     def _render_progress():
         """Render the interactive progress display."""
@@ -616,14 +620,20 @@ async def run(args: argparse.Namespace) -> None:
         # so the cursor-up count matches what was printed last time and the
         # bar redraws in place instead of scrolling up the screen.
         recent = list(recent_failures)
-        lines = [
-            f"\033[2K  {bar} {pct:5.1f}%  ({checked}/{total})",
-            f"\033[2K  ✓ {working} working   ✗ {failed} failed   "
-            f"{rate:.1f}/s   ETA {eta}",
-            f"\033[2K  ── recent failures ──",
+        rows = [
+            f"  {bar} {pct:5.1f}%  ({checked}/{total})",
+            f"  ✓ {working} working   ✗ {failed} failed   {rate:.1f}/s   ETA {eta}",
+            "  ── recent failures ──",
         ]
         for i in range(MAX_RECENT):
-            lines.append(f"\033[2K    {recent[i] if i < len(recent) else ''}")
+            rows.append(f"    {recent[i] if i < len(recent) else ''}")
+
+        # Re-read width each frame (handles resize), strip control chars /
+        # embedded newlines, then clip to the width (minus 1 to dodge auto-wrap
+        # in the last column). Guarantees each row is exactly one physical line
+        # so the fixed cursor-up count always matches what was printed.
+        w = max(1, shutil.get_terminal_size((100, 24)).columns - 1)
+        lines = ["\033[2K" + ctrl_re.sub(" ", row)[:w] for row in rows]
 
         # Move cursor to the top of the reserved block and redraw.
         sys.stdout.write(f"\033[{PROGRESS_LINES}A" + "\n".join(lines) + "\n")
