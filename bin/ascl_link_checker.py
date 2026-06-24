@@ -587,6 +587,8 @@ async def run(args: argparse.Namespace) -> None:
     # Recent failures for the interactive ticker (bounded so it can't grow).
     MAX_RECENT = 5
     recent_failures: collections.deque = collections.deque(maxlen=MAX_RECENT)
+    # Fixed render height so the in-place redraw stays aligned as failures appear.
+    PROGRESS_LINES = 2 + 1 + MAX_RECENT  # bar + stats + header + MAX_RECENT slots
 
     def _render_progress():
         """Render the interactive progress display."""
@@ -610,27 +612,28 @@ async def run(args: argparse.Namespace) -> None:
         else:
             eta = f"{remaining:.0f}s"
 
-        # Clear screen area and draw
-        lines = []
-        lines.append(f"\033[2K  {bar} {pct:5.1f}%  ({checked}/{total})")
-        lines.append(f"\033[2K  ✓ {working} working   ✗ {failed} failed   "
-                     f"{rate:.1f}/s   ETA {eta}")
+        # Always emit exactly PROGRESS_LINES lines (padding the failures area)
+        # so the cursor-up count matches what was printed last time and the
+        # bar redraws in place instead of scrolling up the screen.
+        recent = list(recent_failures)
+        lines = [
+            f"\033[2K  {bar} {pct:5.1f}%  ({checked}/{total})",
+            f"\033[2K  ✓ {working} working   ✗ {failed} failed   "
+            f"{rate:.1f}/s   ETA {eta}",
+            f"\033[2K  ── recent failures ──",
+        ]
+        for i in range(MAX_RECENT):
+            lines.append(f"\033[2K    {recent[i] if i < len(recent) else ''}")
 
-        if recent_failures:
-            lines.append(f"\033[2K  ── recent failures ──")
-            for entry in recent_failures:
-                lines.append(f"\033[2K    {entry}")
-
-        # Move cursor up and redraw
-        output = f"\033[{len(lines)}A" if checked > 1 else ""
-        output += "\n".join(lines)
-        print(output, flush=True)
+        # Move cursor to the top of the reserved block and redraw.
+        sys.stdout.write(f"\033[{PROGRESS_LINES}A" + "\n".join(lines) + "\n")
+        sys.stdout.flush()
 
     # Print initial blank lines so _render_progress has space to overwrite
     if interactive:
-        print(f"  Checking {total} links ({args.link_type})...\n" * 1, end="")
-        # Reserve lines: progress bar + stats + header + MAX_RECENT failures
-        for _ in range(2 + 1 + MAX_RECENT):
+        print(f"  Checking {total} links ({args.link_type})...")
+        # Reserve the render block so _render_progress can redraw in place.
+        for _ in range(PROGRESS_LINES):
             print()
 
     async def producer():
