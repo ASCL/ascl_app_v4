@@ -51,10 +51,8 @@
 					<div class="inline-label-field">
 						<label for="ascl_id">ASCL ID</label>
 						<div class="ascl-id-row">
-						<input type="text" name="ascl_id" id="ascl_id" value="{{ code.ascl_id or '0000.000' }}" maxlength="8">
-						{% if mode == 'insert' %}
+						<input type="text" name="ascl_id" id="ascl_id" value="{{ code.ascl_id or '0000.000' }}" maxlength="8" pattern="0000\.000|\d{2}(0[1-9]|1[0-2])\.\d{3}" title="Format: YYMM.NNN (e.g. 2605.008), or 0000.000 if unassigned">
 						<button type="button" id="autofill" onclick="fetchNextAsclId()">Autofill</button>
-						{% endif %}
 					</div>
 					</div>
 					<small >Leave blank or as 0000.000 for user-submitted codes.</small>

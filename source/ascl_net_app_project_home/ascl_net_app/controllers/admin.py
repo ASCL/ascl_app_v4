@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from functools import wraps
 
 import flask
@@ -9,6 +10,15 @@ from flask import render_template, request, redirect, url_for, session, flash
 import bcrypt
 
 admin_page = flask.Blueprint("admin_page", __name__, url_prefix="/admin")
+
+# ASCL IDs are YYMM.NNN (e.g. 2605.008); MM must be 01-12. The placeholder
+# '0000.000' marks an unassigned (e.g. user-submitted) code.
+_ASCL_ID_RE = re.compile(r"^\d{2}(0[1-9]|1[0-2])\.\d{3}$")
+
+
+def _is_valid_ascl_id(ascl_id):
+	"""True if ascl_id is the unassigned placeholder or a well-formed YYMM.NNN."""
+	return ascl_id == "0000.000" or bool(_ASCL_ID_RE.match(ascl_id or ""))
 
 
 # ==========================================
@@ -619,8 +629,8 @@ def update_code(pk):
 			validation_error = "Title is required."
 		elif not credit:
 			validation_error = "Credit is required."
-		elif not ascl_id or len(ascl_id) != 8:
-			validation_error = "ASCL ID must be 8 characters (e.g., 2401.001)."
+		elif not _is_valid_ascl_id(ascl_id):
+			validation_error = "ASCL ID must be in YYMM.NNN format (e.g., 2605.008), or 0000.000 if unassigned."
 
 		if validation_error:
 			flash(validation_error, "error")
@@ -806,8 +816,8 @@ def insert_code():
 			validation_error = "Title is required."
 		elif not credit:
 			validation_error = "Credit is required."
-		elif not ascl_id or len(ascl_id) != 8:
-			validation_error = "ASCL ID must be 8 characters (e.g., 2401.001)."
+		elif not _is_valid_ascl_id(ascl_id):
+			validation_error = "ASCL ID must be in YYMM.NNN format (e.g., 2605.008), or 0000.000 if unassigned."
 
 		if validation_error:
 			flash(validation_error, "error")
