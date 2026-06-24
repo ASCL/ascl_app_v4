@@ -31,6 +31,15 @@ JOIN (
 ) g ON g.code_pk = c.pk
 SET c.short_name = g.repo_name;
 
+-- Rebuild the fulltext search index to include short_name so that searches on
+-- a code's repo name match even when the name is absent from the title/abstract
+-- (e.g. "pdrtpy"). The ft_search index is created earlier by
+-- create_fulltext_index.sql; it must be dropped and recreated because MySQL only
+-- uses MATCH(...) when the column set exactly matches a FULLTEXT index. This step
+-- runs after short_name exists and is populated.
+ALTER TABLE codes DROP INDEX ft_search;
+ALTER TABLE codes ADD FULLTEXT INDEX ft_search (title, abstract, credit, short_name), ALGORITHM=INPLACE, LOCK=SHARED;
+
 -- Report results
 SELECT
     COUNT(*) AS total_codes,

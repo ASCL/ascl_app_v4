@@ -161,6 +161,8 @@ def _search_mysql_suggestions(query_string, limit=8):
 	prefix_ascl = case((func.lower(ASCLCode.ascl_id).like(f"{query_lower}%"), 500), else_=0)
 	prefix_title = case((func.lower(ASCLCode.title).like(f"{query_lower}%"), 300), else_=0)
 	contains_title = case((func.lower(ASCLCode.title).like(f"%{query_lower}%"), 100), else_=0)
+	exact_short_name = case((func.lower(ASCLCode.short_name) == query_lower, 700), else_=0)
+	prefix_short_name = case((func.lower(ASCLCode.short_name).like(f"{query_lower}%"), 250), else_=0)
 
 	results = (
 		session.query(ASCLCode)
@@ -170,9 +172,10 @@ def _search_mysql_suggestions(query_string, limit=8):
 				ASCLCode.ascl_id.ilike(f"%{query_string}%"),
 				ASCLCode.title.ilike(f"%{query_string}%"),
 				ASCLCode.credit.ilike(f"%{query_string}%"),
+				ASCLCode.short_name.ilike(f"%{query_string}%"),
 			)
 		)
-		.order_by((exact_ascl + prefix_ascl + prefix_title + contains_title).desc(), ASCLCode.time_added.desc())
+		.order_by((exact_ascl + prefix_ascl + prefix_title + contains_title + exact_short_name + prefix_short_name).desc(), ASCLCode.time_added.desc())
 		.limit(limit)
 		.all()
 	)
@@ -217,7 +220,7 @@ def search_mysql(query_string, published_only=True, page=1, per_page=20):
 		count_sql = text(f"""
 			SELECT COUNT(*) as cnt
 			FROM codes
-			WHERE MATCH(title, abstract, credit) AGAINST(:query IN NATURAL LANGUAGE MODE)
+			WHERE MATCH(title, abstract, credit, short_name) AGAINST(:query IN NATURAL LANGUAGE MODE)
 			{published_filter}
 		""")
 		total_count = session.execute(count_sql, {"query": query_string}).scalar()
@@ -230,14 +233,15 @@ def search_mysql(query_string, published_only=True, page=1, per_page=20):
 		# - Views as popularity tiebreaker
 		search_sql = text(f"""
 			SELECT pk,
-				MATCH(title, abstract, credit) AGAINST(:query IN NATURAL LANGUAGE MODE) AS relevance,
+				MATCH(title, abstract, credit, short_name) AGAINST(:query IN NATURAL LANGUAGE MODE) AS relevance,
 				CASE WHEN LOWER(title) = LOWER(:query) THEN 1000 ELSE 0 END AS exact_match,
 				CASE WHEN LOWER(title) LIKE CONCAT(LOWER(:query), '%') THEN 500 ELSE 0 END AS prefix_match,
-				CASE WHEN LOWER(title) LIKE CONCAT('%', LOWER(:query), '%') THEN 100 ELSE 0 END AS title_match
+				CASE WHEN LOWER(title) LIKE CONCAT('%', LOWER(:query), '%') THEN 100 ELSE 0 END AS title_match,
+				CASE WHEN LOWER(short_name) = LOWER(:query) THEN 900 ELSE 0 END AS short_name_match
 			FROM codes
-			WHERE MATCH(title, abstract, credit) AGAINST(:query IN NATURAL LANGUAGE MODE)
+			WHERE MATCH(title, abstract, credit, short_name) AGAINST(:query IN NATURAL LANGUAGE MODE)
 			{published_filter}
-			ORDER BY exact_match DESC, prefix_match DESC, title_match DESC, relevance DESC
+			ORDER BY exact_match DESC, short_name_match DESC, prefix_match DESC, title_match DESC, relevance DESC
 			LIMIT :limit OFFSET :offset
 		""")
 		rows = session.execute(
@@ -277,7 +281,8 @@ def _search_mysql_like(session, query_string, published_only=True, page=1, per_p
 			ASCLCode.ascl_id.ilike(search_pattern),
 			ASCLCode.title.ilike(search_pattern),
 			ASCLCode.abstract.ilike(search_pattern),
-			ASCLCode.credit.ilike(search_pattern)
+			ASCLCode.credit.ilike(search_pattern),
+			ASCLCode.short_name.ilike(search_pattern)
 		)
 	)
 
@@ -312,11 +317,19 @@ def _search_mysql_like(session, query_string, published_only=True, page=1, per_p
 		(func.lower(ASCLCode.ascl_id) == query_lower, 1200),
 		else_=0
 	)
+	exact_short_name = case(
+		(func.lower(ASCLCode.short_name) == query_lower, 900),
+		else_=0
+	)
+	contains_short_name = case(
+		(func.lower(ASCLCode.short_name).like(f"%{query_lower}%"), 200),
+		else_=0
+	)
 
 	# Apply pagination with relevance ordering
 	offset = (page - 1) * per_page
 	results = base_query.order_by(
-		(exact_ascl + prefix_ascl + exact_title + prefix_title + contains_title + contains_abstract).desc(),
+		(exact_ascl + prefix_ascl + exact_title + prefix_title + contains_title + contains_abstract + exact_short_name + contains_short_name).desc(),
 		ASCLCode.time_added.desc()
 	).offset(offset).limit(per_page).all()
 
@@ -364,8 +377,8 @@ def search():
 		logger.info(f"Using Typesense for search: '{query_string}'")
 		typesense_results = typesense.search(
 			query=query_string,
-			query_by='ascl_id,title,abstract,credit',
-			query_by_weights='10,8,2,1',
+			query_by='ascl_id,title,short_name,abstract,credit',
+			query_by_weights='10,8,7,2,1',
 			filter_by='published:1',
 			per_page=per_page,
 			page=page
@@ -454,8 +467,8 @@ def search_suggest():
 	if typesense_available:
 		results = typesense.search(
 			query=query_string,
-			query_by='title,ascl_id,credit,abstract',
-			query_by_weights='8,10,4,1',
+			query_by='title,ascl_id,short_name,credit,abstract',
+			query_by_weights='8,10,7,4,1',
 			filter_by='published:1',
 			sort_by='_text_match:desc,time_added:desc',
 			prefix=True,

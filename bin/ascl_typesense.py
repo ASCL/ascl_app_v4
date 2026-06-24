@@ -30,6 +30,7 @@ COLLECTION_SCHEMA = {
         {"name": "pk", "type": "int32", "facet": False},
         {"name": "ascl_id", "type": "string", "facet": True, "index": True},
         {"name": "title", "type": "string", "facet": False, "index": True},
+        {"name": "short_name", "type": "string", "facet": False, "index": True, "optional": True},
         {"name": "abstract", "type": "string", "facet": False, "index": True, "optional": True},
         {"name": "credit", "type": "string", "facet": False, "index": True, "optional": True},
         {"name": "published", "type": "int32", "facet": True, "index": True},
@@ -109,6 +110,8 @@ def _prepare_document(code, keywords_dict):
         "published": code.published or 0,
         "time_added": _ts_to_unix(code.time_added) or 0,
     }
+    if getattr(code, "short_name", None):
+        doc["short_name"] = code.short_name
     if code.abstract:
         doc["abstract"] = _strip_html(code.abstract)
     if code.credit:
