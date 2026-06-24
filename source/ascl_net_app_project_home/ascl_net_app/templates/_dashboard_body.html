@@ -1,6 +1,4 @@
 <div class="dashboard-container">
-	<h1>ASCL Statistics Dashboard</h1>
-
 	{% if stats.link_check %}
 	<p class="link-check-summary">
 		{{ stats.link_check.working_links|number_format }} site links
@@ -13,6 +11,8 @@
 		Site link check has not been run yet.{% if is_admin %} Run it with <code>python bin/ascl_link_checker.py {{ link_check_db }}</code>{% endif %}
 	</p>
 	{% endif %}
+
+	<h1>ASCL Statistics Dashboard</h1>
 
 	<!-- Overall Statistics -->
 	<div class="stats-grid-bar">
