@@ -24,14 +24,12 @@ History:
 
 import argparse
 import asyncio
-import configparser
 import datetime
 import logging
-import os
-import sys
 
 import httpx
 import pymysql
+from db_config import read_db_config, pymysql_kwargs
 from phpserialize import dict_to_tuple, loads as php_loads
 
 # ---------------------------------------------------------------------------
@@ -50,54 +48,10 @@ log = logging.getLogger("link_checker")
 # Database helpers
 # ---------------------------------------------------------------------------
 
-def read_db_config() -> dict:
-    """Read MySQL credentials from ~/.my.cnf.
-
-    Prefers the [client_ascl] section, falls back to [client].
-    """
-    cnf_path = os.path.expanduser("~/.my.cnf")
-    if not os.path.exists(cnf_path):
-        sys.exit(f"Error: {cnf_path} not found. Create it with [client] or [client_ascl] section.")
-
-    config = configparser.ConfigParser()
-    config.read(cnf_path)
-
-    section = "client_ascl" if config.has_section("client_ascl") else "client"
-    if not config.has_section(section):
-        sys.exit(f"Error: No [client] or [client_ascl] section in {cnf_path}")
-
-    cfg = {
-        "host":     config.get(section, "host", fallback="localhost"),
-        "user":     config.get(section, "user"),
-        "password": config.get(section, "password"),
-        "database": config.get(section, "database", fallback="ascl_db"),
-        "port":     config.getint(section, "port", fallback=3306),
-    }
-
-    # Support Unix socket connections (common on shared/cPanel hosts).
-    socket = config.get(section, "socket", fallback=None)
-    if socket:
-        cfg["unix_socket"] = socket
-
-    return cfg
-
-
 def get_connection(db_cfg: dict) -> pymysql.Connection:
     """Open a pymysql connection from the config dict."""
-    kwargs = {
-        "user":     db_cfg["user"],
-        "password": db_cfg["password"],
-        "database": db_cfg["database"],
-        "charset":  "utf8mb4",
-        "cursorclass": pymysql.cursors.DictCursor,
-    }
-
-    if "unix_socket" in db_cfg:
-        kwargs["unix_socket"] = db_cfg["unix_socket"]
-    else:
-        kwargs["host"] = db_cfg["host"]
-        kwargs["port"] = db_cfg["port"]
-
+    kwargs = pymysql_kwargs(db_cfg)
+    kwargs["cursorclass"] = pymysql.cursors.DictCursor
     return pymysql.connect(**kwargs)
 
 

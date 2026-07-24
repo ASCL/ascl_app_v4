@@ -28,6 +28,8 @@ import datetime
 import logging
 import sys
 
+from db_config import read_db_config, pymysql_kwargs
+
 try:
     import ads
 except ImportError:
@@ -43,16 +45,21 @@ except ImportError:
 log = logging.getLogger("ascl_citations")
 
 # --- Database config (v3) ---------------------------------------------------
-# NOTE: credentials are hardcoded here to match the long-standing production
-# setup. Consider moving them to ~/.my.cnf (see link_checker_async.py).
-db_name = "ascl_db"
-db_user = "ascl_db"
-db_pass = "voCNg.K={Zn~"
-
+# Credentials come from ~/.my.cnf [client_ascl]; see db_config.py.
 citations_table = "citations"
 ads_entries_table = "ads_entries_new"
 
-database = MySQLDatabase(db_name, user=db_user, password=db_pass)
+# Deferred initialisation: the models below need `database` to exist at import
+# time, but reading ~/.my.cnf here would make even `--help` fail when the file
+# is missing. connect_database() fills it in once arguments are parsed.
+database = MySQLDatabase(None)
+
+
+def connect_database():
+    """Point `database` at the configured server and open the connection."""
+    kwargs = pymysql_kwargs(read_db_config())
+    database.init(kwargs.pop("database"), **kwargs)
+    database.connect()
 
 
 class BaseModel(Model):
@@ -235,7 +242,7 @@ def main():
         log.warning("ADS returned no entries; nothing to do.")
         return
 
-    database.connect()
+    connect_database()
     try:
         stats = update_database(ads_data, dry_run=args.dry_run,
                                 remove_deleted=args.remove_deleted)

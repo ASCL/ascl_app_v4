@@ -36,6 +36,8 @@ import re
 import sys
 import time
 
+from db_config import read_db_config, pymysql_kwargs
+
 try:
     import pymysql
 except ImportError:
@@ -49,10 +51,7 @@ except ImportError:
 log = logging.getLogger("citefile_metadata")
 
 # --- Database config (v3) ---------------------------------------------------
-db_name = "ascl_db"
-db_user = "ascl_db"
-db_pass = "voCNg.K={Zn~"
-
+# Credentials come from ~/.my.cnf [client_ascl]; see db_config.py.
 codes_table = "codes"
 citefiles_table = "citefile_metadata"
 
@@ -64,10 +63,9 @@ REQUEST_PAUSE = 0.1   # seconds between requests, to be polite
 
 
 def get_connection():
-    return pymysql.connect(
-        host="localhost", user=db_user, password=db_pass, db=db_name,
-        charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor,
-    )
+    kwargs = pymysql_kwargs(read_db_config())
+    kwargs["cursorclass"] = pymysql.cursors.DictCursor
+    return pymysql.connect(**kwargs)
 
 
 def make_session():
