@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """
-Async link checker for the ASCL database.
+Async link checker for the ASCL v3 database (`ascl_db`).
 
-Checks all URLs in the `codes` table for availability using concurrent
-HTTP requests and writes results to the `links_new` table.
+Checks all URLs in the v3 `codes` table for availability using concurrent
+HTTP requests and writes results to the v3 `links_new` table.
+
+This is the v3 script. The v4 equivalent is `bin/ascl_link_checker.py`
+(`ascl linkcheck`), which writes to the `link_check` table in `ascl_db_v4`.
+The two are not interchangeable: v4 has no `links_new`, and the v4 migration
+dropped the `codes.site_list` column this script reads.
 
 Drop-in replacement for link_checker.py — same DB tables, same result codes.
 Requires Python 3.13+, httpx, pymysql, phpserialize.

@@ -1,0 +1,36 @@
+# ASCL maintenance crontab — v3 production site (database `ascl_db`)
+#
+# Install:  crontab crontab.example
+# Verify:   crontab -l
+#
+# Did a job run?
+#   tail -n 20 ~/ascl_app_v4/logs/cron/cron_history.log
+# What did it print?
+#   less ~/ascl_app_v4/logs/cron/link-check.log
+
+MAILTO=aallen@ascl.net
+
+# Deliberately unquoted. Not every cron implementation strips quotes from
+# variable assignments; one that does not will try to exec the literal string
+# `"/bin/bash"` and report it as not found, killing every job in the file.
+# cron_wrap.sh carries its own bash shebang, so /bin/sh here is also fine.
+SHELL=/bin/bash
+
+# cron does NOT read ~/.bash_profile, so ~/bin is not on its PATH and a bare
+# `python` will not resolve the way it does in an interactive shell. PATH is
+# set explicitly below and PY is an absolute path for exactly this reason.
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# /itss/home/ascl/bin/python -> /opt/alt/python313/bin/python3 (Python 3.13.14)
+PY=/itss/home/ascl/bin/python
+
+SCRIPTS=/itss/home/ascl/repositories/ascl_app_v4/scripts_maintenance
+
+# Citations from NASA ADS — Tue & Fri 03:19
+19 3 * * 2,5 $SCRIPTS/cron_wrap.sh ads-citations $PY $SCRIPTS/v3/ascl_citations.py
+
+# Link checker — Tue & Fri 03:00
+0 3 * * 2,5 $SCRIPTS/cron_wrap.sh link-check $PY $SCRIPTS/v3/link_checker_async.py
+
+# Detect codemeta.json / CITATION.cff on GitHub — daily 03:30
+30 3 * * * $SCRIPTS/cron_wrap.sh citefile-metadata $PY $SCRIPTS/v3/citefile_metadata.py
