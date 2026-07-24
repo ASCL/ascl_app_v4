@@ -1,0 +1,7 @@
+# Cron run logs written by ../cron_wrap.sh.
+#
+# This file is tracked so the directory exists in a fresh clone; everything
+# else in here is generated at runtime and must never be committed. Log
+# contents can include database errors and command lines.
+*
+!.gitignore

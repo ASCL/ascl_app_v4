@@ -4,9 +4,10 @@
 # Verify:   crontab -l
 #
 # Did a job run?
-#   tail -n 20 ~/ascl_app_v4/logs/cron/cron_history.log
+#   tail -n 20 $SCRIPTS/logs/cron_history.log
 # What did it print?
-#   less ~/ascl_app_v4/logs/cron/link-check.log
+#   less $SCRIPTS/logs/link-check.log
+# (SCRIPTS is set below; logs are gitignored.)
 
 MAILTO=aallen@ascl.net
 

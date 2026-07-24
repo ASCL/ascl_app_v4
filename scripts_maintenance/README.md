@@ -41,11 +41,11 @@ See `v3/README.md` and `v4/README.md` for per-script detail.
 
 ## Scheduling
 
-All jobs run under `cron_wrap.sh`, which logs every run to
-`~/ascl_app_v4/logs/cron/`. To check whether a job actually ran:
+All jobs run under `cron_wrap.sh`, which logs every run to `logs/` beside it
+(gitignored). To check whether a job actually ran:
 
 ```bash
-tail -n 20 ~/ascl_app_v4/logs/cron/cron_history.log
+tail -n 20 scripts_maintenance/logs/cron_history.log
 ```
 
 **cron does not read `~/.bash_profile`.** `~/bin` is therefore absent from

@@ -26,7 +26,7 @@
 # successful run prints nothing and sends no mail.
 #
 # Environment overrides:
-#   ASCL_CRON_LOG_DIR        log directory (default: $HOME/ascl_app_v4/logs/cron)
+#   ASCL_CRON_LOG_DIR        log directory (default: <this script's dir>/logs)
 #   ASCL_CRON_LOG_MAX_BYTES  rotate a log once it exceeds this (default: 5242880)
 #   ASCL_CRON_LOG_KEEP       rotations to retain (default: 5)
 #   ASCL_CRON_FAIL_LINES     lines of output to email on failure (default: 40)
@@ -35,7 +35,12 @@
 
 set -uo pipefail
 
-LOG_DIR="${ASCL_CRON_LOG_DIR:-$HOME/ascl_app_v4/logs/cron}"
+# Logs live beside this script, not under $HOME, so they stay with the checkout
+# they belong to. Resolved from BASH_SOURCE rather than $PWD because cron runs
+# jobs from the home directory regardless of where the script lives.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+LOG_DIR="${ASCL_CRON_LOG_DIR:-$SCRIPT_DIR/logs}"
 MAX_BYTES="${ASCL_CRON_LOG_MAX_BYTES:-5242880}"
 KEEP="${ASCL_CRON_LOG_KEEP:-5}"
 FAIL_LINES="${ASCL_CRON_FAIL_LINES:-40}"
