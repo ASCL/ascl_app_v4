@@ -174,22 +174,60 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-head_ "Dry run under a cron-like environment"
+head_ "Startability under a cron-like environment"
+# NOTE: --dry-run on these scripts means "skip database writes", NOT "skip the
+# work". citefile_metadata.py still crawls GitHub for every code with a repo
+# URL, and link_checker_async.py still fetches every URL in the database. A
+# preflight must not do that: it burns the GitHub rate limit and takes as long
+# as the real job. Check that each script can START instead, then exercise the
+# one script that has a real limit flag against a handful of rows.
+cronenv=(env -i HOME="$HOME" SHELL=/bin/bash PATH=/usr/local/bin:/usr/bin:/bin)
+
 if [[ -x $PY && -d $SCRIPTS ]]; then
     for t in $targets; do
         [[ -f "$SCRIPTS/$t" ]] || continue
         out=$(mktemp)
-        if env -i HOME="$HOME" SHELL=/bin/bash PATH=/usr/local/bin:/usr/bin:/bin \
-               "$PY" "$SCRIPTS/$t" --dry-run >"$out" 2>&1; then
-            ok "$t --dry-run exited 0"
+        if "${cronenv[@]}" "$PY" -m py_compile "$SCRIPTS/$t" >"$out" 2>&1; then
+            ok "$t compiles"
         else
-            bad "$t --dry-run exited $? — last 20 lines:"
-            tail -20 "$out" | sed 's/^/        /'
+            bad "$t does NOT compile:"; sed 's/^/        /' "$out" | tail -10
         fi
         rm -f "$out"
     done
+
+    # Imports resolve only if the script's own directory is on sys.path the way
+    # python puts it there for a script run by absolute path.
+    out=$(mktemp)
+    if "${cronenv[@]}" "$PY" -c "
+import sys; sys.path.insert(0, '$SCRIPTS/v3')
+import db_config, pymysql
+cfg = db_config.read_db_config()
+conn = pymysql.connect(**db_config.pymysql_kwargs(cfg))
+cur = conn.cursor(); cur.execute('SELECT COUNT(*) FROM codes')
+print(cfg['database'], cur.fetchone()[0])
+" >"$out" 2>&1; then
+        read -r dbname ncodes < "$out"
+        ok "connected to MySQL as cron would: database=$dbname, codes=$ncodes"
+        [[ $dbname == ascl_db_v4 ]] && bad "connected to ascl_db_v4 — the v3 scripts must not write there"
+    else
+        bad "could not connect to MySQL with db_config.py:"; sed 's/^/        /' "$out" | tail -10
+    fi
+    rm -f "$out"
+
+    # citefile_metadata.py is the only one with a bounded mode.
+    if [[ -f "$SCRIPTS/v3/citefile_metadata.py" ]]; then
+        out=$(mktemp)
+        if "${cronenv[@]}" "$PY" "$SCRIPTS/v3/citefile_metadata.py" \
+               --dry-run --limit 3 >"$out" 2>&1; then
+            ok "citefile_metadata.py --dry-run --limit 3 exited 0"
+        else
+            bad "citefile_metadata.py --dry-run --limit 3 exited $? — last 20 lines:"
+            tail -20 "$out" | sed 's/^/        /'
+        fi
+        rm -f "$out"
+    fi
 else
-    warn "skipped dry runs (interpreter or script directory missing)"
+    warn "skipped startability checks (interpreter or script directory missing)"
 fi
 
 # ---------------------------------------------------------------------------
