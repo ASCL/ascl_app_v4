@@ -25,11 +25,15 @@ Usage:
     python3 citefile_metadata.py --limit 50     # only the 50 stalest entries
 
 History:
+  2026-09-11 Distinguish a 404 from an unreachable repo (ProbeResult). A
+             non-200 was previously recorded as absence, so one GitHub
+             outage would null out already-discovered URLs.
   2026-06-24 Rewritten: correctness fixes + quiet-on-success.
 """
 
 import argparse
 import datetime
+import enum
 import logging
 import os
 import re
@@ -60,6 +64,25 @@ GITHUB_URL_RE = re.compile(r'"([^"]+github[^"]+)"')
 
 REQUEST_TIMEOUT = 15  # seconds
 REQUEST_PAUSE = 0.1   # seconds between requests, to be polite
+
+# Fail the run if more than this fraction of probes could not be resolved.
+# A few flaky repos are normal; a systemic GitHub outage or a block is not,
+# and must not pass as a quiet success.
+INDETERMINATE_FAIL_RATE = 0.10
+
+
+class ProbeResult(enum.Enum):
+    """Outcome of probing one repo for one file.
+
+    ABSENT means GitHub answered 404: the file really is not there.
+    INDETERMINATE means we could not find out (rate limit, 5xx, timeout,
+    DNS). The two must never be conflated -- recording INDETERMINATE as
+    absence erases real data on the next write.
+    """
+
+    FOUND = "found"
+    ABSENT = "absent"
+    INDETERMINATE = "indeterminate"
 
 
 def get_connection():
@@ -121,61 +144,120 @@ def load_entries(connection, limit=None):
 
 
 def probe_file(session, owner, repo, filename):
-    """Return a github.com blob URL (default branch) if the file exists, else None."""
+    """Probe a repo's default branch for `filename`.
+
+    Returns (ProbeResult, url). Only a 404 is treated as absence. Any other
+    outcome is INDETERMINATE, and write_result leaves the stored column alone
+    for those, so a transient GitHub failure cannot erase a URL we previously
+    discovered.
+    """
     raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{filename}"
     try:
         resp = session.get(raw_url, timeout=REQUEST_TIMEOUT, stream=True)
         resp.close()
     except requests.RequestException as exc:
-        log.warning("Request failed for %s/%s %s: %s", owner, repo, filename, exc)
-        return None
+        log.warning("Indeterminate (request failed) %s/%s %s: %s",
+                    owner, repo, filename, exc)
+        return ProbeResult.INDETERMINATE, None
     finally:
         time.sleep(REQUEST_PAUSE)
 
     if resp.status_code == 200:
         # Human-facing URL; blob/HEAD redirects to whatever the default branch is.
-        return f"https://github.com/{owner}/{repo}/blob/HEAD/{filename}"
-    return None
+        return ProbeResult.FOUND, f"https://github.com/{owner}/{repo}/blob/HEAD/{filename}"
+    if resp.status_code == 404:
+        return ProbeResult.ABSENT, None
+
+    log.warning("Indeterminate (HTTP %s) %s/%s %s",
+                resp.status_code, owner, repo, filename)
+    return ProbeResult.INDETERMINATE, None
 
 
 def check_entry(session, entry):
-    """Return {ascl_id, codemeta_url, citation_cff_url, present}."""
-    codemeta_url = None
-    citation_cff_url = None
+    """Return {ascl_id, codemeta, citation_cff, present}.
+
+    `codemeta` and `citation_cff` are (ProbeResult, url) pairs. A repo that
+    yields FOUND short-circuits further probing for that file; otherwise
+    INDETERMINATE outranks ABSENT, so we never claim a file is missing on the
+    strength of a repo we could not reach.
+    """
+    states = {
+        "codemeta.json": (ProbeResult.ABSENT, None),
+        "CITATION.cff": (ProbeResult.ABSENT, None),
+    }
+    parsed_any_url = False
+
     for url in entry["urls"]:
         # Expect https://github.com/<owner>/<repo> (4 slashes).
         if url.count("/") != 4:
             log.debug("Skipping non-standard GitHub URL: %s", url)
             continue
+        parsed_any_url = True
         owner, repo = url.split("/")[-2], url.split("/")[-1]
-        codemeta_url = codemeta_url or probe_file(session, owner, repo, "codemeta.json")
-        # CITATION.cff: capitalization matters.
-        citation_cff_url = citation_cff_url or probe_file(session, owner, repo, "CITATION.cff")
+        for filename in states:
+            if states[filename][0] is ProbeResult.FOUND:
+                continue
+            state, found_url = probe_file(session, owner, repo, filename)
+            if state is ProbeResult.FOUND:
+                states[filename] = (state, found_url)
+            elif state is ProbeResult.INDETERMINATE:
+                states[filename] = (state, None)
+
+    if not parsed_any_url:
+        # Every URL was unparseable, so we learned nothing about this code.
+        # Recording absence here would be an assertion we never tested.
+        log.warning("No parseable GitHub URL for %s; leaving row unchanged",
+                    entry["ascl_id"])
+        states = {name: (ProbeResult.INDETERMINATE, None) for name in states}
+
     return {
         "ascl_id": entry["ascl_id"],
-        "codemeta_url": codemeta_url,
-        "citation_cff_url": citation_cff_url,
+        "codemeta": states["codemeta.json"],
+        "citation_cff": states["CITATION.cff"],
         "present": entry["present"],
     }
 
 
 def write_result(connection, result, dry_run=False):
+    """Persist only the determinate outcomes for one code.
+
+    An INDETERMINATE column is omitted from the statement entirely, so the
+    stored value survives. Writing NULL because GitHub was unreachable would
+    destroy a real, previously discovered URL -- and the next run would have
+    no way to tell that had happened.
+    """
     if dry_run:
         return
+
+    # Fixed literals, not user input: safe to interpolate as identifiers.
+    columns = {}
+    for key, column in (("codemeta", "codemeta_url"),
+                        ("citation_cff", "citation_cff_url")):
+        state, url = result[key]
+        if state is not ProbeResult.INDETERMINATE:
+            columns[column] = url
+
+    if not columns:
+        log.warning("No determinate result for %s; leaving row unchanged",
+                    result["ascl_id"])
+        return
+
     now = datetime.datetime.now()
     with connection.cursor() as cursor:
         if result["present"]:
+            assignments = ", ".join(f"`{c}` = %s" for c in columns)
             cursor.execute(
-                f"UPDATE `{citefiles_table}` SET `codemeta_url` = %s, "
-                f"`citation_cff_url` = %s, `time_updated` = %s WHERE `ascl_id` = %s",
-                (result["codemeta_url"], result["citation_cff_url"], now, result["ascl_id"]),
+                f"UPDATE `{citefiles_table}` SET {assignments}, `time_updated` = %s "
+                f"WHERE `ascl_id` = %s",
+                (*columns.values(), now, result["ascl_id"]),
             )
         else:
+            names = ", ".join(f"`{c}`" for c in columns)
+            marks = ", ".join(["%s"] * len(columns))
             cursor.execute(
-                f"INSERT INTO `{citefiles_table}` "
-                f"(`ascl_id`, `codemeta_url`, `citation_cff_url`, `time_updated`) "
-                f"VALUES (%s, %s, %s, %s)",
-                (result["ascl_id"], result["codemeta_url"], result["citation_cff_url"], now),
+                f"INSERT INTO `{citefiles_table}` (`ascl_id`, {names}, `time_updated`) "
+                f"VALUES (%s, {marks}, %s)",
+                (result["ascl_id"], *columns.values(), now),
             )
     connection.commit()
 
@@ -200,14 +282,20 @@ def main():
     connection = get_connection()
     session = make_session()
     found_codemeta = found_cff = 0
+    probes = indeterminate = 0
     try:
         entries = load_entries(connection, limit=args.limit)
         log.info("Checking %d codes with GitHub URLs", len(entries))
         for i, entry in enumerate(entries, 1):
             result = check_entry(session, entry)
             write_result(connection, result, dry_run=args.dry_run)
-            found_codemeta += bool(result["codemeta_url"])
-            found_cff += bool(result["citation_cff_url"])
+            for key in ("codemeta", "citation_cff"):
+                state, _ = result[key]
+                probes += 1
+                if state is ProbeResult.INDETERMINATE:
+                    indeterminate += 1
+            found_codemeta += result["codemeta"][0] is ProbeResult.FOUND
+            found_cff += result["citation_cff"][0] is ProbeResult.FOUND
             if args.verbose and i % 100 == 0:
                 log.info("  processed %d/%d", i, len(entries))
     finally:
@@ -215,6 +303,21 @@ def main():
 
     log.info("%sDone: %d codemeta.json, %d CITATION.cff found",
              "[DRY RUN] " if args.dry_run else "", found_codemeta, found_cff)
+
+    # Unresolved probes are reported at WARNING so they surface even in the
+    # quiet mode cron uses, and a systemic failure fails the run outright
+    # rather than passing as a night with "nothing found".
+    if indeterminate:
+        rate = indeterminate / probes if probes else 0.0
+        log.warning(
+            "%d of %d probes were indeterminate (%.1f%%); those values were "
+            "left unchanged", indeterminate, probes, 100 * rate)
+        if rate > INDETERMINATE_FAIL_RATE:
+            log.error(
+                "Indeterminate rate exceeds %.0f%% -- treating this run as "
+                "failed. GitHub may be rate limiting or unreachable.",
+                100 * INDETERMINATE_FAIL_RATE)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

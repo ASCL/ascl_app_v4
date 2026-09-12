@@ -142,9 +142,13 @@ fi
     && ok "~/.ads/dev_key present (ascl_citations.py)" \
     || bad "~/.ads/dev_key missing — ascl_citations.py cannot reach NASA ADS"
 
+# citefile_metadata.py probes raw.githubusercontent.com, not api.github.com,
+# so the 60 req/hr unauthenticated API limit does not apply and no token is
+# required. Note that cron does not read ~/.bash_profile: if a token is ever
+# wanted, it has to be set in the crontab, not the shell profile.
 [[ -n ${GITHUB_TOKEN:-} ]] \
-    && ok "GITHUB_TOKEN set" \
-    || warn "GITHUB_TOKEN unset — citefile_metadata.py limited to 60 GitHub req/hr"
+    && ok "GITHUB_TOKEN set (optional; raw.githubusercontent.com is not API-rate-limited)" \
+    || ok "GITHUB_TOKEN unset — fine; citefile_metadata.py uses raw.githubusercontent.com"
 
 # ---------------------------------------------------------------------------
 head_ "Run history"
